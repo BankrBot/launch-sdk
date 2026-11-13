@@ -1,0 +1,5 @@
+[install]
+saveTextLockfile = true
+# Refuse package versions published in the last 48 hours (in seconds). CI also installs under Aikido safe-chain,
+# which blocks packages flagged as malicious. Never lower this floor.
+minimumReleaseAge = 172800

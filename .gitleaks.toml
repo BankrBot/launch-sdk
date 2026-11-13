@@ -1,0 +1,23 @@
+# gitleaks' default rules, plus the public values its generic-api-key rule reads as keys in an EVM SDK
+# (a keyword such as `token` or `Abi`, then a high-entropy value). Each allowlist names one value shape.
+title = "@bankr/launch-sdk"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "20-byte EVM addresses are public, and too short to be a secp256k1 private key"
+targetRules = ["generic-api-key"]
+regexes = ['''^0x[0-9a-fA-F]{40}$''']
+
+[[allowlists]]
+description = "The generated ABI manifest's keccak256 hashes; abis.test.ts holds each one equal to its ABI's hash"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)src/abis/manifest\.json$''']
+regexes = ['''^0x[0-9a-f]{64}$''']
+
+[[allowlists]]
+description = "UPPER_SNAKE_CASE identifiers, such as Bankr API error codes"
+targetRules = ["generic-api-key"]
+regexes = ['''^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$''']

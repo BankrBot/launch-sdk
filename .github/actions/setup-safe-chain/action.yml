@@ -1,0 +1,144 @@
+name: "Setup Safe Chain"
+description: "Install Aikido Safe Chain from the pinned, checksum-verified official installer and expose its package-manager shims. Linux runners."
+author: "Bankr"
+
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  version:
+    description: "safe-chain release tag. Empty uses the version pinned in this action."
+    required: false
+    default: ""
+  checksum:
+    description: "SHA-256 of that release's install-safe-chain.sh. Required when overriding version; `skip` installs unverified."
+    required: false
+    default: ""
+  add-to-path:
+    description: "Put the shims on the job PATH. `false` keeps them scoped — use the path-prefix output."
+    required: false
+    default: "true"
+  verify-with:
+    description: "Package manager for the `safe-chain-verify` smoke test. `none` skips it."
+    required: false
+    default: "npm"
+  minimum-package-age-exclusions:
+    description: "Comma-separated packages exempt from the age check. Malware blocking still applies."
+    required: false
+    default: ""
+
+outputs:
+  path-prefix:
+    description: "`<shims>:<bin>`, for a per-step `export PATH`."
+    value: ${{ steps.install.outputs.path-prefix }}
+  shims-dir:
+    description: "The shims directory, for actions taking an executable path (e.g. `<shims-dir>/bun`)."
+    value: ${{ steps.install.outputs.shims-dir }}
+  version:
+    description: "The safe-chain version installed."
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install safe-chain
+      id: install
+      shell: bash
+      env:
+        SC_VERSION: ${{ inputs.version }}
+        SC_CHECKSUM: ${{ inputs.checksum }}
+        SC_VERIFY_WITH: ${{ inputs.verify-with }}
+      run: |
+        set -euo pipefail
+
+        # The only place the pin lives. Inputs default to empty so overriding the
+        # version cannot silently inherit a hash that belongs to another release.
+        PINNED_VERSION="1.5.26"
+        PINNED_CHECKSUM="9e4af7107f06d9c0d758cb08fb36804c2af88e24972f3a9d3f8c2bd0ca002adf"
+
+        SC_VERSION="${SC_VERSION:-$PINNED_VERSION}"
+        if [ -z "$SC_CHECKSUM" ]; then
+          if [ "$SC_VERSION" != "$PINNED_VERSION" ]; then
+            echo "::error::version ${SC_VERSION} needs its own checksum (or checksum: skip) — the pinned hash belongs to ${PINNED_VERSION}."
+            exit 1
+          fi
+          SC_CHECKSUM="$PINNED_CHECKSUM"
+        fi
+
+        # Must run before the shims reach PATH: setup-ci creates one for all 18
+        # managers, so a check afterwards finds a shim and never a missing tool.
+        if [ "$SC_VERIFY_WITH" != "none" ] && ! command -v "$SC_VERIFY_WITH" >/dev/null 2>&1; then
+          echo "::error::verify-with=${SC_VERIFY_WITH} is not installed on this runner. Install it first, or pass verify-with: none."
+          exit 1
+        fi
+
+        INSTALLER="$(mktemp)"
+        SC_GITHUB_PATH="$(mktemp)"
+        trap 'rm -f "$INSTALLER" "$SC_GITHUB_PATH"' EXIT
+
+        # --retry covers the 503s the releases CDN throws; long-standing flags only,
+        # so an older curl can't die on an unknown option.
+        curl -fsSL --retry 5 --retry-delay 3 --retry-max-time 90 \
+          "https://github.com/AikidoSec/safe-chain/releases/download/${SC_VERSION}/install-safe-chain.sh" \
+          -o "$INSTALLER"
+
+        if [ "$SC_CHECKSUM" = "skip" ]; then
+          echo "::warning::Installing safe-chain ${SC_VERSION} without verifying the installer."
+        else
+          echo "${SC_CHECKSUM}  ${INSTALLER}" | sha256sum -c -
+        fi
+
+        # --ci gives PATH shims rather than shell aliases. GITHUB_PATH is redirected
+        # because setup-ci writes the shims dir there itself and a later step can't
+        # take that back, which would make add-to-path a no-op.
+        env -u SAFE_CHAIN_VERSION GITHUB_PATH="$SC_GITHUB_PATH" sh "$INSTALLER" --ci
+
+        SHIMS="$HOME/.safe-chain/shims"
+        BIN="$HOME/.safe-chain/bin"
+        if [ ! -d "$SHIMS" ]; then
+          echo "::error::safe-chain shims were not created at ${SHIMS}."
+          exit 1
+        fi
+
+        {
+          echo "path-prefix=${SHIMS}:${BIN}"
+          echo "shims-dir=${SHIMS}"
+          echo "version=${SC_VERSION}"
+        } >> "$GITHUB_OUTPUT"
+
+        # Prove interception before any caller depends on it.
+        export PATH="${SHIMS}:${BIN}:${PATH}"
+        [ "$SC_VERIFY_WITH" = "none" ] || "$SC_VERIFY_WITH" safe-chain-verify
+
+    # Reversed because the runner inverts multi-line GITHUB_PATH order — the last
+    # line lands first — and shims must precede bin. awk, not tac/tail -r: neither
+    # is portable across both runner families. Order is asserted in the test workflow.
+    - name: Add shims to PATH for later steps
+      if: inputs.add-to-path == 'true'
+      shell: bash
+      env:
+        PATH_PREFIX: ${{ steps.install.outputs.path-prefix }}
+      run: |
+        printf '%s\n' "$PATH_PREFIX" | tr ':' '\n' \
+          | awk '{ line[NR] = $0 } END { for (i = NR; i >= 1; i--) print line[i] }' \
+          >> "$GITHUB_PATH"
+
+    - name: Export minimum-age exclusions
+      if: inputs.minimum-package-age-exclusions != ''
+      shell: bash
+      env:
+        EXCLUSIONS: ${{ inputs.minimum-package-age-exclusions }}
+      run: |
+        set -euo pipefail
+
+        # A newline here would append arbitrary vars to every later step's env.
+        case "$EXCLUSIONS" in
+          *[!A-Za-z0-9@/._,-]*)
+            echo "::error::minimum-package-age-exclusions accepts package names and commas only."
+            exit 1
+            ;;
+        esac
+
+        printf 'SAFE_CHAIN_MINIMUM_PACKAGE_AGE_EXCLUSIONS=%s\n' "$EXCLUSIONS" >> "$GITHUB_ENV"
+        echo "::notice::Minimum-age check skipped job-wide for: ${EXCLUSIONS}. Malicious-package blocking still applies."

@@ -1,0 +1,191 @@
+name: Stage @bankr/launch-sdk release
+
+# Builds @bankr/launch-sdk and submits it to npm's staging queue via trusted publishing (OIDC), so no npm token
+# exists in this repo. The version is not installable until a maintainer approves it with 2FA.
+# Setup and approval steps: PUBLISHING.md in Bankr's monorepo, which exports this repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dist_tag:
+        description: "npm dist-tag override. Default: derived from the version (alpha/beta/rc/next, else latest)."
+        required: false
+        type: string
+
+concurrency:
+  group: stage-release
+  cancel-in-progress: false
+
+env:
+  # npm 11.15.0+ ships `npm stage`; pinned so a bad npm release can't break a publish.
+  NPM_VERSION: "12.0.2"
+  # The same pin as .github/actions/setup-safe-chain; 1.5.14+ ships a vendor-published installer hash.
+  SAFE_CHAIN_VERSION: "1.5.26"
+  # Published by Aikido in the repo README; confirmed against the release asset.
+  SAFE_CHAIN_SHA256: "9e4af7107f06d9c0d758cb08fb36804c2af88e24972f3a9d3f8c2bd0ca002adf"
+
+jobs:
+  stage:
+    name: Build and stage
+    runs-on: ubuntu-latest
+    # Must exist with a deployment branch policy restricted to main, and be named in the npm trust config: npm then
+    # requires an environment claim that a branch copy of this workflow can't mint.
+    environment: npm-launch-sdk-release
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # trusted publishing (OIDC)
+    steps:
+      # Fallback for when the environment's branch policy isn't in effect. With the policy active GitHub rejects a
+      # non-main dispatch before any step runs, so this never fires.
+      - name: Refuse to stage from a non-release ref
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Stage releases only from main (got ${REF})."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      # No registry-url on purpose. It makes setup-node write an `_authToken` line into .npmrc that expands empty
+      # without NODE_AUTH_TOKEN; npm reads that as "auth configured" and skips the OIDC exchange.
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Install npm with staged-publishing support
+        run: |
+          npm install -g "npm@${NPM_VERSION}"
+          npm --version
+
+      # Ahead of the dependency install, so a forgotten version bump surfaces in seconds.
+      - name: Resolve version and dist-tag
+        id: meta
+        shell: bash # [[ ]] below is not POSIX
+        env:
+          DIST_TAG_INPUT: ${{ inputs.dist_tag }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+
+          if [ -n "$DIST_TAG_INPUT" ]; then
+            TAG="$DIST_TAG_INPUT"
+          elif [[ "$VERSION" == *"-alpha"* ]]; then
+            TAG="alpha"
+          elif [[ "$VERSION" == *"-beta"* ]]; then
+            TAG="beta"
+          elif [[ "$VERSION" == *"-rc"* ]]; then
+            TAG="rc"
+          elif [[ "$VERSION" == *"-"* ]]; then
+            TAG="next"
+          else
+            TAG="latest"
+          fi
+
+          # `latest` stays on the deprecated 0.0.0-reserved.0 placeholder until 1.0.0 (GA).
+          if [ "$TAG" = "latest" ] && [[ "$VERSION" == 0.* ]]; then
+            echo "::error::${VERSION} is below 1.0.0, and latest moves only at GA. Stage it under a prerelease dist-tag."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Staging @bankr/launch-sdk@$VERSION with dist-tag $TAG"
+
+      - name: Fail if the version is already published
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          # The package exists from the reserved placeholder on; `npm stage publish` cannot create one anyway.
+          # Every failure path exits 1, so a registry problem can never fall through to "this version is free".
+          if ! VERSIONS=$(npm view "@bankr/launch-sdk" versions --json); then
+            echo "::error::Could not read @bankr/launch-sdk from the registry (unreachable, or the package does not exist)."
+            exit 1
+          fi
+
+          if ! PUBLISHED=$(node -e "
+            const raw = JSON.parse(process.argv[1]);
+            if (typeof raw !== 'string' && !Array.isArray(raw)) throw new Error('unexpected versions payload');
+            const list = Array.isArray(raw) ? raw : [raw]; // npm flattens a single-version result
+            console.log(list.includes(process.argv[2]) ? 'yes' : 'no');
+          " "$VERSIONS" "$VERSION"); then
+            echo "::error::Could not parse the registry response for @bankr/launch-sdk."
+            exit 1
+          fi
+
+          if [ "$PUBLISHED" = "yes" ]; then
+            echo "::error::@bankr/launch-sdk@${VERSION} is already on the registry. Bump the version in Bankr's monorepo and export again."
+            exit 1
+          fi
+
+          echo "@bankr/launch-sdk@${VERSION} is not published yet."
+
+      # The lockfile's integrity hashes are the trust anchor, and safe-chain catches packages flagged malicious
+      # after it was committed.
+      - name: Set up safe-chain
+        id: safe-chain
+        uses: ./.github/actions/setup-safe-chain
+        with:
+          version: ${{ env.SAFE_CHAIN_VERSION }}
+          checksum: ${{ env.SAFE_CHAIN_SHA256 }}
+          # Shims stay off the job PATH so they wrap dependency resolution only, never the stage call below.
+          add-to-path: false
+          verify-with: bun
+
+      - name: Install dependencies under safe-chain
+        env:
+          SAFE_CHAIN_PATH: ${{ steps.safe-chain.outputs.path-prefix }}
+        run: |
+          export PATH="${SAFE_CHAIN_PATH}:$PATH"
+          bun install --frozen-lockfile
+
+      - name: Test
+        run: bun test
+
+      - name: Build
+        run: bun run build
+
+      - name: List tarball contents
+        run: npm pack --dry-run
+
+      - name: ESM import of the tarball on Node 24
+        run: |
+          DEST="${RUNNER_TEMP}/launch-sdk-pack"
+          mkdir -p "$DEST"
+          bun pm pack --ignore-scripts --destination "$DEST"
+          node scripts/smoke-node-import.mjs "$DEST"/*.tgz
+
+      # Trusted publishing attests on its own; --provenance makes a stage that cannot attest fail here rather than go
+      # live unattested.
+      - name: Stage publish
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: npm stage publish --provenance --tag "$TAG"
+
+      - name: Summarize approval step
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          {
+            echo "### @bankr/launch-sdk@${VERSION} staged (dist-tag \`${TAG}\`)"
+            echo
+            echo "It is **not installable yet**. A maintainer must approve it with 2FA:"
+            echo
+            echo '```bash'
+            echo "npm stage list @bankr/launch-sdk"
+            echo "npm stage download @bankr/launch-sdk <stage-id>   # inspect: dist/, README.md, LICENSE, package.json only"
+            echo "npm stage approve @bankr/launch-sdk <stage-id>"
+            echo '```'
+            echo
+            echo "Once it is live, \`npm view @bankr/launch-sdk@${VERSION} dist.attestations\` must name BankrBot/launch-sdk."
+          } >> "$GITHUB_STEP_SUMMARY"
