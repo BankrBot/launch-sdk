@@ -14,8 +14,8 @@ contracts and run no indexer: read the launches from Bankr's public
 [Launch API](https://docs.bankr.bot/token-launching/launch-sdk/builder-api) or from the SDK.
 
 > **Status: alpha**, on npm's `alpha` tag. This is the SDK's **version 1** line, built for Bankr's configurable
-> suite ("suite 4"). No chain's suite 4 record ships in this release: `suite: 4` throws `PROVIDER_NOT_DEPLOYED`
-> until the release that carries one, and until then it runs against a suite you deployed (pass its record as
+> suite ("suite 4"). Base's suite 4 record ships from the next release, where `suite: 4` launches on Base. On
+> every other chain it throws `PROVIDER_NOT_DEPLOYED`, or runs against a suite you deployed (pass its record as
 > `addresses` with `fork: true`). A client is on suite 4 only when it asks for it. The suite live on Base today
 > ("suite 3") is the default, and is still launched, read and claimed with this SDK: see
 > [Suite 3](#suite-3-the-suite-live-today).
