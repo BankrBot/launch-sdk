@@ -15,9 +15,12 @@ export {
 export {
   BANKR_V4_ADDRESSES,
   BANKR_V4_CAP_EXCLUSIONS,
+  BANKR_V4_SUITE4_ADDRESSES,
+  isSuite4Record,
   type LaunchProviderId,
   type ProviderAddresses,
   type ProviderInfo,
+  type Suite4Addresses,
 } from "./addresses.js";
 export {
   createLaunchClient,
@@ -59,6 +62,7 @@ export type {
   DevBuyKind,
   FeeRecipient,
   FeeSchedule,
+  LaunchAllocation,
   LaunchEconomics,
   LaunchInput,
   LaunchMetadata,
@@ -129,6 +133,34 @@ export {
   type CurveVerdict,
 } from "./curveCheck.js";
 export { curveRevertDetail } from "./curveDetail.js";
+export {
+  EXTENSION_PRESETS,
+  PRESET_BOUNDS,
+  decodePresetParams,
+  describePreset,
+  encodePresetParams,
+  type ExtensionTerms,
+  type PresetKey,
+  type PresetName,
+  type PresetParams,
+} from "./presets.js";
+export {
+  extensionAllowlistKey,
+  type CustomExtensionInput,
+  type DecayTaxInput,
+  type LaunchExtensionInput,
+  type PumpBrakeInput,
+  type RawPresetInput,
+  type SniperTaxInput,
+} from "./extension.js";
+export {
+  EXTENSION_TREASURY_BPS,
+  extensionFeeTable,
+  type ExtensionCodeScan,
+  type ExtensionFeeRow,
+  type LaunchExtensionPreview,
+  type PreviewExtensionOptions,
+} from "./extensionPreview.js";
 export type { CurveKeyInput, LaunchCurveInput } from "./curveInput.js";
 export {
   curveFromMarketCaps,
@@ -159,7 +191,7 @@ export {
   type SetPayeesOptions,
   type SetPolicyOptions,
 } from "./launchpads.js";
-export { bankrLaunchpadRegistryAbi } from "./abis/generated.js";
+export { bankrLaunchpadRegistryAbi } from "./abis/suite3.js";
 export {
   bpsToPercent,
   percentToBps,
@@ -181,8 +213,11 @@ export {
   predictEscrow,
   predictToken,
   readLiveSuite,
+  readSuite4LiveSuite,
   type LiveSuite,
+  type Suite4LiveSuite,
   type TokenIdentity,
+  type TokenTerms,
 } from "./predict.js";
 export {
   VANITY_MAX_TRIES,
@@ -198,6 +233,8 @@ export { resolveQuote } from "./quotes.js";
 export {
   BANKR_BUILDER_CODE,
   LAUNCH_ALLOCATION_GAS,
+  LAUNCH_LINK_BYTE_GAS,
+  LAUNCH_PAD_PAYEE_GAS,
   buildApproveTx,
   buildCallTx,
   buildLaunchTx,
@@ -205,6 +242,8 @@ export {
   clampLaunchGas,
   encodeBuilderCodeSuffix,
   encodeLaunchCalldata,
+  launchGasFallback,
+  type LaunchGasWeight,
 } from "./tx.js";
 export { launchRevertName } from "./simulate.js";
 export {
@@ -236,6 +275,35 @@ export {
   type RoutePool,
 } from "./swapGas.js";
 export { parseLaunchReceipt } from "./receipt.js";
+// Suite 4's launch path: what a launch names beyond its launchpad's defaults, its pins, the chain's refusals in
+// words, the terms a plan shows, and the pieces a custom launcher builds with.
+export {
+  LAUNCH_OPTION,
+  decodeLaunchOptions,
+  encodeLaunchOptions,
+  launchOptions,
+  launchPinsOf,
+  pinLaunchOptions,
+  type LaunchOptionName,
+  type LaunchOptions,
+  type LaunchOptionsInput,
+  type LaunchPins,
+} from "./suite4/options.js";
+export type { Suite4Plan } from "./suite4/plan.js";
+export {
+  SUITE4_LAUNCH_REFUSALS,
+  suite4LaunchRefusal,
+  type LaunchRefusal,
+} from "./suite4/refusals.js";
+export {
+  SUITE4_PRESET_WORDS,
+  decodePresetSite,
+  decodeSuite4PresetParams,
+  encodeSuite4PresetParams,
+  validateSuite4PresetParams,
+  type PresetSite,
+  type Suite4PresetParams,
+} from "./suite4/presets.js";
 export {
   bucketIds,
   type BeneficiaryRole,
@@ -313,3 +381,5 @@ export {
   type LaunchSdkErrorKind,
   type LaunchSdkErrorOptions,
 } from "./errors.js";
+// Suite 4's settings: the reads, a launchpad operator's and the owner's changes, a coin's frozen terms, holder legs.
+export * from "./settings/index.js";

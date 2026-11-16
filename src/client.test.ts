@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { getAddress, type Hex } from "viem";
 import { arbitrum, base, robinhood } from "viem/chains";
-import { BANKR_V4_ADDRESSES } from "./addresses.js";
+import {
+  BANKR_V4_ADDRESSES,
+  BANKR_V4_SUITE4_ADDRESSES,
+  DEFAULT_SUITE,
+  chooseSuite,
+  type Suite4Addresses,
+  type SuiteRecords,
+} from "./addresses.js";
 import { CHAINS } from "./chains/index.js";
 import { createLaunchClient, type LaunchClient } from "./client.js";
 import { ANY_CURVE, curveWordHex, encodeCurve } from "./curve.js";
@@ -70,6 +77,120 @@ async function expectCode(
   );
   return thrown;
 }
+
+describe("which suite a client is on", () => {
+  const at = (n: number) => getAddress(`0x${n.toString(16).padStart(40, "0")}`);
+  // A made-up suite 4 row: what a chain's go-live adds to the SDK's table.
+  const row = (chainId: number): Suite4Addresses => ({
+    ...testSuite(chainId),
+    factory: at(0x4f),
+    settings: at(0x45),
+    termsLens: at(0x46),
+    raffleRunCode: at(0x47),
+    launchResolverLibrary: at(0x48),
+    launchPricingLibrary: at(0x49),
+    settingsColdLibrary: at(0x4a),
+    ledgerColdLibrary: at(0x4b),
+  });
+  // Base has both suites, Arbitrum suite 4 alone.
+  const SHIPPED: SuiteRecords = {
+    suite3: BANKR_V4_ADDRESSES,
+    suite4: {
+      ...BANKR_V4_SUITE4_ADDRESSES,
+      base: row(8453),
+      arbitrum: row(42161),
+    },
+  };
+
+  test("the default suite is 3: a client that names none is built on suite 3's record, or on none", () => {
+    expect(DEFAULT_SUITE).toBe(3);
+    for (const chain of sdk.LAUNCH_CHAINS) {
+      const record = BANKR_V4_ADDRESSES[chain];
+      if (record === null) {
+        expectSync(
+          () => createLaunchClient({ chain }),
+          "PROVIDER_NOT_DEPLOYED",
+        );
+        continue;
+      }
+      const c = createLaunchClient({ chain });
+      expect(c.provider.addresses, chain).toEqual(record);
+      expectSync(() => c.suite4(), "PROVIDER_NOT_DEPLOYED");
+    }
+  });
+
+  test("a suite 4 record landing moves no client that names no suite: it stays on suite 3's record", () => {
+    expect(chooseSuite("base", {}, SHIPPED)).toEqual({
+      suite: 3,
+      addresses: { ...BANKR_V4_ADDRESSES.base },
+    });
+    // A whole suite 3 fork record is a suite 3 client, and takes no settings contract from the shipped row.
+    const fork = chooseSuite("base", { addresses: SUITE }, SHIPPED);
+    expect(fork).toEqual({ suite: 3, addresses: { ...SUITE } });
+    expect(fork.addresses.settings).toBeUndefined();
+  });
+
+  test("suite 4 is asked for by name, or by addresses that name a settings contract", () => {
+    expect(chooseSuite("base", { suite: 4 }, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: row(8453),
+    });
+    const hook = at(0x77);
+    expect(
+      chooseSuite("base", { suite: 4, addresses: { hook } }, SHIPPED),
+    ).toEqual({ suite: 4, addresses: { ...row(8453), hook } });
+    const own = { ...row(8453), settings: at(0x99) };
+    expect(chooseSuite("base", { addresses: own }, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: own,
+    });
+    // With no shipped row a fork's record stands alone: nothing of suite 3's is merged under it.
+    const none = { ...SHIPPED, suite4: { ...SHIPPED.suite4, base: null } };
+    expect(
+      chooseSuite("base", { addresses: { settings: at(0x99) } }, none),
+    ).toEqual({ suite: 4, addresses: { settings: at(0x99) } });
+  });
+
+  test("on a chain with suite 4 alone an unnamed client has no record, and an override takes nothing from the suite 4 row", () => {
+    expect(chooseSuite("arbitrum", {}, SHIPPED)).toEqual({
+      suite: 3,
+      addresses: {},
+    });
+    const hook = at(0x77);
+    expect(chooseSuite("arbitrum", { addresses: { hook } }, SHIPPED)).toEqual({
+      suite: 3,
+      addresses: { hook },
+    });
+    expect(chooseSuite("arbitrum", { suite: 4 }, SHIPPED).addresses).toEqual(
+      row(42161),
+    );
+  });
+
+  test("suite 3 with a settings contract is refused, not read as suite 4", () => {
+    const detail = (
+      expectSync(
+        () =>
+          createLaunchClient({
+            chain: "base",
+            suite: 3,
+            addresses: { ...SUITE, settings: at(0x45) },
+          }),
+        "PROVIDER_NOT_DEPLOYED",
+      ) as { detail?: string }
+    ).detail;
+    expect(detail).toContain("addresses.settings");
+  });
+
+  test("asking for suite 4 where this version ships no record of it is PROVIDER_NOT_DEPLOYED", () => {
+    for (const chain of sdk.LAUNCH_CHAINS) {
+      if (BANKR_V4_SUITE4_ADDRESSES[chain] !== null) continue;
+      expectSync(
+        () => createLaunchClient({ chain, suite: 4 }),
+        "PROVIDER_NOT_DEPLOYED",
+      );
+    }
+  });
+});
 
 describe("createLaunchClient", () => {
   test("UNSUPPORTED_CHAIN for a chain outside CHAINS; RPC_REQUIRED on Arc without an RPC", () => {

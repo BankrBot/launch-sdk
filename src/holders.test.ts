@@ -11,7 +11,7 @@ import {
 import {
   bankrFeeLedgerAbi,
   holderRewardsDistributorAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { isLaunchSdkError } from "./errors.js";
 import { EIP_7825_MAX_TX_GAS } from "./chains/index.js";
 import { HOLDER_CLAIM_ALL_GAS, HOLDER_GAS } from "./index.js";

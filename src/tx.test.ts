@@ -8,7 +8,8 @@ import {
   zeroAddress,
   type Hex,
 } from "viem";
-import { bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrLaunchFactoryAbi as suite4FactoryAbi } from "./abis/generated.js";
+import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import { CHAINS, EIP_7825_MAX_TX_GAS } from "./chains/index.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import { buildLaunchParams } from "./normalize.js";
@@ -17,11 +18,15 @@ import { testSuite } from "./__internal__/fakeSuite.js";
 import {
   BANKR_BUILDER_CODE,
   LAUNCH_ALLOCATION_GAS,
+  LAUNCH_LINK_BYTE_GAS,
+  LAUNCH_PAD_PAYEE_GAS,
   buildApproveTx,
   buildLaunchTx,
   builderCodeSuffix,
   clampLaunchGas,
   encodeBuilderCodeSuffix,
+  launchGasFallback,
+  type LaunchGasWeight,
 } from "./tx.js";
 
 const LAUNCHER = getAddress("0x1111111111111111111111111111111111111111");
@@ -89,6 +94,7 @@ function plan(over: Partial<LaunchPlan<"base">> = {}): LaunchPlan<"base"> {
     tokenIsCurrency0: true,
     distributor: getAddress("0x0000000000000000000000000000000000000def"),
     escrow: null,
+    extension: null,
     quote: {
       symbol: "WETH",
       address: WETH,
@@ -185,11 +191,11 @@ describe("per-chain gas clamp", () => {
 });
 
 describe("launch gas pre-flight: builder allocations against the per-transaction ceiling", () => {
-  // The heaviest launch every check accepts, as the lowest gas limit it lands at on Base with the chain's seven cap
-  // exclusions (layer 7, an eight-band table): 13,684,692, and about 131,150 more for each builder allocation. 23
-  // fit Base's 16,777,216; the 24th does not.
+  // The heaviest launch measured on Bankr's pad (id 0), as the lowest gas limit it lands at on Base with the chain's
+  // seven cap exclusions (seven band edges crossed by the dev buy, a quote's first launch): 14,722,586, and about
+  // 129,400 more for each builder allocation. 15 fit Base's 16,777,216; the 16th does not.
   const heaviest = (allocations: number): bigint =>
-    13_684_692n + BigInt(allocations) * LAUNCH_ALLOCATION_GAS;
+    14_722_586n + BigInt(allocations) * LAUNCH_ALLOCATION_GAS;
   const withAllocations = (
     count: number,
     gasEstimate: bigint | null = heaviest(count),
@@ -220,40 +226,40 @@ describe("launch gas pre-flight: builder allocations against the per-transaction
     throw new Error("accepted");
   }
 
-  test("23 allocations fit: the launch is built, its limit the ceiling", () => {
-    expect(LAUNCH_ALLOCATION_GAS).toBe(131_150n);
-    expect(heaviest(0)).toBe(13_684_692n);
-    expect(heaviest(23)).toBe(16_701_142n);
-    const tx = buildLaunchTx(CHAINS.base, withAllocations(23));
+  test("15 allocations fit: the launch is built, its limit the ceiling", () => {
+    expect(LAUNCH_ALLOCATION_GAS).toBe(129_400n);
+    expect(heaviest(0)).toBe(14_722_586n);
+    expect(heaviest(15)).toBe(16_663_586n);
+    const tx = buildLaunchTx(CHAINS.base, withAllocations(15));
     expect(tx.gas).toBe(EIP_7825_MAX_TX_GAS);
-    expect(clampLaunchGas(CHAINS.base, heaviest(23), true, 23)).toBe(
+    expect(clampLaunchGas(CHAINS.base, heaviest(15), true, 15)).toBe(
       EIP_7825_MAX_TX_GAS,
     );
   });
 
-  test("24 do not: INVALID_PARAMS before a transaction is built, saying how many fit", () => {
-    expect(heaviest(24)).toBe(16_832_292n);
-    const err = refusal(() => buildLaunchTx(CHAINS.base, withAllocations(24)));
+  test("16 do not: INVALID_PARAMS before a transaction is built, saying how many fit", () => {
+    expect(heaviest(16)).toBe(16_792_986n);
+    const err = refusal(() => buildLaunchTx(CHAINS.base, withAllocations(16)));
     expect(err.detail).toBe(
-      "This launch needs about 16,832,292 gas, and this chain takes at most 16,777,216 in one transaction. A builder allocation adds about 131,150: 23 of its 24 builder allocations fit.",
+      "This launch needs about 16,792,986 gas, and this chain takes at most 16,777,216 in one transaction. A builder allocation adds about 129,400: 15 of its 16 builder allocations fit.",
     );
     // A caller's own gas changes nothing: the launch itself is over the ceiling.
     refusal(() =>
-      buildLaunchTx(CHAINS.base, withAllocations(24), { gas: 16_000_000n }),
+      buildLaunchTx(CHAINS.base, withAllocations(16), { gas: 16_000_000n }),
     );
-    // The lowest limit layer 7 measured for 24 on a built-in curve, 10,899 over the ceiling: 23 of them fit.
+    // The lowest limit measured for 16 with seven crossed edges, 11,568 over the ceiling: 15 of them fit.
     expect(
       refusal(() =>
-        buildLaunchTx(CHAINS.base, withAllocations(24, 16_788_115n)),
+        buildLaunchTx(CHAINS.base, withAllocations(16, 16_788_784n)),
       ).detail,
-    ).toContain("23 of its 24 builder allocations fit");
-    // Further over, the same 23 fit; a launch over the ceiling without its allocations fits none.
+    ).toContain("15 of its 16 builder allocations fit");
+    // Further over, the same 15 fit; a launch over the ceiling without its allocations fits none.
     expect(
-      refusal(() => buildLaunchTx(CHAINS.base, withAllocations(25))).detail,
-    ).toContain("23 of its 25 builder allocations fit");
+      refusal(() => buildLaunchTx(CHAINS.base, withAllocations(17))).detail,
+    ).toContain("15 of its 17 builder allocations fit");
     expect(
       refusal(() => buildLaunchTx(CHAINS.base, withAllocations(32))).detail,
-    ).toContain("23 of its 32 builder allocations fit");
+    ).toContain("15 of its 32 builder allocations fit");
     expect(
       refusal(() => buildLaunchTx(CHAINS.base, withAllocations(2, 17_100_000n)))
         .detail,
@@ -261,10 +267,10 @@ describe("launch gas pre-flight: builder allocations against the per-transaction
     // A chain with a higher ceiling takes the same launch.
     expect(
       buildLaunchTx(CHAINS.arbitrum, {
-        ...withAllocations(24),
+        ...withAllocations(16),
         chain: "arbitrum",
       } as LaunchPlan).gas,
-    ).toBe((heaviest(24) * 12n) / 10n + 960_000n);
+    ).toBe((heaviest(16) * 12n) / 10n + 960_000n);
   });
 
   test("a launch without allocations over the ceiling keeps SIMULATION_REVERTED", () => {
@@ -276,14 +282,14 @@ describe("launch gas pre-flight: builder allocations against the per-transaction
 
   // A node refuses to estimate a launch over its per-transaction cap, and gives none for other reasons too (an RPC
   // without estimate overrides): with no estimate the heaviest launch stands in, as the worst case.
-  test("no estimate, 23 allocations: the heaviest launch fits, so the launch is built at the ceiling", () => {
-    expect(clampLaunchGas(CHAINS.base, null, false, 23)).toBe(
+  test("no estimate, 15 allocations: the heaviest launch fits, so the launch is built at the ceiling", () => {
+    expect(clampLaunchGas(CHAINS.base, null, false, 15)).toBe(
       EIP_7825_MAX_TX_GAS,
     );
-    expect(clampLaunchGas(CHAINS.base, null, true, 23)).toBe(
+    expect(clampLaunchGas(CHAINS.base, null, true, 15)).toBe(
       EIP_7825_MAX_TX_GAS,
     );
-    expect(buildLaunchTx(CHAINS.base, withAllocations(23, null)).gas).toBe(
+    expect(buildLaunchTx(CHAINS.base, withAllocations(15, null)).gas).toBe(
       EIP_7825_MAX_TX_GAS,
     );
     // Without allocations nothing is refused: the ceiling itself, as before.
@@ -292,56 +298,56 @@ describe("launch gas pre-flight: builder allocations against the per-transaction
     );
   });
 
-  test("no estimate, 24 allocations: INVALID_PARAMS from the heaviest launch's figure, saying how many fit", () => {
+  test("no estimate, 16 allocations: INVALID_PARAMS from the heaviest launch's figure, saying how many fit", () => {
     const err = refusal(() =>
-      buildLaunchTx(CHAINS.base, withAllocations(24, null)),
+      buildLaunchTx(CHAINS.base, withAllocations(16, null)),
     );
     // The figure is named as the worst case, never as what this launch needs, with the two ways past it.
     expect(err.detail).toBe(
-      "The node gave no gas estimate for this launch, so the heaviest launch the factory accepts stands in for it: a gas limit of about 16,832,292 with its 24 builder allocations, and this chain takes at most 16,777,216 in one transaction. A builder allocation adds about 131,150: at that figure 23 of the 24 fit. A lighter launch can fit as it is: set the plan's gasEstimate to your own estimate, or pass buildLaunchTx your own gas limit.",
+      "The node gave no gas estimate for this launch, so the heaviest launch on Bankr's launchpad stands in for it: a gas limit of about 16,792,986 with its 16 builder allocations, and this chain takes at most 16,777,216 in one transaction. A builder allocation adds about 129,400: at that figure 15 of the 16 fit. A lighter launch can fit as it is: set the plan's gasEstimate to your own estimate, or pass buildLaunchTx your own gas limit.",
     );
-    expect(err.detail).not.toContain("23 of its 24 builder allocations fit");
+    expect(err.detail).not.toContain("15 of its 16 builder allocations fit");
     expect(
-      refusal(() => clampLaunchGas(CHAINS.base, null, false, 24)).detail,
+      refusal(() => clampLaunchGas(CHAINS.base, null, false, 16)).detail,
     ).toBe(err.detail);
     // A caller's gas over the ceiling shows nothing: the launch is still held to the heaviest figure.
     expect(
       refusal(() =>
-        buildLaunchTx(CHAINS.base, withAllocations(24, null), {
+        buildLaunchTx(CHAINS.base, withAllocations(16, null), {
           gas: EIP_7825_MAX_TX_GAS + 1n,
         }),
       ).detail,
     ).toBe(err.detail);
     expect(
-      refusal(() => buildLaunchTx(CHAINS.base, withAllocations(25, null)))
+      refusal(() => buildLaunchTx(CHAINS.base, withAllocations(17, null)))
         .detail,
-    ).toContain("at that figure 23 of the 25 fit");
+    ).toContain("at that figure 15 of the 17 fit");
     expect(
       refusal(() => buildLaunchTx(CHAINS.base, withAllocations(32, null)))
         .detail,
-    ).toContain("at that figure 23 of the 32 fit");
-    // A chain with a higher ceiling holds 139 at the heaviest launch's figure; the 140th is refused there too.
+    ).toContain("at that figure 15 of the 32 fit");
+    // A chain with a higher ceiling holds 133 at the heaviest launch's figure; the 134th is refused there too.
     const onArbitrum = (count: number) => () =>
       buildLaunchTx(CHAINS.arbitrum, {
         ...withAllocations(count, null),
         chain: "arbitrum",
       } as LaunchPlan);
     expect(onArbitrum(24)().gas).toBe(CHAINS.arbitrum.maxTxGas);
-    expect(heaviest(139)).toBe(31_914_542n);
-    expect(onArbitrum(139)().gas).toBe(32_000_000n);
-    expect(refusal(onArbitrum(140)).detail).toContain(
-      "at that figure 139 of the 140 fit",
+    expect(heaviest(133)).toBe(31_932_786n);
+    expect(onArbitrum(133)().gas).toBe(32_000_000n);
+    expect(refusal(onArbitrum(134)).detail).toContain(
+      "at that figure 133 of the 134 fit",
     );
   });
 
-  // A plain launch is about 6M gas, and even at 7.3M its 24 allocations make about 10.4M: the chain takes it, and
+  // A plain launch is about 7.5M gas, and even at 8M its 24 allocations make about 11.1M: the chain takes it, and
   // a missing estimate (any estimate failure nulls it) says nothing of its weight.
   test("no estimate, a light launch with 24 allocations: the caller's own gas limit builds it", () => {
-    const light = 7_300_000n + 24n * LAUNCH_ALLOCATION_GAS;
-    expect(light).toBe(10_447_600n);
+    const light = 8_000_000n + 24n * LAUNCH_ALLOCATION_GAS;
+    expect(light).toBe(11_105_600n);
     const unestimated = withAllocations(24, null);
-    const tx = buildLaunchTx(CHAINS.base, unestimated, { gas: 12_537_120n });
-    expect(tx.gas).toBe(12_537_120n);
+    const tx = buildLaunchTx(CHAINS.base, unestimated, { gas: 13_326_720n });
+    expect(tx.gas).toBe(13_326_720n);
     expect(tx.to).toBe(SUITE.factory);
     const decoded = decodeFunctionData({
       abi: bankrLaunchFactoryAbi,
@@ -359,12 +365,12 @@ describe("launch gas pre-flight: builder allocations against the per-transaction
     ).toBe(14_000_000n);
     // The caller's own estimate on the plan does the same, with the usual headroom.
     expect(buildLaunchTx(CHAINS.base, withAllocations(24, light)).gas).toBe(
-      12_537_120n + 960_000n,
+      13_326_720n + 960_000n,
     );
-    expect(clampLaunchGas(CHAINS.base, light, false, 24)).toBe(12_537_120n);
+    expect(clampLaunchGas(CHAINS.base, light, false, 24)).toBe(13_326_720n);
     // An estimate over the ceiling is knowledge, not a guess: no gas of the caller's builds that launch.
     refusal(() =>
-      buildLaunchTx(CHAINS.base, withAllocations(24), { gas: 12_537_120n }),
+      buildLaunchTx(CHAINS.base, withAllocations(24), { gas: 13_326_720n }),
     );
   });
 });
@@ -451,5 +457,116 @@ describe("buildLaunchTx", () => {
     const decoded = decodeFunctionData({ abi: erc20Abi, data: tx.data });
     expect(decoded.functionName).toBe("approve");
     expect(decoded.args).toEqual([SUITE.factory, 5_000_000n]);
+  });
+});
+
+describe("the gas that stands in for a suite 4 launch with no estimate is sized from its own launchpad", () => {
+  const cap = EIP_7825_MAX_TX_GAS;
+  /** The most builder allocations the fallback passes under Base's ceiling for a pad's weight. */
+  const fits = (weight?: LaunchGasWeight): number => {
+    let n = 0;
+    while (launchGasFallback(n + 1, weight) <= cap) n++;
+    return n;
+  };
+
+  test("Bankr's pad, and any lighter one, is held to what forge pins on id 0: 15 fit Base, the 16th does not", () => {
+    expect(fits()).toBe(15);
+    // Two payees, a decay split and a 2,048-byte link are what the measured launch carried.
+    expect(fits({ padPayees: 2, linkBytes: 2_048 })).toBe(15);
+    // An open pad with no payee lands more on chain (forge: 18); the fallback never claims more than id 0's count.
+    expect(fits({ padPayees: 0, linkBytes: 0 })).toBe(15);
+  });
+
+  test("a pad with four payees lands 9 as forge pins it (GasV2HeaviestLaunchPads), and the 10th is refused", () => {
+    const weight = { padPayees: 4, linkBytes: 2_048 };
+    expect(fits(weight)).toBe(9);
+    expect(launchGasFallback(0, weight) - launchGasFallback(0)).toBe(
+      2n * LAUNCH_PAD_PAYEE_GAS,
+    );
+    expectCode(
+      () => clampLaunchGas(CHAINS.base, null, false, 10, weight),
+      "INVALID_PARAMS",
+    );
+    expect(clampLaunchGas(CHAINS.base, null, false, 9, weight)).toBe(cap);
+    // Where suite 3's pair alone would have passed 15 at the ceiling, to revert whole on chain.
+    expect(clampLaunchGas(CHAINS.base, null, false, 15)).toBe(cap);
+  });
+
+  test("a 4,096-byte link, once a pad raised its limit, never passes more than the 7 forge lands on an open pad", () => {
+    const weight = { padPayees: 1, linkBytes: 4_096 };
+    expect(launchGasFallback(0, weight) - launchGasFallback(0)).toBe(
+      2_048n * LAUNCH_LINK_BYTE_GAS,
+    );
+    expect(fits(weight)).toBeLessThanOrEqual(7);
+    expect(fits(weight)).toBeGreaterThan(0);
+  });
+
+  test("a plan carries its launch's weight: buildLaunchTx refuses the count its own pad cannot land", () => {
+    const params = {
+      ...buildLaunchParams({
+        name: "Coin",
+        symbol: "COIN",
+        metadataUri: "",
+        metadataAdmin: zeroAddress,
+        quote: testSuite(8453).weth,
+        capExclusions: [],
+        startTick: -239_600,
+        deadline: 1n,
+        economics: {
+          buy: { startPips: 5_000, steadyPips: 5_000, decaySecs: 0 },
+          sell: { startPips: 5_000, steadyPips: 5_000, decaySecs: 0 },
+          referrerBps: 0,
+          holdersBps: 0,
+          autoLpBps: 0,
+          buybackBps: 0,
+          vestToHoldersBps: 0,
+          vestToHoldersCliff: 0n,
+          vestToHoldersDuration: 0n,
+        },
+        launchpadId: 7n,
+        maxOperatorShareBps: 0,
+        operatorPayeesHash: `0x${"00".repeat(32)}`,
+        feeRecipients: [],
+        allowOpenCodeFeeRecipients: false,
+        vestingRecipient: LAUNCHER,
+        vestBps: 0,
+        allowCodeVestingRecipient: false,
+        devBuyAmountIn: 0n,
+        startTime: 0,
+      }),
+      extraAllocations: Array.from({ length: 10 }, (_, i) => ({
+        recipient: getAddress(`0x${(i + 1).toString(16).padStart(40, "a")}`),
+        amount: 10n ** 20n,
+        cliff: 0n,
+        duration: 0n,
+        push: false,
+      })),
+      options: "0x" as Hex,
+    };
+    const plan = (gasWeight: LaunchGasWeight) =>
+      ({
+        chain: "base",
+        launcher: LAUNCHER,
+        factory: testSuite(8453).factory,
+        params,
+        value: 0n,
+        gasEstimate: null,
+        dataSuffix: undefined,
+        suite4: { gasWeight },
+      }) as unknown as LaunchPlan;
+    expectCode(
+      () =>
+        buildLaunchTx(CHAINS.base, plan({ padPayees: 4, linkBytes: 2_048 })),
+      "INVALID_PARAMS",
+    );
+    const tx = buildLaunchTx(
+      CHAINS.base,
+      plan({ padPayees: 2, linkBytes: 2_048 }),
+    );
+    expect(tx.gas).toBe(cap);
+    // A suite 4 launch's calldata is suite 4's tuple: `options` rides at its end.
+    const sent = decodeFunctionData({ abi: suite4FactoryAbi, data: tx.data });
+    if (sent.functionName !== "launch") throw new Error("not a launch");
+    expect(sent.args[0].options).toBe("0x");
   });
 });

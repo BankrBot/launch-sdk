@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import { getBlock, readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import {
   HOLDER_LEG_WAKE_ABI,
   UNLISTED_FLOOR,

@@ -24,10 +24,10 @@ import {
   creatorVestingEscrowAbi,
   erc20TokenDeployerAbi,
   holderRewardsDeployerAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import type { LaunchChain } from "./chains/index.js";
 import type { CurveRevertName } from "./curveCheck.js";
-import { curveRevertDetail } from "./curveDetail.js";
+import { curveRevertDetail, type CurveRuleFigures } from "./curveDetail.js";
 import { erc20SlotsFor, type Erc20Slots } from "./data/erc20Slots.js";
 import type { LaunchParams } from "./economics.js";
 import {
@@ -37,16 +37,33 @@ import {
   type LaunchSdkErrorCode,
 } from "./errors.js";
 import type { LaunchPlan, ReadClient, SimResult } from "./providers/types.js";
+import { suite4CallError, suite4LaunchAbi } from "./suite4/revert.js";
 
 const isError = <T extends { type: string }>(
   item: T,
 ): item is Extract<T, { type: "error" }> => item.type === "error";
 
-/** The hook's two extension errors a launch or a buy can surface; the hook's ABI is not vendored. Held equal to
- *  core's hook ABI entries. */
+/** The hook's extension errors a launch or a buy can surface; the hook's ABI is not vendored. Held equal to core's
+ *  hook ABI entries. */
 export const HOOK_EXTENSION_ERRORS = [
   { type: "error", name: "ExtensionGasBudget", inputs: [] },
   { type: "error", name: "ExtensionRefusedBuy", inputs: [] },
+  { type: "error", name: "ExtensionRejected", inputs: [] },
+  { type: "error", name: "ExtensionCodehashMismatch", inputs: [] },
+] as const;
+
+/** What a preset launch reverts with from code the SDK vendors no ABI of: each preset's constructor (its bounds) and
+ *  the preset deployer. Held equal to core's ABI entries. */
+export const PRESET_ERRORS = [
+  { type: "error", name: "PresetParamsMalformed", inputs: [] },
+  { type: "error", name: "PresetFeeOutOfBounds", inputs: [] },
+  { type: "error", name: "PresetTimeOutOfBounds", inputs: [] },
+  { type: "error", name: "PresetThresholdOutOfBounds", inputs: [] },
+  {
+    type: "error",
+    name: "UnknownPreset",
+    inputs: [{ name: "preset", type: "uint8", internalType: "uint8" }],
+  },
 ] as const;
 
 // A launch reverts from the factory (its libraries' errors are declared there), the launchpad registry, the ledger,
@@ -62,6 +79,7 @@ const LAUNCH_ABI = [
     ...bankrLaunchTokenAbi,
   ].filter(isError),
   ...HOOK_EXTENSION_ERRORS,
+  ...PRESET_ERRORS,
 ];
 
 const REVERT_CODES: Readonly<Record<string, LaunchSdkErrorCode>> = {
@@ -116,6 +134,17 @@ const REVERT_CODES: Readonly<Record<string, LaunchSdkErrorCode>> = {
   DevBuyerExcluded: "DEV_BUY_UNAVAILABLE",
   ExtensionGasBudget: "INVALID_PARAMS",
   AmbiguousExtension: "INVALID_PARAMS",
+  ExtensionNotAllowlisted: "EXTENSION_NOT_ALLOWED",
+  ExtensionNotAllowedByLaunchpad: "EXTENSION_NOT_ALLOWED",
+  PresetsUnavailable: "EXTENSION_NOT_ALLOWED",
+  PresetParamsMalformed: "EXTENSION_OUT_OF_BOUNDS",
+  PresetFeeOutOfBounds: "EXTENSION_OUT_OF_BOUNDS",
+  PresetTimeOutOfBounds: "EXTENSION_OUT_OF_BOUNDS",
+  PresetThresholdOutOfBounds: "EXTENSION_OUT_OF_BOUNDS",
+  UnknownPreset: "INVALID_PARAMS",
+  InvalidExtensionPayee: "INVALID_PARAMS",
+  ExtensionRejected: "INVALID_PARAMS",
+  ExtensionCodehashMismatch: "INVALID_PARAMS",
   InvalidCurve: "INVALID_PARAMS",
   CurveNotAllowedByLaunchpad: "CURVE_NOT_ALLOWED",
   CurveTooThin: "INVALID_PARAMS",
@@ -167,6 +196,27 @@ const REVERT_DETAILS: Readonly<Record<string, string>> = {
     "The extension is named two ways at once: a preset takes only its id and parameters, and custom code takes no preset parameters and writes a gas budget at its floor as 0.",
   ExtensionRefusedBuy:
     "The token's extension refused this buy. It can refuse buys from the pool's first swap; it can never refuse a sell.",
+  ExtensionNotAllowlisted:
+    "The suite's extension allowlist does not hold this extension's key. Only Bankr, the registry's owner, adds a key.",
+  ExtensionNotAllowedByLaunchpad:
+    "This launchpad's policy does not allow this kind of extension, or caps custom code's fee under what this one declares (policy.allowedExtensions, policy.maxExtensionPips).",
+  PresetsUnavailable:
+    "Bankr's presets are switched off on this chain right now.",
+  PresetParamsMalformed:
+    "The preset's params are not its parameters' exact ABI encoding.",
+  PresetFeeOutOfBounds:
+    "A preset fee is out of bounds: at most 100,000 pips (10%) each way; Sniper Tax's buy fee and Pump Brake's fee at least 1, and a Decay Tax needs a buy or a sell fee.",
+  PresetTimeOutOfBounds:
+    "A preset's window is out of bounds: more than 120 seconds after launch, and at most 3,600 (Sniper Tax), 7 days (Decay Tax) or 30 days (Raffle Run).",
+  PresetThresholdOutOfBounds:
+    "Pump Brake's threshold is out of bounds: 6,932 to 887,272 ticks above the launch price.",
+  UnknownPreset: "The suite deploys no preset with this id.",
+  InvalidExtensionPayee:
+    "The extension's payee cannot be a Bankr launch contract, or this launch's own token, escrow or holder-rewards distributor.",
+  ExtensionRejected:
+    "The extension address has no contract code the hook admits (none, a delegated account, EOF or Stylus).",
+  ExtensionCodehashMismatch:
+    "The extension's code does not match the codehash the launch names.",
   CurveNotAllowedByLaunchpad:
     "This launchpad does not allow this launch's curve. Its operator must open it first: list these bands, open the launchpad to launcher-defined bands, or switch the built-in curve back on, with setCurveAllowed.",
 };
@@ -192,6 +242,10 @@ function revertOf(error: unknown): ContractFunctionRevertedError | null {
   );
   return reverted instanceof ContractFunctionRevertedError ? reverted : null;
 }
+
+/** Whether a failed call is a contract's own revert, not a transport or RPC failure. */
+export const isContractRevert = (error: unknown): boolean =>
+  revertOf(error) !== null;
 
 /** The suite error a failed launch call reverted with (e.g. `"StartTickOutOfBounds"`), or null. Pass an error's `cause`. */
 export function launchRevertName(error: unknown): string | null {
@@ -304,7 +358,10 @@ export interface LaunchCall {
   chain: LaunchChain;
   factory: Address;
   launcher: Address;
-  params: LaunchParams;
+  /** A suite 4 launch's tuple carries `options`; it is called and its reverts read on suite 4's ABIs. */
+  params: LaunchParams & { options?: Hex };
+  /** A suite 4 coin's own curve rules, for a curve revert's sentence. */
+  curveRules?: CurveRuleFigures | null;
   value: bigint;
   dataSuffix: Hex | undefined;
   stateOverride?: StateOverride;
@@ -321,10 +378,11 @@ export async function callLaunch(
   client: ReadClient,
   c: LaunchCall,
 ): Promise<Omit<SimResult, "assumedApprovals">> {
+  const suite4 = c.params.options !== undefined;
   const request = {
     account: c.launcher,
     address: c.factory,
-    abi: LAUNCH_ABI,
+    abi: (suite4 ? suite4LaunchAbi() : LAUNCH_ABI) as typeof LAUNCH_ABI,
     functionName: "launch",
     args: [c.params],
     value: c.value,
@@ -342,7 +400,9 @@ export async function callLaunch(
   try {
     ({ result } = await simulateContract(client, request));
   } catch (err) {
-    throw launchCallError(err, c.chain);
+    throw suite4
+      ? suite4CallError(err, c.chain, c.curveRules)
+      : launchCallError(err, c.chain);
   }
   let gas: bigint | null;
   try {
@@ -424,6 +484,7 @@ export async function simulateLaunch(
     factory: plan.factory,
     launcher: plan.launcher,
     params: plan.params,
+    curveRules: plan.suite4?.terms.curve,
     value: plan.value,
     dataSuffix: plan.dataSuffix,
     blockNumber: options.blockNumber,

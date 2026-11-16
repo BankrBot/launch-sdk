@@ -4,7 +4,7 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   bankrLaunchTokenAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { curveWordHex, encodeCurve } from "./curve.js";
 import { isLaunchSdkError } from "./errors.js";
 import { bucketIds } from "./lens.js";

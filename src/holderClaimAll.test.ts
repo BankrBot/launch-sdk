@@ -12,7 +12,7 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   holderRewardsDistributorAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { isLaunchSdkError } from "./errors.js";
 import { HOLDER_CLAIM_ALL_GAS, HOLDER_GAS } from "./holderClaimAll.js";

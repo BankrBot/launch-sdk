@@ -2,8 +2,11 @@
 // simulations and receipts run through viem's real encode and decode. Shipped with the public tests' fakes.
 import {
   decodeFunctionData,
+  encodeAbiParameters,
+  encodePacked,
   getAddress,
   keccak256,
+  sha256,
   toHex,
   zeroAddress,
   type Address,
@@ -15,7 +18,7 @@ import {
   bankrLaunchTokenAbi,
   bankrLaunchpadRegistryAbi,
   holderRewardsDeployerAbi,
-} from "../abis/generated.js";
+} from "../abis/suite3.js";
 import type { ProviderAddresses } from "../addresses.js";
 import { CHAINS, LAUNCH_CHAINS } from "../chains/index.js";
 import { ANY_CURVE, builtInCurveId } from "../curve.js";
@@ -75,6 +78,106 @@ export const FAKE_SIGNED_PRICE = 10n ** 18n;
 export const MIN_START_FDV_USD = 2_000n;
 /** The fake registry's `registrationBondWei`: 0.01 ETH, Base's configured bond. */
 export const FAKE_REGISTRATION_BOND = 10n ** 16n;
+
+/** The fake factory's live `presetDeployer()`; `set("factory", "presetDeployer", zeroAddress)` switches presets off. */
+export const PRESET_DEPLOYER = fakeAddress(0x8018);
+
+/** The registry's allowlist key of preset `id`: keccak256("preset", id). */
+export const fakePresetKey = (id: number): Hex =>
+  keccak256(encodePacked(["string", "uint8"], ["preset", id]));
+
+/** Each preset constructor's own checks (src/extensions/*.sol), in its order: the error it reverts with, or null. */
+function presetRevert(id: number, params: Hex): string | null {
+  const words = { 1: 3, 2: 3, 3: 2, 4: 4 }[id];
+  if (words === undefined) return "UnknownPreset";
+  if (params.length !== 2 + words * 64) return "PresetParamsMalformed";
+  const w = (i: number) => BigInt(`0x${params.slice(2 + i * 64, 66 + i * 64)}`);
+  const fee = "PresetFeeOutOfBounds";
+  if (w(0) > 100_000n || (id !== 3 && w(1) > 100_000n)) return fee;
+  if (id === 3) {
+    const ticks = BigInt.asIntN(256, w(1));
+    if (w(0) === 0n) return fee;
+    return ticks < 6_932n || ticks > 887_272n
+      ? "PresetThresholdOutOfBounds"
+      : null;
+  }
+  if ((id === 1 && w(0) === 0n) || (id === 2 && w(0) + w(1) === 0n)) return fee;
+  const longest = { 1: 3_600n, 2: 604_800n, 4: 2_592_000n }[id]!;
+  return w(2) <= 120n || w(2) > longest ? "PresetTimeOutOfBounds" : null;
+}
+
+/** recordLaunch's extension checks: the pad's policy for the extension's kind, then the allowlist's key. */
+function recordExtension(
+  p: LaunchParams,
+  policy: Launchpad["policy"],
+  allowed: ReadonlySet<string>,
+): void {
+  const e = p.extension;
+  const kind = e.id !== 0 ? 1 : BigInt(e.ext) === 0n ? 0 : e.quoteOnly ? 2 : 3;
+  if (kind === 0) return;
+  const declared = kind > 1 ? Math.max(e.maxBuyPips, e.maxSellPips) : 0;
+  if (
+    ((policy.allowedExtensions >> (kind - 1)) & 1) === 0 ||
+    declared > policy.maxExtensionPips
+  )
+    throw new Revert("ExtensionNotAllowedByLaunchpad");
+  const key =
+    kind === 1
+      ? fakePresetKey(e.id)
+      : (e.quoteGas | e.afterGas) === 0
+        ? e.codehash
+        : sha256(
+            encodeAbiParameters(
+              [{ type: "bytes32" }, { type: "uint256" }, { type: "uint256" }],
+              [
+                e.codehash,
+                BigInt(e.quoteGas || 50_000),
+                BigInt(e.afterGas || (e.quoteOnly ? 0 : 150_000)),
+              ],
+            ),
+          );
+  if (!allowed.has(key.toLowerCase()))
+    throw new Revert("ExtensionNotAllowlisted");
+}
+
+/** LaunchRegistry._bindExtension and the hook's admission: one encoding per term, a preset's own constructor, and
+ *  custom code that exists at the codehash the launch pins, inside its gas budgets. */
+function bindExtension(
+  p: LaunchParams,
+  code: Hex | undefined,
+  presetDeployer: unknown,
+): void {
+  const e = p.extension;
+  if (e.id === 0) {
+    if (BigInt(e.ext) === 0n) return;
+    if (e.params !== "0x" || e.quoteGas === 50_000 || e.afterGas === 150_000)
+      throw new Revert("AmbiguousExtension");
+    if (!code || code === "0x" || code.toLowerCase().startsWith("0xef"))
+      throw new Revert("ExtensionRejected");
+    if (keccak256(code) !== e.codehash.toLowerCase())
+      throw new Revert("ExtensionCodehashMismatch");
+    const quote = e.quoteGas || 50_000;
+    const after = e.afterGas || (e.quoteOnly ? 0 : 150_000);
+    const afterOk = e.quoteOnly
+      ? after === 0
+      : after >= 150_000 && after <= 1_000_000;
+    if (quote < 50_000 || quote > 250_000 || !afterOk)
+      throw new Revert("ExtensionGasBudget");
+    return;
+  }
+  const custom =
+    BigInt(e.ext) !== 0n ||
+    BigInt(e.codehash) !== 0n ||
+    e.quoteOnly ||
+    (e.maxBuyPips | e.maxSellPips | e.sunsetSecs | e.quoteGas | e.afterGas) !==
+      0;
+  if (custom) throw new Revert("AmbiguousExtension");
+  if (BigInt(presetDeployer as Address) === 0n)
+    throw new Revert("PresetsUnavailable");
+  const revert = presetRevert(e.id, e.params);
+  if (revert)
+    throw new Revert(revert, revert === "UnknownPreset" ? [e.id] : []);
+}
 
 /** A complete v4 record for `chainId`, standing in for a broadcast suite (a fork or test override). */
 export function testSuite(chainId: number): ProviderAddresses {
@@ -273,6 +376,8 @@ export interface SuiteFixture {
   fake: FakeChain;
   suite: ProviderAddresses;
   pads: Map<bigint, FakePad>;
+  /** The registry's extension allowlist, by lowercase key: the four presets until a test changes it. */
+  allowedExtensions: Set<string>;
   /** Overrides one suite function: `set("factory", "paused", true)`. */
   set(
     contract: "factory" | "registry" | "ledger" | "distributors",
@@ -320,6 +425,7 @@ export function installSuite(
         }),
       ],
     ]);
+  const allowedExtensions = new Set<string>([1, 2, 3, 4].map(fakePresetKey));
   const byAddress = Object.fromEntries(
     Object.entries(quotes).map(([a, v]) => [lower(a), v]),
   );
@@ -405,6 +511,7 @@ export function installSuite(
     capController: live.capController,
     buyback: live.buyback,
     holderLeg: suite.holderLeg,
+    presetDeployer: PRESET_DEPLOYER,
     quoteList: Object.keys(quotes)
       .filter(listed)
       .map((a) => getAddress(a)),
@@ -473,6 +580,7 @@ export function installSuite(
         throw new Revert("UnlistedQuoteAutoLp");
       if (p.operatorPayeesHash !== padTermsHash(entry.terms))
         throw new Revert("OperatorPayeesMismatch");
+      recordExtension(p, entry.pad.policy, allowedExtensions);
       if (BigInt(entry.pad.signer) !== 0n && p.authorization.signature === "0x")
         throw new Revert("InvalidAuthorization");
       if (
@@ -480,10 +588,23 @@ export function installSuite(
         p.startTime - now > BigInt(entry.pad.policy.maxStartDelay)
       )
         throw new Revert("StartDelayAboveLaunchpadMax");
+      // LaunchRegistry._feeRecipients: with several recipients none stands in for an extension's payee.
+      const named = p.extension.id !== 0 || BigInt(p.extension.ext) !== 0n;
+      if (
+        named &&
+        p.feeRecipients.length > 1 &&
+        BigInt(p.extension.payee) === 0n
+      )
+        throw new Revert("ExtensionPayeeUnnamed");
       checkFeeRecipients(p, launcher, call);
+      bindExtension(
+        p,
+        fake.code.get(lower(p.extension.ext)),
+        fake.contracts.get(lower(suite.factory))?.fns.presetDeployer,
+      );
       const token = predictToken(live, p, launcher, p.salt);
       if (fake.code.has(lower(token))) throw new Revert("TokenSaltTaken");
-      // recordLaunch's curve key, then LaunchPool's rules on a launch's own bands (the fake launches no extension).
+      // recordLaunch's curve key, then LaunchPool's rules on a launch's own bands.
       if (
         !fakeCurveAllowed(entry, p.curveId) &&
         !(ownBands && fakeCurveAllowed(entry, ANY_CURVE))
@@ -500,7 +621,10 @@ export function installSuite(
               buybackBps: p.econ.buybackBps,
               autoLpBps: p.econ.autoLpBps,
               padDecay: entry.terms.decay,
-              extensionCallsOut: false,
+              // Custom code with a post-swap call, and the Raffle Run preset.
+              extensionCallsOut:
+                p.extension.id === 4 ||
+                (BigInt(p.extension.ext) !== 0n && !p.extension.quoteOnly),
             }),
           })
         : null;
@@ -549,6 +673,8 @@ export function installSuite(
     // No revert past the count, as on-chain: an unregistered pad reads as one nobody flipped.
     isCurveAllowed: ([id, key]: readonly unknown[]) =>
       fakeCurveAllowed(pads.get(id as bigint), key as bigint),
+    extensionAllowed: ([key]: readonly unknown[]) =>
+      allowedExtensions.has(lower(String(key))),
     bankrSigner: BANKR_SIGNER,
     registrationBondWei: FAKE_REGISTRATION_BOND,
     // The pad owning exactly this suffix (the registry's owner word), from each pad's live vanity.
@@ -600,6 +726,7 @@ export function installSuite(
     fake,
     suite,
     pads,
+    allowedExtensions,
     set: (contract, fn, value) => {
       const entry = fake.contracts.get(lower(byName[contract]));
       if (!entry) throw new Error(`no ${contract} installed`);

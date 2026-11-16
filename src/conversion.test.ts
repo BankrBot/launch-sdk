@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeFunctionData, zeroAddress, type Address } from "viem";
-import { bankrFeeLedgerAbi, bankrHookLensAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrHookLensAbi } from "./abis/suite3.js";
 import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { isLaunchSdkError } from "./errors.js";
 import {

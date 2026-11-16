@@ -7,7 +7,7 @@ import {
   type Hex,
 } from "viem";
 import { readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import { bucketIds, requireLaunch, type SuiteReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";
 import { requireAddress } from "./recipient.js";

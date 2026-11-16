@@ -11,7 +11,7 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   holderRewardsDeployerAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import type { BankrApi } from "./api.js";
 import { LaunchRefusedError, type CodeOfKind } from "./errors.js";
 import {

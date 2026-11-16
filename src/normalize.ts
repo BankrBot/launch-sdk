@@ -21,9 +21,15 @@ import {
   type LaunchParams,
 } from "./economics.js";
 import { LaunchRefusedError, type CodeOfKind } from "./errors.js";
+import { normalizeExtension, type NormalizedExtension } from "./extension.js";
 import { padEconomics, type PadState } from "./launchpad.js";
 import type { LaunchInput } from "./providers/types.js";
 import { resolveQuote, type QuoteRef } from "./quotes.js";
+import {
+  SUITE4_ONLY_FIELDS,
+  normalizeSuite4Choices,
+  type Suite4Choices,
+} from "./suite4/input.js";
 import { requireAddress } from "./recipient.js";
 import {
   EMPTY_AUTHORIZATION,
@@ -83,8 +89,12 @@ export interface NormalizedLaunch<C extends LaunchChain = LaunchChain> {
   startFdv: bigint | undefined;
   /** The launch's curve: the default (id 0) when the input names none. */
   curve: NormalizedCurve;
+  /** The launch's extension, its parameters held to their bounds; null when the input names none. */
+  extension: NormalizedExtension | null;
   salt: Hex | undefined;
   deadlineSeconds: number;
+  /** A suite 4 launch's own choices; null on suite 3, which can carry none of them. */
+  suite4: Suite4Choices | null;
 }
 
 const isInt = (v: unknown, min: number, max: number): v is number =>
@@ -97,6 +107,7 @@ function normalizeFeeRecipients(
   launcher: Address,
   address: (v: unknown, what: string) => Address,
   invalid: (detail: string) => never,
+  most: number = MAX_FEE_RECIPIENTS,
 ): FeeRecipient[] {
   const raw: unknown = input.feeRecipients;
   if (raw === undefined) {
@@ -111,8 +122,8 @@ function normalizeFeeRecipients(
   if (!Array.isArray(raw) || raw.length === 0)
     invalid("Name at least one fee recipient.");
   const list = raw as readonly unknown[];
-  if (list.length > MAX_FEE_RECIPIENTS)
-    invalid(`A launch can name at most ${MAX_FEE_RECIPIENTS} fee recipients.`);
+  if (list.length > most)
+    invalid(`A launch can name at most ${most} fee recipients.`);
   const out: FeeRecipient[] = [];
   list.forEach((entry, i) => {
     if (typeof entry !== "object" || entry === null)
@@ -169,15 +180,18 @@ export function checkStartTime(i: {
 /**
  * Applies the refusals that need no chain state: name and symbol, metadata and its admin, launcher, pad id, quote,
  * recipients' shape and split, fee and split fields' shape, vesting, dev-buy amount, the start time's shape, the
- * curve's form, salt and deadline. `metadata` is refused unless `allowMetadata` (API mode, where Bankr pins it).
+ * curve's form, the extension's form and bounds, salt and deadline. `metadata` is refused unless `allowMetadata` (API
+ * mode, where Bankr pins it).
  */
 export function normalizeLaunchInput<C extends LaunchChain>(
   caps: ChainCapabilities<C>,
   input: LaunchInput<C>,
   usedSalts: ReadonlySet<string>,
-  options: { allowMetadata?: boolean } = {},
+  options: { allowMetadata?: boolean; suite?: 3 | 4 } = {},
 ): NormalizedLaunch<C> {
   const chain = caps.chain;
+  // Suite 3 compiles its bounds in, and they are held here; a suite 4 launch's are its pad's, held by `resolve`.
+  const suite4 = options.suite === 4;
   const refuse = (code: CodeOfKind<"refused">, detail?: string): never => {
     throw new LaunchRefusedError(code, { chain, detail });
   };
@@ -191,6 +205,19 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     return v as number;
   };
 
+  if (!suite4) {
+    const named = [
+      ...SUITE4_ONLY_FIELDS.filter((k) => input[k] !== undefined),
+      ...(input.vesting?.cliffSeconds !== undefined ||
+      input.vesting?.durationSeconds !== undefined
+        ? ["vesting.cliffSeconds and vesting.durationSeconds"]
+        : []),
+    ];
+    if (named.length > 0)
+      invalid(
+        `${named.join(", ")}: this chain's suite takes no such option. It is a term of the configurable suite (suite 4), which this client is not on.`,
+      );
+  }
   if (typeof input.name !== "string" || !isInt(input.name.length, 1, NAME_MAX))
     invalid("The name must be 1–100 characters.");
   if (
@@ -205,7 +232,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   const metadataUri = input.metadataUri ?? "";
   if (typeof metadataUri !== "string") invalid("metadataUri must be a string.");
   // The token's deployer counts bytes, not characters (MetadataTooLong).
-  if (stringToBytes(metadataUri).length > MAX_METADATA_URI_BYTES)
+  if (!suite4 && stringToBytes(metadataUri).length > MAX_METADATA_URI_BYTES)
     invalid(
       `The metadata link can be at most ${MAX_METADATA_URI_BYTES.toLocaleString("en-US")} bytes.`,
     );
@@ -230,6 +257,8 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     launcher,
     address,
     invalid,
+    // The ledger's own ceiling for one bucket; a pad's limit is its feeRecipients knob.
+    suite4 ? 255 : MAX_FEE_RECIPIENTS,
   );
 
   if (input.fees !== undefined && input.schedule !== undefined)
@@ -246,7 +275,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
         s === null ||
         !isInt(s.startPips, 0, 1_000_000) ||
         !isInt(s.steadyPips, 0, 1_000_000) ||
-        !isInt(s.decaySecs, 0, 65_535)
+        !isInt(s.decaySecs, 0, suite4 ? 0xffff_ffff : 65_535)
       )
         invalid(
           "A fee schedule is { startPips, steadyPips, decaySecs }, each a non-negative integer.",
@@ -262,7 +291,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   const v = input.vestToHolders;
   if (
     v !== undefined &&
-    (!isInt(v.bps, 0, MAX_VEST_BPS) ||
+    (!isInt(v.bps, 0, suite4 ? BPS : MAX_VEST_BPS) ||
       !isInt(v.cliffSeconds, 0, Number.MAX_SAFE_INTEGER) ||
       !isInt(v.durationSeconds, 0, Number.MAX_SAFE_INTEGER))
   )
@@ -286,6 +315,19 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   )
     invalid("startFdv must be a positive bigint in the quote's base units.");
   const curve = normalizeCurve(input.curve, invalid);
+  const extension =
+    input.extension === undefined
+      ? null
+      : normalizeExtension(input.extension, chain, suite4 ? 4 : 3);
+  // LaunchRegistry._feeRecipients (ExtensionPayeeUnnamed): with several recipients none stands in for the payee.
+  if (
+    extension &&
+    feeRecipients.length > 1 &&
+    BigInt(extension.params.payee) === 0n
+  )
+    invalid(
+      "Name the extension's payee when a launch has several fee recipients.",
+    );
 
   const start: unknown = input.startTime ?? 0;
   const startTime =
@@ -307,6 +349,9 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   const deadlineSeconds = input.deadlineSeconds ?? DEFAULT_DEADLINE_SECONDS;
   if (!isInt(deadlineSeconds, 1, Number.MAX_SAFE_INTEGER))
     invalid("deadlineSeconds must be a positive integer.");
+  const choices = suite4
+    ? normalizeSuite4Choices(input, address, invalid)
+    : null;
 
   return {
     chain,
@@ -324,8 +369,10 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     schedule,
     referrerBps: bps(input.referrerBps, "referrerBps"),
     holderShareBps: bps(input.holderShareBps, "holderShareBps"),
-    autoLpBps: bps(input.autoLpBps, "autoLpBps"),
-    buybackBps: bps(input.buybackBps, "buybackBps"),
+    autoLpBps: choices ? choices.autoLpBps : bps(input.autoLpBps, "autoLpBps"),
+    buybackBps: choices
+      ? choices.buybackBps
+      : bps(input.buybackBps, "buybackBps"),
     vestBps,
     vestingRecipient,
     allowContractVestingRecipient:
@@ -342,8 +389,10 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     slippageBps,
     startFdv,
     curve,
+    extension,
     salt,
     deadlineSeconds,
+    suite4: choices,
   };
 }
 
@@ -427,9 +476,11 @@ export interface LaunchParamsInput {
   startTime: number;
   /** The launch's curve, of which the word enters the tuple; omitted, the default curve (id 0). */
   curve?: Pick<NormalizedCurve, "word">;
+  /** The launch's extension as the factory takes it; omitted or null, none. */
+  extension?: Pick<NormalizedExtension, "params"> | null;
 }
 
-/** `factory.launch`'s tuple for an SDK launch: default supply, no allocations or extension, unsigned. */
+/** `factory.launch`'s tuple for an SDK launch: default supply, no allocations, unsigned. */
 export function buildLaunchParams(i: LaunchParamsInput): LaunchParams {
   return {
     name: i.name,
@@ -460,7 +511,7 @@ export function buildLaunchParams(i: LaunchParamsInput): LaunchParams {
     operatorPayeesHash: i.operatorPayeesHash,
     authorization: { ...EMPTY_AUTHORIZATION },
     priceAttestation: { ...EMPTY_PRICE_ATTESTATION },
-    extension: { ...NO_EXTENSION },
+    extension: { ...(i.extension?.params ?? NO_EXTENSION) },
     startTime: BigInt(i.startTime),
   };
 }

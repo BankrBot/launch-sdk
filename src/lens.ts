@@ -16,7 +16,7 @@ import {
   bankrLaunchTokenAbi,
   bankrLaunchpadRegistryAbi,
   holderRewardsDeployerAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { ChainCapabilities } from "./chains/index.js";
 import type { LaunchCurve } from "./curve.js";

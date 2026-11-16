@@ -9,7 +9,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { readContract } from "viem/actions";
-import { holderRewardsDistributorAbi } from "./abis/generated.js";
+import { holderRewardsDistributorAbi } from "./abis/suite3.js";
 import { LaunchRefusedError } from "./errors.js";
 import {
   HOLDER_GAS,

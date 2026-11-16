@@ -8,7 +8,7 @@ import {
   type Hex,
 } from "viem";
 import { getBlock, readContract } from "viem/actions";
-import { bankrLaunchTokenAbi } from "./abis/generated.js";
+import { bankrLaunchTokenAbi } from "./abis/suite3.js";
 import { MAX_METADATA_URI_BYTES } from "./economics.js";
 import { LaunchRefusedError } from "./errors.js";
 import { requireLaunch, type SuiteReadContext } from "./lens.js";

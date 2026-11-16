@@ -8,7 +8,7 @@ import {
   type Hex,
 } from "viem";
 import { readContract } from "viem/actions";
-import { bankrLaunchpadRegistryAbi } from "./abis/generated.js";
+import { bankrLaunchpadRegistryAbi } from "./abis/suite3.js";
 import type { LaunchChain } from "./chains/index.js";
 import {
   BANKR_FEE_BPS,
@@ -384,11 +384,22 @@ export function volumeSplit(i: {
     "referrerBps" | "holdersBps" | "autoLpBps" | "buybackBps"
   >;
   waived?: boolean;
+  /** A suite 4 coin's own Bankr terms (`CoinTerms`); omitted, the figures suite 3 compiled in. */
+  bankrTerms?: {
+    bankrFeeBps: number;
+    bankrMinPips: number;
+    holdersShareBps: number;
+  };
 }): VolumeSplit {
   const f = i.steadyPips;
-  const b = Math.max((f * BANKR_FEE_BPS) / 10_000, BANKR_MIN_PIPS);
-  const holders = b / 2;
-  let bankr = i.waived ? 0 : b / 2;
+  const t = i.bankrTerms ?? {
+    bankrFeeBps: BANKR_FEE_BPS,
+    bankrMinPips: BANKR_MIN_PIPS,
+    holdersShareBps: 5_000,
+  };
+  const b = Math.max((f * t.bankrFeeBps) / 10_000, t.bankrMinPips);
+  const holders = (b * t.holdersShareBps) / 10_000;
+  let bankr = i.waived ? 0 : b - holders;
   const referrer = (f * i.economics.referrerBps) / 10_000;
   const m = f - holders - bankr - referrer;
   let opTotal = 0;

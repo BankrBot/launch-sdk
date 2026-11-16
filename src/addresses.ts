@@ -50,7 +50,32 @@ export interface ProviderAddresses {
   /** Added after a hook rotation: every generation oldest first, `hook` last. */
   readonly hookGenerations?: readonly Address[];
   readonly claimsRedeemers?: readonly Address[];
+  /**
+   * Suite 4 only: BankrLaunchSettings, which holds every pad's terms and judges a launch (`resolve`). A record that
+   * names it is suite 4's, and the client plans its launches against it; suite 3 has none.
+   */
+  readonly settings?: Address;
+  /** Suite 4 only: BankrTermsLens, which reads a coin's stored terms and holds them to its record. */
+  readonly termsLens?: Address;
 }
+
+/** A suite 4 record: core's `BankrV4Suite4Deployment` key for key, suite 3's keys and the seven DeploySuite adds. */
+export interface Suite4Addresses extends ProviderAddresses {
+  readonly settings: Address;
+  readonly termsLens: Address;
+  /** RaffleRunCode: Raffle Run's creation code, which the preset deployer reads. */
+  readonly raffleRunCode: Address;
+  readonly launchResolverLibrary: Address;
+  readonly launchPricingLibrary: Address;
+  readonly settingsColdLibrary: Address;
+  readonly ledgerColdLibrary: Address;
+}
+
+/** Whether a record is suite 4's: it names a settings contract (core's `isBankrV4Suite4Record`). */
+export const isSuite4Record = (
+  a: Partial<ProviderAddresses>,
+): a is Partial<ProviderAddresses> & { settings: Address } =>
+  a.settings !== undefined;
 
 export interface ProviderInfo<C extends LaunchChain = LaunchChain> {
   readonly id: LaunchProviderId;
@@ -101,6 +126,20 @@ export const BANKR_V4_ADDRESSES: {
 });
 
 /**
+ * Suite 4 per chain, core's `BANKR_V4_SUITE4_DEPLOYMENTS` key for key: `null` until that chain's suite 4 is
+ * broadcast. Both suites run side by side. A chain's record here is its suite 4 go-live: from then `suite: 4`
+ * launches there without `fork`. It moves no client that names no suite (`chooseSuite`).
+ */
+export const BANKR_V4_SUITE4_ADDRESSES: {
+  readonly [C in LaunchChain]: Suite4Addresses | null;
+} = Object.freeze({
+  base: null,
+  robinhood: null,
+  arbitrum: null,
+  arc: null,
+});
+
+/**
  * Each chain's `config/<chain>.json` capExclusions (core's `BANKR_V4_CAP_EXCLUSIONS`): the aggregator settlers every
  * launch excludes from its 24 h wallet cap. They enter the token's initcode. Absent = the chain has no suite config
  * yet, so no launch can be built for it, fork or not; every chain has one today.
@@ -126,6 +165,55 @@ export const BANKR_V4_CAP_EXCLUSIONS: {
   arbitrum: Object.freeze([] as const),
   arc: Object.freeze([] as const),
 });
+
+/** The seven keys a suite 4 record adds to suite 3's (core's `BANKR_V4_SUITE4_RECORD_KEYS`). */
+export const SUITE4_ADDRESS_KEYS = Object.freeze(
+  Object.keys({
+    settings: true,
+    termsLens: true,
+    raffleRunCode: true,
+    launchResolverLibrary: true,
+    launchPricingLibrary: true,
+    settingsColdLibrary: true,
+    ledgerColdLibrary: true,
+  } satisfies Record<
+    | Exclude<keyof Suite4Addresses, keyof ProviderAddresses>
+    | "settings"
+    | "termsLens",
+    true
+  >) as (keyof Suite4Addresses)[],
+);
+
+/**
+ * The suite of a client that names none. Suite 3 until suite 4's after-launch reads and API mode are ported: a
+ * suite 4 record landing must not move a caller off suite 3 (Bankr's own launchpad launches only in API mode).
+ */
+export const DEFAULT_SUITE: 3 | 4 = 3;
+
+/** The records a client is built from; a test passes its own. */
+export interface SuiteRecords {
+  readonly suite3: { readonly [C in LaunchChain]: ProviderAddresses | null };
+  readonly suite4: { readonly [C in LaunchChain]: Suite4Addresses | null };
+}
+
+/**
+ * The suite a client is on and the addresses it starts from. A named `suite` wins; unnamed, `addresses` that name
+ * a settings contract are suite 4's and anything else is `DEFAULT_SUITE`. The override is merged over that suite's
+ * own record only, so a client never holds one suite's settings beside the other's contracts.
+ */
+export function chooseSuite(
+  chain: LaunchChain,
+  o: { suite?: 3 | 4; addresses?: Partial<ProviderAddresses> },
+  records: SuiteRecords = {
+    suite3: BANKR_V4_ADDRESSES,
+    suite4: BANKR_V4_SUITE4_ADDRESSES,
+  },
+): { suite: 3 | 4; addresses: Partial<ProviderAddresses> } {
+  const suite =
+    o.suite ?? (o.addresses?.settings !== undefined ? 4 : DEFAULT_SUITE);
+  const record = suite === 4 ? records.suite4[chain] : records.suite3[chain];
+  return { suite, addresses: { ...record, ...o.addresses } };
+}
 
 // Every key a complete record carries: a fork override for a chain without a record must fill all of them.
 export const PROVIDER_ADDRESS_KEYS = Object.freeze(
@@ -158,10 +246,27 @@ export const PROVIDER_ADDRESS_KEYS = Object.freeze(
     blockNumber: true,
     gitCommit: true,
   } satisfies Record<
-    Exclude<keyof ProviderAddresses, "hookGenerations" | "claimsRedeemers">,
+    Exclude<
+      keyof ProviderAddresses,
+      "hookGenerations" | "claimsRedeemers" | "settings" | "termsLens"
+    >,
     true
   >) as (keyof ProviderAddresses)[],
 );
+
+/** Whether `a` is the suite 4 this SDK version ships for `chain`: the record that went through its go-live. */
+export function isShippedSuite4(
+  chain: LaunchChain,
+  a: Pick<ProviderAddresses, "factory" | "settings">,
+): boolean {
+  const record = BANKR_V4_SUITE4_ADDRESSES[chain];
+  return (
+    record !== null &&
+    a.settings !== undefined &&
+    record.settings.toLowerCase() === a.settings.toLowerCase() &&
+    record.factory.toLowerCase() === a.factory.toLowerCase()
+  );
+}
 
 export function isCompleteRecord(
   a: Partial<ProviderAddresses>,

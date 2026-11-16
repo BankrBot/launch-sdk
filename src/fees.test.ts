@@ -8,7 +8,7 @@ import {
   zeroAddress,
   type Hex,
 } from "viem";
-import { bankrFeeLedgerAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi } from "./abis/suite3.js";
 import type { FetchLike } from "./api.js";
 import { CHAINS } from "./chains/index.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
@@ -365,6 +365,7 @@ const apiBucket = (i: number, o: { firstTouch?: boolean } = {}) => ({
 const accountBody = (buckets: unknown[], balances: unknown[] = []) => ({
   chainId: 8453,
   account: OTHER,
+  ledger: SUITE.ledger,
   balances,
   buckets,
   totalByQuote: [],
@@ -383,7 +384,7 @@ describe("claim all", () => {
     const { client } = postLaunchFixture({ api: { url: API, fetch } });
     const owed = await client.fees.getOwed(OTHER);
     expect(urls.map((u) => u.href)).toEqual([
-      `${API}/bankr-v4/accounts/${OTHER}/fees?chainId=8453`,
+      `${API}/bankr-v4/accounts/${OTHER}/fees?chainId=8453&ledger=${SUITE.ledger}`,
     ]);
     expect(owed).toEqual({
       account: OTHER,

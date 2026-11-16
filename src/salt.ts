@@ -14,6 +14,7 @@ import {
   predictToken,
   tokenInitCode,
   type LiveSuite,
+  type Suite4LiveSuite,
   type TokenIdentity,
 } from "./predict.js";
 
@@ -115,7 +116,7 @@ export interface MinedSalt {
  * Always bounded: null when `maxTries` (a positive whole number; `plan()` uses {@link vanityMaxTries}) run out.
  */
 export async function mineVanitySalt(i: {
-  suite: LiveSuite;
+  suite: LiveSuite | Suite4LiveSuite;
   identity: TokenIdentity;
   launcher: Address;
   rule: VanityRule;

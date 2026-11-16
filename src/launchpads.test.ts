@@ -12,7 +12,7 @@ import {
 } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 import { base } from "viem/chains";
-import { bankrLaunchpadRegistryAbi } from "./abis/generated.js";
+import { bankrLaunchpadRegistryAbi } from "./abis/suite3.js";
 import { ANY_CURVE, encodeCurve } from "./curve.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import { PAD_TREASURY_MARKER } from "./launchpad.js";

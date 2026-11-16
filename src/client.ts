@@ -11,7 +11,8 @@ import {
 } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 import {
-  BANKR_V4_ADDRESSES,
+  BANKR_V4_SUITE4_ADDRESSES,
+  chooseSuite,
   isCompleteRecord,
   PROVIDER_ADDRESS_KEYS,
   type LaunchProviderId,
@@ -46,6 +47,11 @@ import {
   isLaunchSdkError,
   launchSdkError,
 } from "./errors.js";
+import type { LaunchExtensionInput } from "./extension.js";
+import type {
+  LaunchExtensionPreview,
+  PreviewExtensionOptions,
+} from "./extensionPreview.js";
 import type { LaunchFees } from "./fees.js";
 import type { LaunchHolders } from "./holders.js";
 import type { InvariantReport } from "./invariants.js";
@@ -54,6 +60,7 @@ import type { LaunchpadOperations } from "./launchpads.js";
 import type { LaunchInfo } from "./lens.js";
 import type { LaunchMetadataAdmin, TradingStatus } from "./token.js";
 import { requireAddress } from "./recipient.js";
+import type { SuiteSettings } from "./settings/index.js";
 import { createBankrV4Adapter } from "./providers/bankrV4.js";
 import type {
   LaunchInput,
@@ -91,8 +98,15 @@ export interface LaunchClientOptions<C extends LaunchChain = LaunchChain> {
   /** Also append Bankr's own builder code. Default false. */
   appendBankrBuilderCode?: boolean;
   /**
-   * Fork or test override of the suite's addresses, merged over the record (complete when the chain has none).
-   * It never enables launches on a chain that is not `deployed`: that takes `fork`.
+   * Which of Bankr's suites the client is on: 4, the configurable suite, where every term is its launchpad's and the
+   * chain's own launch check resolves it, or 3, the suite before it. Default 3: a client is on suite 4 only when it
+   * asks (`suite: 4`, or a fork's `addresses` that name `settings`). Both run side by side and a coin stays on the
+   * suite it launched on. Asking for a suite the chain has no record of is `PROVIDER_NOT_DEPLOYED`.
+   */
+  suite?: 3 | 4;
+  /**
+   * Fork or test override of the suite's addresses, merged over that suite's record (complete when the chain has
+   * none). It never enables launches on a chain that is not `deployed`: that takes `fork`.
    */
   addresses?: Partial<ProviderAddresses>;
   /**
@@ -144,14 +158,32 @@ export interface LaunchClient<C extends LaunchChain = LaunchChain> {
   /** A launchpad's terms, bounds, policy, vanity and signer, the defaults a launch on it takes, and their volume split. */
   launchpad(id?: bigint): Promise<LaunchpadInfo>;
   /**
-   * Your own launchpad: register it (paying the registry's bond) and configure it, as unsigned transactions for the
-   * operator's wallet or Safe, checked against the registry's rules first. No wallet needed; any chain with a record.
+   * A suite 3 launchpad of your own: register and configure it, as unsigned transactions for the operator's wallet
+   * or Safe, checked against the registry's rules first. No wallet needed. On a suite 4 client every call refuses
+   * (`PROVIDER_NOT_DEPLOYED`) and names `client.suite4().launchpads`.
    */
   readonly launchpads: LaunchpadOperations;
+  /**
+   * Suite 4 only: the settings contract by name. `settings` reads what the owner and each launchpad hold a launch to;
+   * `launchpads` and `owner` build a pad operator's and the protocol owner's changes as unsigned transactions;
+   * `coinTerms` reads a coin's frozen record and holds the coin to it; `holderLegs` reads the holders' legs. Nothing
+   * here sends. Throws `PROVIDER_NOT_DEPLOYED` on a suite 3 client.
+   */
+  suite4(): SuiteSettings;
   /** Every quote the factory allows and prices that pad `launchpadId` (default 0) accepts, named majors first. */
   quotes(launchpadId?: bigint): Promise<QuoteToken[]>;
   /** Validates and refuses, reads the pad, prices, mines the salt, predicts the token and lists approvals. Sends nothing. */
   plan(input: LaunchInput<C>): Promise<LaunchPlan<C>>;
+  /**
+   * What a launch's `extension` does and whether it can launch on `launchpadId` (default 0) now: its label, terms,
+   * fee over time and payee split, the registry's answer for its allowlist key and the launchpad policy's, and
+   * `refusal`, the reason `plan()` would throw `EXTENSION_NOT_ALLOWED`. Reads only; a parameter outside its bound
+   * throws `EXTENSION_OUT_OF_BOUNDS`.
+   */
+  previewExtension(
+    extension: LaunchExtensionInput,
+    options?: PreviewExtensionOptions,
+  ): Promise<LaunchExtensionPreview>;
   /**
    * The unsigned launch transaction (pure; gas clamped to the chain's ceiling) for wagmi, a Safe or a 4337 bundler.
    * Multisig signing latency risks `Expired`, an expired pad authorization and `START_TICK_CHANGED`: plan with a
@@ -265,8 +297,20 @@ export function createLaunchClient<C extends LaunchChain>(
   const chain = caps.chain;
   const api = o.api || undefined;
   refuseApiKeyOption(api, chain);
-  const record = BANKR_V4_ADDRESSES[chain];
-  const merged: Partial<ProviderAddresses> = { ...record, ...o.addresses };
+  // The suite asked for, else suite 3: a suite 4 record landing moves no client that named no suite.
+  const { suite, addresses: merged } = chooseSuite(chain, o);
+  if (suite === 4 && merged.settings === undefined && o.addresses)
+    throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
+      chain,
+      detail:
+        "addresses is missing addresses.settings: a suite 4 record names its settings contract.",
+    });
+  if (suite === 3 && merged.settings !== undefined)
+    throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
+      chain,
+      detail:
+        "addresses.settings names a suite 4 settings contract and suite 3 has none: drop it, or ask for `suite: 4`.",
+    });
   const providerId = o.provider ?? "bankr_v4";
   if (providerId !== "bankr_v4") {
     throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
@@ -282,7 +326,9 @@ export function createLaunchClient<C extends LaunchChain>(
       chain,
       detail: o.addresses
         ? `addresses is missing ${missing.map((k) => `addresses.${k}`).join(", ")}: on a chain with no record, pass the suite's whole record.`
-        : `Bankr's suite on ${chain} is not in this SDK version yet. On a local fork, pass the fork's suite as \`addresses\` and set \`fork: true\`.`,
+        : suite === 3 && BANKR_V4_SUITE4_ADDRESSES[chain] !== null
+          ? `Suite 3 is not on ${chain}. This SDK version ships Bankr's configurable suite there: ask for it with \`suite: 4\`.`
+          : `Bankr's suite on ${chain} is not in this SDK version yet. On a local fork, pass the fork's suite as \`addresses\` and set \`fork: true\`.`,
     });
   }
   if (merged.chainId !== caps.chainId) {
@@ -438,6 +484,8 @@ export function createLaunchClient<C extends LaunchChain>(
     launchpad: (id) => provider.launchpad(id),
     quotes: (launchpadId) => provider.readQuotes(launchpadId),
     plan: (input) => provider.plan(input),
+    previewExtension: (extension, options) =>
+      provider.previewExtension(extension, options),
     buildLaunchTx: (plan, options) => provider.buildLaunchTx(plan, options),
     simulate: (plan) => provider.simulate(plan),
     parseLaunchReceipt: (receipt, expectedToken) =>
@@ -449,6 +497,7 @@ export function createLaunchClient<C extends LaunchChain>(
     vesting: provider.vesting,
     metadataAdmin: provider.metadataAdmin,
     launchpads: provider.launchpads,
+    suite4: () => provider.suite4(),
     verifyTokenInvariants: (token, receipt) =>
       provider.verifyTokenInvariants(token, receipt),
     index: {
@@ -472,10 +521,12 @@ export function createLaunchClient<C extends LaunchChain>(
         throw new LaunchRefusedError("LAUNCHER_MISMATCH", { chain });
       }
 
-      // A moved tick, a lapsed authorization or a taken token is fixed by a fresh plan. A broadcast salt is burned,
-      // so a caller's own salt is re-planned only before it is sent, and never after a taken token.
+      // A moved tick, a lapsed authorization, a taken token or (suite 4) a pin that no longer holds is fixed by a
+      // fresh plan. A broadcast salt is burned, so a caller's own salt is re-planned only before it is sent, and
+      // never after a taken token.
       const replannable = (err: unknown, broadcast: boolean): boolean =>
         ((isLaunchSdkError(err, "START_TICK_CHANGED") ||
+          isLaunchSdkError(err, "TERMS_CHANGED") ||
           isLaunchSdkError(err, "AUTHORIZATION_INVALID")) &&
           (!broadcast || input.salt === undefined)) ||
         (isLaunchSdkError(err, "POOL_ALREADY_INITIALIZED") &&

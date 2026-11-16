@@ -65,6 +65,16 @@ const ERROR_SPEC = {
     message:
       "This launchpad does not allow this launch curve: its operator decides which curves and liquidity bands launch on it.",
   },
+  EXTENSION_NOT_ALLOWED: {
+    kind: "refused",
+    message:
+      "This launch's extension is not allowed on this chain or launchpad.",
+  },
+  EXTENSION_OUT_OF_BOUNDS: {
+    kind: "refused",
+    message:
+      "A parameter of the launch's extension is outside the bound its contract holds it to.",
+  },
   DEV_BUY_UNAVAILABLE: {
     kind: "refused",
     message: "A dev buy is not available for this quote token on this chain.",
@@ -97,6 +107,34 @@ const ERROR_SPEC = {
     kind: "refused",
     message:
       "This launchpad does not allow a dev buy, cap exclusions or a custom supply, which this launch needs.",
+  },
+  OUTSIDE_LAUNCHPAD_RANGE: {
+    kind: "refused",
+    message:
+      "A launch term is outside this launchpad's range: `detail` names the term and the range in force.",
+  },
+  NOT_ALLOWED_BY_LAUNCHPAD: {
+    kind: "refused",
+    message:
+      "This launchpad does not allow one of this launch's features: `detail` names it.",
+  },
+  HARD_BOUND: {
+    kind: "refused",
+    message: "One of the launch's numbers is outside what a pool can run on.",
+  },
+  OPTION_FOR_FEATURE_OFF: {
+    kind: "refused",
+    message:
+      "The launch names an option for a feature it leaves off: drop the option, or turn the feature on.",
+  },
+  CLAIM_OPERATOR_REQUIRED: {
+    kind: "refused",
+    message:
+      "A fee recipient is a contract with restricted claims and no claim operator named: after a takeover only it, or its operator, could withdraw its balance.",
+  },
+  LAUNCH_REFUSED: {
+    kind: "refused",
+    message: "The chain's launch check refuses this launch: see `detail`.",
   },
   CREATOR_CAP_EXCEEDED: {
     kind: "refused",
@@ -144,6 +182,11 @@ const ERROR_SPEC = {
     message:
       "This launchpad change breaks a rule of the launchpad registry (payees, shares, fee bounds, policy, vanity, metadata or operator).",
   },
+  INVALID_SETTINGS: {
+    kind: "refused",
+    message:
+      "This owner change breaks a rule of the settings contract, the factory or the launchpad registry.",
+  },
   SIMULATION_REVERTED: {
     kind: "execution",
     message: "The launch transaction reverted in simulation.",
@@ -176,6 +219,11 @@ const ERROR_SPEC = {
     kind: "execution",
     message:
       "The launchpad's payees or shares changed after planning: review its new terms and re-plan.",
+  },
+  TERMS_CHANGED: {
+    kind: "execution",
+    message:
+      "The terms this launch would freeze, or its token address, changed after planning: plan again.",
   },
   STALE_POLICY: {
     kind: "execution",

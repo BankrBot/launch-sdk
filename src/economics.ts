@@ -1,5 +1,5 @@
 import type { ContractFunctionArgs } from "viem";
-import type { bankrLaunchFactoryAbi } from "./abis/generated.js";
+import type { bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import type { LaunchChain } from "./chains/index.js";
 import { LaunchRefusedError, type CodeOfKind } from "./errors.js";
 

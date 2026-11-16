@@ -12,13 +12,13 @@ import {
   type Authorizer,
 } from "./authorizer.js";
 import { CHAINS, isLaunchChain, type LaunchChain } from "./chains/index.js";
-import type { LaunchParams } from "./economics.js";
 import { LaunchConfigError } from "./errors.js";
 import { randomSalt } from "./salt.js";
 import { MAX_BODY_BYTES, isJsonRequest, json, readBody } from "./serverHttp.js";
 import {
   launchAuthorizationTypedData,
   launchTermsHash,
+  type AnyLaunchParams,
   type LaunchAuthorization,
 } from "./terms.js";
 
@@ -37,7 +37,8 @@ export interface SignLaunchAuthorizationInput {
   registry: Address;
   launchpadId: bigint;
   launcher: Address;
-  params: LaunchParams;
+  /** A suite 4 launch's carry `options`: its pins are part of what is signed. */
+  params: AnyLaunchParams;
   /** `msg.value` of the launch (a native dev buy); folded into the signed terms. */
   nativeDevBuy: bigint;
   /** One-use; default 32 random bytes. */

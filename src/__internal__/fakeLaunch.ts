@@ -20,7 +20,7 @@ import {
   creatorVestingEscrowAbi,
   holderRewardsDeployerAbi,
   holderRewardsDistributorAbi,
-} from "../abis/generated.js";
+} from "../abis/suite3.js";
 import { base } from "viem/chains";
 import { CHAINS } from "../chains/index.js";
 import { createLaunchClient, type LaunchApiOptions } from "../client.js";

@@ -15,7 +15,7 @@ import {
   bankrLaunchFactoryAbi,
   holderRewardsDeployerAbi,
   holderRewardsDistributorAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { LaunchRefusedError } from "./errors.js";
 import { readHolderPiles } from "./holderPiles.js";

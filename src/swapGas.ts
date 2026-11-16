@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import { readContract } from "viem/actions";
-import { bankrHookLensAbi } from "./abis/generated.js";
+import { bankrHookLensAbi } from "./abis/suite3.js";
 import {
   EXT_AFTER_GAS,
   EXT_AFTER_GAS_MAX,
@@ -38,8 +38,8 @@ export const EXT_PATH_PIN_GAS = 1_200n;
 export const ROUTE_HOP_GAS = 250_000n;
 export const ROUTE_OTHER_HOP_GAS = 300_000n;
 /** What a sender adds over a swap's estimate so the route's first asking pool, keeping nothing, runs its holders'
- *  wake: the ledger's gate (4,951,748) through six call frames, rounded up. */
-export const HOLDERS_WAKE_SWAP_GAS = 5_450_000n;
+ *  wake: the ledger's gate (4,971,748) through six call frames, rounded up. */
+export const HOLDERS_WAKE_SWAP_GAS = 5_470_000n;
 
 /** An extension binding's gas budgets as the hook holds them (its `ExtensionGasBudgets` event, or what
  *  `extensionGasBudgets` returns for a launch): `afterGas` is 0 exactly when the binding is quote-only. */

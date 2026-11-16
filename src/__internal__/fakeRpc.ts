@@ -34,9 +34,14 @@ import {
   erc20TokenDeployerAbi,
   holderRewardsDeployerAbi,
   holderRewardsDistributorAbi,
+} from "../abis/suite3.js";
+import {
+  bankrLaunchFactoryAbi as suite4FactoryAbi,
+  bankrLaunchSettingsAbi as suite4SettingsAbi,
 } from "../abis/generated.js";
 import type { Erc20Slots } from "../data/erc20Slots.js";
-import { HOOK_EXTENSION_ERRORS } from "../simulate.js";
+import { HOOK_EXTENSION_ERRORS, PRESET_ERRORS } from "../simulate.js";
+import { SUITE4_HOOK_ERRORS } from "../suite4/revert.js";
 
 /** Thrown by a handler to revert the call with a named suite error, or `Error(string)` with `new Revert("Error", [reason])`. */
 export class Revert extends Error {
@@ -132,6 +137,11 @@ const REVERT_ABI: Abi = [
   ...holderRewardsDistributorAbi,
   ...bankrLaunchTokenAbi,
   ...HOOK_EXTENSION_ERRORS,
+  ...PRESET_ERRORS,
+  // Suite 4's own errors, after suite 3's: a name both suites raise encodes as before.
+  ...suite4SettingsAbi,
+  ...suite4FactoryAbi,
+  ...SUITE4_HOOK_ERRORS,
 ].filter((item) => item.type === "error");
 
 const lower = (a: string): string => a.toLowerCase();

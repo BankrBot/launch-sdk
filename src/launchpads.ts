@@ -11,7 +11,7 @@ import { readContract } from "viem/actions";
 import {
   bankrLaunchFactoryAbi,
   bankrLaunchpadRegistryAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { ANY_CURVE } from "./curve.js";
 import { padAllowsCurve } from "./curveDetail.js";
 import { curveKey, type CurveKeyInput } from "./curveInput.js";

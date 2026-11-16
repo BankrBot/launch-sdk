@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeFunctionData } from "viem";
-import { creatorVestingEscrowAbi } from "./abis/generated.js";
+import { creatorVestingEscrowAbi } from "./abis/suite3.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import {
   LAUNCHER,

@@ -3,7 +3,7 @@ import { getAddress, zeroAddress, type Address } from "viem";
 import { readContract } from "viem/actions";
 import { base } from "viem/chains";
 import { launchParamsToJson } from "./abiJson.js";
-import { bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import { requireCapExclusions } from "./addresses.js";
 import type {
   FetchLike,

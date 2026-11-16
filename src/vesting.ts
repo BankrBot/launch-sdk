@@ -5,7 +5,7 @@ import {
   type Address,
 } from "viem";
 import { readContract } from "viem/actions";
-import { creatorVestingEscrowAbi } from "./abis/generated.js";
+import { creatorVestingEscrowAbi } from "./abis/suite3.js";
 import { LaunchRefusedError } from "./errors.js";
 import { requireLaunch, type SuiteReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";

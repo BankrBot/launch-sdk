@@ -254,12 +254,17 @@ export interface AccountFeeBucket {
 }
 
 /**
- * `GET /bankr-v4/accounts/:account/fees?chainId=`: what an account is owed on one chain's fee ledger, from Bankr's
+ * `GET /bankr-v4/accounts/:account/fees?chainId=&ledger=`: what an account is owed on one fee ledger, from Bankr's
  * bucket-share index (claimable read on-chain). Amounts are decimal strings.
  */
 export interface AccountFeesResponse {
   chainId: number;
   account: Address;
+  /**
+   * The ledger answered for: the one asked, else the chain's oldest suite's. Each suite has its own, never summed.
+   * Absent from an API that predates the field, which serves the chain's suite 3 record alone.
+   */
+  ledger?: Address;
   /** Pull balances: referral slices and settled shares. */
   balances: { quote: Address; amount: string }[];
   buckets: AccountFeeBucket[];
@@ -512,10 +517,14 @@ export interface BankrApi {
     txHash: Hex,
     options?: { signal?: AbortSignal },
   ): Promise<RegisterResult>;
-  /** `GET /bankr-v4/accounts/:account/fees`: the account's owed fees on the chain's ledger; null for a 404. */
+  /**
+   * `GET /bankr-v4/accounts/:account/fees`: the account's owed fees on one suite's `ledger`, unnamed the chain's
+   * oldest suite's; null for a 404 (no such ledger there, or not indexed).
+   */
   accountFees(
     chain: LaunchChain,
     account: Address,
+    ledger?: Address,
   ): Promise<AccountFeesResponse | null>;
 }
 
@@ -597,10 +606,10 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
         chain,
       );
     },
-    async accountFees(chain, account) {
+    async accountFees(chain, account, ledger) {
       const reply = await get(
         `/bankr-v4/accounts/${segment(account)}/fees`,
-        { chainId: getChain(chain).chainId },
+        { chainId: getChain(chain).chainId, ledger },
         chain,
       );
       return found(

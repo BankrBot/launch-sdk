@@ -1,13 +1,16 @@
 import {
   getAddress,
+  isAddress,
   isAddressEqual,
   type AbiEvent,
   type Address,
   type Hex,
 } from "viem";
 import { getBlockNumber, getLogs, readContract } from "viem/actions";
-import { bankrFeeLedgerAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi } from "./abis/suite3.js";
+import { BANKR_V4_ADDRESSES } from "./addresses.js";
 import type { AccountFeesResponse, BankrApi } from "./api.js";
+import type { LaunchChain } from "./chains/index.js";
 import { LaunchApiError, LaunchRefusedError } from "./errors.js";
 import { bucketIds, type SuiteReadContext } from "./lens.js";
 import type { ClaimAllBucket, QuoteAmount } from "./planClaimAll.js";
@@ -84,11 +87,13 @@ function totalsOf(balances: QuoteAmount[], buckets: OwedBucket[]) {
   );
 }
 
-/** The index's reply as bigints and checksummed addresses; throws on anything malformed. */
+/** The index's reply as bigints and checksummed addresses; throws on anything malformed or not `ledger`'s. */
 function fromApi(
   r: AccountFeesResponse,
+  chain: LaunchChain,
   chainId: number,
   account: Address,
+  ledger: Address,
 ): OwedState {
   const big = (v: unknown) => {
     if (typeof v !== "string" || !DECIMAL.test(v))
@@ -101,6 +106,11 @@ function fromApi(
   };
   if (r.chainId !== chainId || !isAddressEqual(r.account, account))
     throw new TypeError("another account or chain");
+  // Each suite has its own ledger and a ledger skips another's buckets, so an answer for another is refused. One
+  // that names none is from an API that serves the chain's shipped suite 3 record alone: it is that ledger's.
+  const answered = r.ledger ?? BANKR_V4_ADDRESSES[chain]?.ledger;
+  if (!answered || !isAddress(answered) || !isAddressEqual(answered, ledger))
+    throw new TypeError("another ledger");
   const balances = r.balances
     .map((b) => ({ quote: getAddress(b.quote), amount: big(b.amount) }))
     .filter((b) => b.amount > 0n);
@@ -353,8 +363,9 @@ async function scanOwed(
 }
 
 /**
- * What `account` is owed: Bankr's account index first, a ledger log scan when the index cannot answer (or `source`
- * says so). An index failure surfaces only when the scan is refused too.
+ * What `account` is owed on the client's own ledger: Bankr's account index first, asked for that ledger, a ledger log
+ * scan when the index cannot answer for it (or `source` says so). An index failure surfaces only when the scan is
+ * refused too.
  */
 export async function readOwed(
   ctx: SuiteReadContext,
@@ -369,9 +380,12 @@ export async function readOwed(
   let indexError: unknown;
   if (source !== "chain") {
     try {
-      const reply = index ? await index.accountFees(chain, account) : null;
+      const ledger = ctx.addresses.ledger;
+      const reply = index
+        ? await index.accountFees(chain, account, ledger)
+        : null;
       if (reply === null) throw new TypeError("not indexed");
-      return fromApi(reply, ctx.chain.chainId, account);
+      return fromApi(reply, chain, ctx.chain.chainId, account, ledger);
     } catch (err) {
       // A 404 or a malformed reply is the index failing too; its own errors keep their code (RATE_LIMITED).
       indexError =

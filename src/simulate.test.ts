@@ -13,7 +13,7 @@ import {
   bankrLaunchFactoryAbi,
   bankrLaunchTokenAbi,
   bankrLaunchpadRegistryAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { CHAINS } from "./chains/index.js";
 import { createLaunchClient } from "./client.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
@@ -205,8 +205,8 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
     const { sdk, withAllocations } = await unestimated(
       "gas required exceeds allowance (16777216)",
     );
-    expect(sdk.buildLaunchTx(await withAllocations(23)).gas).toBe(16_777_216n);
-    const over = await withAllocations(24);
+    expect(sdk.buildLaunchTx(await withAllocations(15)).gas).toBe(16_777_216n);
+    const over = await withAllocations(16);
     let refused: unknown;
     try {
       sdk.buildLaunchTx(over);
@@ -217,10 +217,10 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
       true,
     );
     expect((refused as { detail?: string }).detail).toContain(
-      "the heaviest launch the factory accepts stands in for it: a gas limit of about 16,832,292 with its 24 builder allocations",
+      "the heaviest launch on Bankr's launchpad stands in for it: a gas limit of about 16,792,986 with its 16 builder allocations",
     );
     expect((refused as { detail?: string }).detail).toContain(
-      "at that figure 23 of the 24 fit",
+      "at that figure 15 of the 16 fit",
     );
   });
 

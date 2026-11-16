@@ -7,7 +7,7 @@ import {
   type Hex,
 } from "viem";
 import { getCode, readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { LaunchChain } from "./chains/index.js";
 import { LaunchRefusedError } from "./errors.js";

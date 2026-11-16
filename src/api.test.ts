@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Address, Hex } from "viem";
+import { getAddress, type Address, type Hex } from "viem";
 import {
   BankrApiResponseError,
   DEFAULT_BANKR_API_URL,
@@ -190,10 +190,12 @@ describe("createBankrApi: the launch index", () => {
     expect(calls[0]!.url.searchParams.get("launchpad")).toBe("7");
   });
 
-  test("accountFees: GET /bankr-v4/accounts/:account/fees with the chain's id; null for a 404, API_ERROR for a wrong shape", async () => {
+  test("accountFees: GET /bankr-v4/accounts/:account/fees with the chain's id and the ledger named; null for a 404, API_ERROR for a wrong shape", async () => {
+    const LEDGER = getAddress("0x00000000000000000000000000000000000084e2");
     const body: AccountFeesResponse = {
       chainId: 8453,
       account: TOKEN,
+      ledger: LEDGER,
       balances: [],
       buckets: [],
       totalByQuote: [],
@@ -205,6 +207,11 @@ describe("createBankrApi: the launch index", () => {
     );
     expect(calls[0]!.url.href).toBe(
       `https://api.bankr.bot/bankr-v4/accounts/${TOKEN}/fees?chainId=8453`,
+    );
+    // A suite's client names its own ledger: on a chain with two suites the answer is that ledger's alone.
+    await createBankrApi({ fetch }).accountFees("base", TOKEN, LEDGER);
+    expect(calls[1]!.url.href).toBe(
+      `https://api.bankr.bot/bankr-v4/accounts/${TOKEN}/fees?chainId=8453&ledger=${LEDGER}`,
     );
     const missing = fakeFetch(() => json(404, { error: "Not found" }));
     expect(

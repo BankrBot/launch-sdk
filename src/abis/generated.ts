@@ -40,7 +40,7 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "BuybackFeeTooLow",
+    name: "CompoundStartTooDeep",
     inputs: [],
   },
   {
@@ -156,11 +156,6 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "InsufficientGas",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "InvalidCurve",
     inputs: [],
   },
@@ -181,7 +176,7 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "InvalidFeeSchedule",
+    name: "InvalidHolderLeg",
     inputs: [],
   },
   {
@@ -191,32 +186,7 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "InvalidPresetDeployer",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidPriceAttestation",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidPricing",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidQuoteEntry",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidReferrerBps",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidSplits",
+    name: "InvalidSettings",
     inputs: [],
   },
   {
@@ -236,11 +206,6 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "InvalidVestToHolders",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "LaunchGated",
     inputs: [],
   },
@@ -251,7 +216,7 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "NothingQueued",
+    name: "MalformedLaunch",
     inputs: [],
   },
   {
@@ -309,26 +274,6 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "PresetsUnavailable",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "QuoteExists",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "QuoteKnobsLocked",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "QuoteNotAllowed",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "SafeERC20FailedOperation",
     inputs: [
       {
@@ -345,37 +290,6 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "StartPassed",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "StartPriceUnavailable",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "StartTickOutOfBounds",
-    inputs: [
-      {
-        name: "lowest",
-        type: "int24",
-        internalType: "int24",
-      },
-      {
-        name: "highest",
-        type: "int24",
-        internalType: "int24",
-      },
-    ],
-  },
-  {
-    type: "error",
-    name: "StartTooFar",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "SuiteAlreadySet",
     inputs: [],
   },
@@ -386,18 +300,19 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "SupplyOutOfRange",
+    name: "TermsMismatch",
     inputs: [],
   },
   {
     type: "error",
-    name: "TimelockActive",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "TimelockExpired",
-    inputs: [],
+    name: "TokenAddressChanged",
+    inputs: [
+      {
+        name: "actual",
+        type: "address",
+        internalType: "address",
+      },
+    ],
   },
   {
     type: "error",
@@ -411,18 +326,45 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "error",
-    name: "UnlistedQuoteAutoLp",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "VestBpsTooHigh",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "ZeroAddress",
     inputs: [],
+  },
+  {
+    type: "event",
+    name: "CoinTermsFrozen",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "poolId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "termsHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "resolvedHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "terms",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
+    ],
+    anonymous: false,
   },
   {
     type: "event",
@@ -434,30 +376,11 @@ export const bankrLaunchFactoryAbi = [
         indexed: true,
         internalType: "address",
       },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "HookCancelled",
-    inputs: [],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "HookQueued",
-    inputs: [
       {
-        name: "newHook",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
+        name: "legId",
+        type: "uint16",
         indexed: false,
-        internalType: "uint64",
+        internalType: "uint16",
       },
     ],
     anonymous: false,
@@ -505,12 +428,6 @@ export const bankrLaunchFactoryAbi = [
         internalType: "uint256",
       },
       {
-        name: "holdersBps",
-        type: "uint16",
-        indexed: false,
-        internalType: "uint16",
-      },
-      {
         name: "distributor",
         type: "address",
         indexed: false,
@@ -527,18 +444,6 @@ export const bankrLaunchFactoryAbi = [
         type: "address",
         indexed: false,
         internalType: "address",
-      },
-      {
-        name: "vestBps",
-        type: "uint16",
-        indexed: false,
-        internalType: "uint16",
-      },
-      {
-        name: "totalSupply",
-        type: "uint256",
-        indexed: false,
-        internalType: "uint256",
       },
       {
         name: "devBuyOut",
@@ -596,378 +501,6 @@ export const bankrLaunchFactoryAbi = [
         type: "bool",
         indexed: false,
         internalType: "bool",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "PresetDeployerCancelled",
-    inputs: [],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "PresetDeployerQueued",
-    inputs: [
-      {
-        name: "presetDeployer",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "PresetDeployerSet",
-    inputs: [
-      {
-        name: "presetDeployer",
-        type: "address",
-        indexed: false,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "PriceSignerSet",
-    inputs: [
-      {
-        name: "signer",
-        type: "address",
-        indexed: false,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuotePricingQueued",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "pricing",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct QuotePricing",
-        components: [
-          {
-            name: "mode",
-            type: "uint8",
-            internalType: "enum PricingMode",
-          },
-          {
-            name: "decimals",
-            type: "uint8",
-            internalType: "uint8",
-          },
-          {
-            name: "maxPriceAge",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "feed",
-            type: "address",
-            internalType: "address",
-          },
-        ],
-      },
-      {
-        name: "feedDescription",
-        type: "string",
-        indexed: false,
-        internalType: "string",
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuotePricingSet",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "pricing",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct QuotePricing",
-        components: [
-          {
-            name: "mode",
-            type: "uint8",
-            internalType: "enum PricingMode",
-          },
-          {
-            name: "decimals",
-            type: "uint8",
-            internalType: "uint8",
-          },
-          {
-            name: "maxPriceAge",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "feed",
-            type: "address",
-            internalType: "address",
-          },
-        ],
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteRemovalCancelled",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteRemovalQueued",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteRemoved",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteSet",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "entry",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct QuoteEntry",
-        components: [
-          {
-            name: "allowed",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "minCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxCompoundDeviationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minCompoundInterval",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "removalExecuteAfter",
-            type: "uint64",
-            internalType: "uint64",
-          },
-        ],
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteSyncFailed",
-    inputs: [
-      {
-        name: "hook",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteUpdateCancelled",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "QuoteUpdateQueued",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "entry",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct QuoteEntry",
-        components: [
-          {
-            name: "allowed",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "minCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxCompoundDeviationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minCompoundInterval",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "removalExecuteAfter",
-            type: "uint64",
-            internalType: "uint64",
-          },
-        ],
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "SequencerUptimeFeedSet",
-    inputs: [
-      {
-        name: "feed",
-        type: "address",
-        indexed: false,
-        internalType: "address",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "StartFdvBoundsSet",
-    inputs: [
-      {
-        name: "minUsd",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-      {
-        name: "maxUsd",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
       },
     ],
     anonymous: false,
@@ -1048,31 +581,6 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "event",
-    name: "TreasuryCancelled",
-    inputs: [],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "TreasuryQueued",
-    inputs: [
-      {
-        name: "treasury",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
     name: "TreasurySet",
     inputs: [
       {
@@ -1093,122 +601,7 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "function",
-    name: "addQuote",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "e",
-        type: "tuple",
-        internalType: "struct QuoteEntry",
-        components: [
-          {
-            name: "allowed",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "minCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxCompoundDeviationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minCompoundInterval",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "removalExecuteAfter",
-            type: "uint64",
-            internalType: "uint64",
-          },
-        ],
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
     name: "buyback",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "cancelHook",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "cancelPresetDeployer",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "cancelQuoteRemoval",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "cancelQuoteUpdate",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "cancelTreasury",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "capController",
     inputs: [],
     outputs: [
       {
@@ -1310,8 +703,8 @@ export const bankrLaunchFactoryAbi = [
                   },
                   {
                     name: "decaySecs",
-                    type: "uint16",
-                    internalType: "uint16",
+                    type: "uint32",
+                    internalType: "uint32",
                   },
                 ],
               },
@@ -1332,8 +725,8 @@ export const bankrLaunchFactoryAbi = [
                   },
                   {
                     name: "decaySecs",
-                    type: "uint16",
-                    internalType: "uint16",
+                    type: "uint32",
+                    internalType: "uint32",
                   },
                 ],
               },
@@ -1589,6 +982,11 @@ export const bankrLaunchFactoryAbi = [
             type: "uint64",
             internalType: "uint64",
           },
+          {
+            name: "options",
+            type: "bytes",
+            internalType: "bytes",
+          },
         ],
       },
     ],
@@ -1624,66 +1022,6 @@ export const bankrLaunchFactoryAbi = [
       },
     ],
     stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "executeHook",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "executePresetDeployer",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "executeQuotePricing",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "executeQuoteRemoval",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "executeQuoteUpdate",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "executeTreasury",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -1779,8 +1117,8 @@ export const bankrLaunchFactoryAbi = [
                   },
                   {
                     name: "decaySecs",
-                    type: "uint16",
-                    internalType: "uint16",
+                    type: "uint32",
+                    internalType: "uint32",
                   },
                 ],
               },
@@ -1801,8 +1139,8 @@ export const bankrLaunchFactoryAbi = [
                   },
                   {
                     name: "decaySecs",
-                    type: "uint16",
-                    internalType: "uint16",
+                    type: "uint32",
+                    internalType: "uint32",
                   },
                 ],
               },
@@ -2058,6 +1396,11 @@ export const bankrLaunchFactoryAbi = [
             type: "uint64",
             internalType: "uint64",
           },
+          {
+            name: "options",
+            type: "bytes",
+            internalType: "bytes",
+          },
         ],
       },
       {
@@ -2069,40 +1412,6 @@ export const bankrLaunchFactoryAbi = [
         name: "nativeDevBuy",
         type: "uint256",
         internalType: "uint256",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "hashPriceAttestation",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "priceUsdE18",
-        type: "uint256",
-        internalType: "uint256",
-      },
-      {
-        name: "observedAt",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "expiresAt",
-        type: "uint64",
-        internalType: "uint64",
       },
     ],
     outputs: [
@@ -2149,19 +1458,6 @@ export const bankrLaunchFactoryAbi = [
         name: "",
         type: "address",
         internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "hookExecuteAfter",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
       },
     ],
     stateMutability: "view",
@@ -2279,8 +1575,8 @@ export const bankrLaunchFactoryAbi = [
                   },
                   {
                     name: "decaySecs",
-                    type: "uint16",
-                    internalType: "uint16",
+                    type: "uint32",
+                    internalType: "uint32",
                   },
                 ],
               },
@@ -2301,8 +1597,8 @@ export const bankrLaunchFactoryAbi = [
                   },
                   {
                     name: "decaySecs",
-                    type: "uint16",
-                    internalType: "uint16",
+                    type: "uint32",
+                    internalType: "uint32",
                   },
                 ],
               },
@@ -2557,6 +1853,11 @@ export const bankrLaunchFactoryAbi = [
             name: "startTime",
             type: "uint64",
             internalType: "uint64",
+          },
+          {
+            name: "options",
+            type: "bytes",
+            internalType: "bytes",
           },
         ],
       },
@@ -2696,46 +1997,7 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "function",
-    name: "pendingHook",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "pendingOwner",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "pendingPresetDeployer",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "pendingTreasury",
     inputs: [],
     outputs: [
       {
@@ -2812,315 +2074,6 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "function",
-    name: "presetDeployer",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "presetDeployerExecuteAfter",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "pricingConfig",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "queueHook",
-    inputs: [
-      {
-        name: "newHook",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "queuePresetDeployer",
-    inputs: [
-      {
-        name: "d",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "queueQuoteRemoval",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "queueQuoteUpdate",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "e",
-        type: "tuple",
-        internalType: "struct QuoteEntry",
-        components: [
-          {
-            name: "allowed",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "minCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxCompoundDeviationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minCompoundInterval",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "removalExecuteAfter",
-            type: "uint64",
-            internalType: "uint64",
-          },
-        ],
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "queueTreasury",
-    inputs: [
-      {
-        name: "t",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "quoteEntry",
-    inputs: [
-      {
-        name: "q",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "tuple",
-        internalType: "struct QuoteEntry",
-        components: [
-          {
-            name: "allowed",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "minCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxCompoundDeviationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minCompoundInterval",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "removalExecuteAfter",
-            type: "uint64",
-            internalType: "uint64",
-          },
-        ],
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "quoteList",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address[]",
-        internalType: "address[]",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "quotePricing",
-    inputs: [
-      {
-        name: "q",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "tuple",
-        internalType: "struct QuotePricing",
-        components: [
-          {
-            name: "mode",
-            type: "uint8",
-            internalType: "enum PricingMode",
-          },
-          {
-            name: "decimals",
-            type: "uint8",
-            internalType: "uint8",
-          },
-          {
-            name: "maxPriceAge",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "feed",
-            type: "address",
-            internalType: "address",
-          },
-        ],
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "quotePricingExecuteAfter",
-    inputs: [
-      {
-        name: "q",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "quoteUpdateExecuteAfter",
-    inputs: [
-      {
-        name: "q",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "renounceOwnership",
     inputs: [],
     outputs: [],
@@ -3128,10 +2081,23 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "function",
-    name: "setCapController",
+    name: "setHolderLeg",
     inputs: [
       {
-        name: "c",
+        name: "leg",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setHook",
+    inputs: [
+      {
+        name: "newHook",
         type: "address",
         internalType: "address",
       },
@@ -3167,127 +2133,88 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "function",
-    name: "setPriceSigner",
-    inputs: [
-      {
-        name: "s",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setQuotePricing",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "mode",
-        type: "uint8",
-        internalType: "enum PricingMode",
-      },
-      {
-        name: "feed",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "maxPriceAge",
-        type: "uint32",
-        internalType: "uint32",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setSequencerUptimeFeed",
-    inputs: [
-      {
-        name: "feed",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setStartFdvBounds",
-    inputs: [
-      {
-        name: "minUsd",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "maxUsd",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
     name: "setSuite",
     inputs: [
       {
-        name: "hook_",
+        name: "a",
+        type: "tuple",
+        internalType: "struct SuiteAddrs",
+        components: [
+          {
+            name: "hook",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "ledger",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "locker",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "holderRewardsDeployer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "tokenDeployer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "vestingEscrowImpl",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "holderLeg",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "buyback",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "launchpadRegistry",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "settings",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "settings",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
         type: "address",
         internalType: "address",
       },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setTreasury",
+    inputs: [
       {
-        name: "ledger_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "locker_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "deployer_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "tokenDeployer_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "escrowImpl_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "holderLeg_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "buyback_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "launchpadRegistry_",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "presetDeployer_",
+        name: "t",
         type: "address",
         internalType: "address",
       },
@@ -3297,56 +2224,19 @@ export const bankrLaunchFactoryAbi = [
   },
   {
     type: "function",
-    name: "startTickBounds",
+    name: "termsHashOf",
     inputs: [
       {
-        name: "quote",
+        name: "",
         type: "address",
         internalType: "address",
-      },
-      {
-        name: "totalSupply",
-        type: "uint256",
-        internalType: "uint256",
-      },
-      {
-        name: "a",
-        type: "tuple",
-        internalType: "struct PriceAttestation",
-        components: [
-          {
-            name: "priceUsdE18",
-            type: "uint256",
-            internalType: "uint256",
-          },
-          {
-            name: "observedAt",
-            type: "uint64",
-            internalType: "uint64",
-          },
-          {
-            name: "expiresAt",
-            type: "uint64",
-            internalType: "uint64",
-          },
-          {
-            name: "signature",
-            type: "bytes",
-            internalType: "bytes",
-          },
-        ],
       },
     ],
     outputs: [
       {
         name: "",
-        type: "int24",
-        internalType: "int24",
-      },
-      {
-        name: "",
-        type: "int24",
-        internalType: "int24",
+        type: "bytes32",
+        internalType: "bytes32",
       },
     ],
     stateMutability: "view",
@@ -3386,19 +2276,6 @@ export const bankrLaunchFactoryAbi = [
         name: "",
         type: "address",
         internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "treasuryExecuteAfter",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
       },
     ],
     stateMutability: "view",
@@ -3484,9 +2361,9 @@ export const bankrLaunchpadRegistryAbi = [
         internalType: "uint256",
       },
       {
-        name: "maxRegistrationBondWei_",
-        type: "uint256",
-        internalType: "uint256",
+        name: "maxPadUriBytes_",
+        type: "uint32",
+        internalType: "uint32",
       },
       {
         name: "owner_",
@@ -3503,67 +2380,12 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "error",
-    name: "AutoLpBelowLaunchpadMin",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "BankrPadAutoLpFixed",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "BankrPadIsPreset",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "BankrSignerUnset",
     inputs: [],
   },
   {
     type: "error",
-    name: "BondAboveMax",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "BondTransferFailed",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "BuilderLaneNotAllowedByLaunchpad",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "BuybackAboveLaunchpadMax",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "CurveNotAllowedByLaunchpad",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "ExtensionNotAllowedByLaunchpad",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "ExtensionNotAllowlisted",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "FeeOutsideLaunchpadBounds",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "HolderShareOutsideLaunchpadBounds",
     inputs: [],
   },
   {
@@ -3574,21 +2396,6 @@ export const bankrLaunchpadRegistryAbi = [
   {
     type: "error",
     name: "InvalidAuthorization",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidFeeBounds",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidPayees",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "InvalidPolicy",
     inputs: [],
   },
   {
@@ -3628,27 +2435,12 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "error",
-    name: "NothingQueued",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "NotOperator",
     inputs: [],
   },
   {
     type: "error",
     name: "NotPendingOperator",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "OperatorPayeesMismatch",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "OperatorShareAboveLauncherBound",
     inputs: [],
   },
   {
@@ -3680,26 +2472,6 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "error",
-    name: "QuoteNotAllowedByLaunchpad",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "QuoteNotInFactoryRegistry",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "ReferrerAboveLaunchpadMax",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "StartDelayAboveLaunchpadMax",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "StringTooLong",
     inputs: [
       {
@@ -3708,16 +2480,6 @@ export const bankrLaunchpadRegistryAbi = [
         internalType: "string",
       },
     ],
-  },
-  {
-    type: "error",
-    name: "TimelockActive",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "TimelockExpired",
-    inputs: [],
   },
   {
     type: "error",
@@ -3737,16 +2499,6 @@ export const bankrLaunchpadRegistryAbi = [
   {
     type: "error",
     name: "VanityTaken",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "VestBpsNotAllowedByLaunchpad",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "VestToHoldersNotAllowedByLaunchpad",
     inputs: [],
   },
   {
@@ -3790,115 +2542,6 @@ export const bankrLaunchpadRegistryAbi = [
     type: "event",
     name: "EIP712DomainChanged",
     inputs: [],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "ExtensionAllowedSet",
-    inputs: [
-      {
-        name: "key",
-        type: "bytes32",
-        indexed: true,
-        internalType: "bytes32",
-      },
-      {
-        name: "allowed",
-        type: "bool",
-        indexed: false,
-        internalType: "bool",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "ExtensionAllowQueued",
-    inputs: [
-      {
-        name: "key",
-        type: "bytes32",
-        indexed: true,
-        internalType: "bytes32",
-      },
-      {
-        name: "executeAfter",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "LaunchpadCurveSet",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        indexed: true,
-        internalType: "uint64",
-      },
-      {
-        name: "key",
-        type: "uint256",
-        indexed: false,
-        internalType: "uint256",
-      },
-      {
-        name: "allowed",
-        type: "bool",
-        indexed: false,
-        internalType: "bool",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "LaunchpadFeeBoundsSet",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        indexed: true,
-        internalType: "uint64",
-      },
-      {
-        name: "bounds",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct IBankrLaunchpadRegistry.FeeBounds",
-        components: [
-          {
-            name: "minSteadyPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "maxSteadyPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "maxStartPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "maxDecaySecs",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxReferrerBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-        ],
-      },
-    ],
     anonymous: false,
   },
   {
@@ -3970,180 +2613,6 @@ export const bankrLaunchpadRegistryAbi = [
       },
       {
         name: "paused",
-        type: "bool",
-        indexed: false,
-        internalType: "bool",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "LaunchpadPayeesSet",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        indexed: true,
-        internalType: "uint64",
-      },
-      {
-        name: "terms",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
-        components: [
-          {
-            name: "payees",
-            type: "address[]",
-            internalType: "address[]",
-          },
-          {
-            name: "steadySharesWad",
-            type: "uint256[]",
-            internalType: "uint256[]",
-          },
-          {
-            name: "decay",
-            type: "tuple",
-            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
-            components: [
-              {
-                name: "on",
-                type: "bool",
-                internalType: "bool",
-              },
-              {
-                name: "autoLpBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "sharesWad",
-                type: "uint256[]",
-                internalType: "uint256[]",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "LaunchpadPolicySet",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        indexed: true,
-        internalType: "uint64",
-      },
-      {
-        name: "policy",
-        type: "tuple",
-        indexed: false,
-        internalType: "struct IBankrLaunchpadRegistry.LaunchpadPolicy",
-        components: [
-          {
-            name: "minHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minAutoLpBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minVestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxVestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "allowBuilderLane",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "allowedExtensions",
-            type: "uint8",
-            internalType: "uint8",
-          },
-          {
-            name: "maxExtensionPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "defaultHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "defaultAutoLpBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "defaultVestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxVestToHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minVestToHoldersSecs",
-            type: "uint64",
-            internalType: "uint64",
-          },
-          {
-            name: "maxBuybackBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxStartDelay",
-            type: "uint32",
-            internalType: "uint32",
-          },
-        ],
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "LaunchpadQuoteSet",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        indexed: true,
-        internalType: "uint64",
-      },
-      {
-        name: "quote",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "allowed",
         type: "bool",
         indexed: false,
         internalType: "bool",
@@ -4266,6 +2735,19 @@ export const bankrLaunchpadRegistryAbi = [
         type: "address",
         indexed: true,
         internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "MaxPadUriBytesSet",
+    inputs: [
+      {
+        name: "bytes_",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
       },
     ],
     anonymous: false,
@@ -4455,32 +2937,6 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "cancelExtensionAllowed",
-    inputs: [
-      {
-        name: "key",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "disallowExtension",
-    inputs: [
-      {
-        name: "key",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
     name: "domainSeparator",
     inputs: [],
     outputs: [
@@ -4531,57 +2987,6 @@ export const bankrLaunchpadRegistryAbi = [
         name: "extensions",
         type: "uint256[]",
         internalType: "uint256[]",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "executeExtensionAllowed",
-    inputs: [
-      {
-        name: "key",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "extensionAllowAfter",
-    inputs: [
-      {
-        name: "",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "extensionAllowed",
-    inputs: [
-      {
-        name: "",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "bool",
-        internalType: "bool",
       },
     ],
     stateMutability: "view",
@@ -4641,11 +3046,6 @@ export const bankrLaunchpadRegistryAbi = [
             internalType: "bool",
           },
           {
-            name: "allowedQuoteCount",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
             name: "vanity",
             type: "tuple",
             internalType: "struct IBankrLaunchpadRegistry.Vanity",
@@ -4659,120 +3059,6 @@ export const bankrLaunchpadRegistryAbi = [
                 name: "nibbles",
                 type: "uint8",
                 internalType: "uint8",
-              },
-            ],
-          },
-          {
-            name: "feeBounds",
-            type: "tuple",
-            internalType: "struct IBankrLaunchpadRegistry.FeeBounds",
-            components: [
-              {
-                name: "minSteadyPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "maxSteadyPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "maxStartPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "maxDecaySecs",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "maxReferrerBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-            ],
-          },
-          {
-            name: "policy",
-            type: "tuple",
-            internalType: "struct IBankrLaunchpadRegistry.LaunchpadPolicy",
-            components: [
-              {
-                name: "minHoldersBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "maxHoldersBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "minAutoLpBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "minVestBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "maxVestBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "allowBuilderLane",
-                type: "bool",
-                internalType: "bool",
-              },
-              {
-                name: "allowedExtensions",
-                type: "uint8",
-                internalType: "uint8",
-              },
-              {
-                name: "maxExtensionPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "defaultHoldersBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "defaultAutoLpBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "defaultVestBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "maxVestToHoldersBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "minVestToHoldersSecs",
-                type: "uint64",
-                internalType: "uint64",
-              },
-              {
-                name: "maxBuybackBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "maxStartDelay",
-                type: "uint32",
-                internalType: "uint32",
               },
             ],
           },
@@ -4822,30 +3108,6 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "isCurveAllowed",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "key",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "bool",
-        internalType: "bool",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "isNonceUsed",
     inputs: [
       {
@@ -4857,30 +3119,6 @@ export const bankrLaunchpadRegistryAbi = [
         name: "nonce",
         type: "bytes32",
         internalType: "bytes32",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "bool",
-        internalType: "bool",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "isQuoteAllowed",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
       },
     ],
     outputs: [
@@ -4926,39 +3164,13 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "MAX_METADATA_URI_BYTES",
+    name: "maxPadUriBytes",
     inputs: [],
     outputs: [
       {
         name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "MAX_PAYEES",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "MAX_REGISTRATION_BOND",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
+        type: "uint32",
+        internalType: "uint32",
       },
     ],
     stateMutability: "view",
@@ -4984,8 +3196,14 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "owner",
-    inputs: [],
+    name: "operatorOf",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
     outputs: [
       {
         name: "",
@@ -4997,53 +3215,13 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "payeesOf",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
+    name: "owner",
+    inputs: [],
     outputs: [
       {
         name: "",
-        type: "tuple",
-        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
-        components: [
-          {
-            name: "payees",
-            type: "address[]",
-            internalType: "address[]",
-          },
-          {
-            name: "steadySharesWad",
-            type: "uint256[]",
-            internalType: "uint256[]",
-          },
-          {
-            name: "decay",
-            type: "tuple",
-            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
-            components: [
-              {
-                name: "on",
-                type: "bool",
-                internalType: "bool",
-              },
-              {
-                name: "autoLpBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "sharesWad",
-                type: "uint256[]",
-                internalType: "uint256[]",
-              },
-            ],
-          },
-        ],
+        type: "address",
+        internalType: "address",
       },
     ],
     stateMutability: "view",
@@ -5060,19 +3238,6 @@ export const bankrLaunchpadRegistryAbi = [
       },
     ],
     stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "queueExtensionAllowed",
-    inputs: [
-      {
-        name: "key",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -5094,145 +3259,9 @@ export const bankrLaunchpadRegistryAbi = [
         internalType: "address",
       },
       {
-        name: "t",
-        type: "tuple",
-        internalType: "struct IBankrLaunchpadRegistry.LaunchTerms",
-        components: [
-          {
-            name: "quote",
-            type: "address",
-            internalType: "address",
-          },
-          {
-            name: "buy",
-            type: "tuple",
-            internalType: "struct FeeSchedule",
-            components: [
-              {
-                name: "startPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "steadyPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "decaySecs",
-                type: "uint16",
-                internalType: "uint16",
-              },
-            ],
-          },
-          {
-            name: "sell",
-            type: "tuple",
-            internalType: "struct FeeSchedule",
-            components: [
-              {
-                name: "startPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "steadyPips",
-                type: "uint24",
-                internalType: "uint24",
-              },
-              {
-                name: "decaySecs",
-                type: "uint16",
-                internalType: "uint16",
-              },
-            ],
-          },
-          {
-            name: "referrerBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "holdersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "autoLpBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "vestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "allocationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "vestToHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "vestToHoldersDuration",
-            type: "uint64",
-            internalType: "uint64",
-          },
-          {
-            name: "buybackBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "usesBuilderLane",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "maxOperatorShareBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "operatorPayeesHash",
-            type: "bytes32",
-            internalType: "bytes32",
-          },
-          {
-            name: "paramsHash",
-            type: "bytes32",
-            internalType: "bytes32",
-          },
-          {
-            name: "extensionKind",
-            type: "uint8",
-            internalType: "uint8",
-          },
-          {
-            name: "extensionMaxPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "extensionKey",
-            type: "bytes32",
-            internalType: "bytes32",
-          },
-          {
-            name: "startDelay",
-            type: "uint64",
-            internalType: "uint64",
-          },
-          {
-            name: "curveKey",
-            type: "uint256",
-            internalType: "uint256",
-          },
-        ],
+        name: "paramsHash",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
         name: "auth",
@@ -5257,47 +3286,7 @@ export const bankrLaunchpadRegistryAbi = [
         ],
       },
     ],
-    outputs: [
-      {
-        name: "terms",
-        type: "tuple",
-        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
-        components: [
-          {
-            name: "payees",
-            type: "address[]",
-            internalType: "address[]",
-          },
-          {
-            name: "steadySharesWad",
-            type: "uint256[]",
-            internalType: "uint256[]",
-          },
-          {
-            name: "decay",
-            type: "tuple",
-            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
-            components: [
-              {
-                name: "on",
-                type: "bool",
-                internalType: "bool",
-              },
-              {
-                name: "autoLpBps",
-                type: "uint16",
-                internalType: "uint16",
-              },
-              {
-                name: "sharesWad",
-                type: "uint256[]",
-                internalType: "uint256[]",
-              },
-            ],
-          },
-        ],
-      },
-    ],
+    outputs: [],
     stateMutability: "nonpayable",
   },
   {
@@ -5369,19 +3358,6 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "setBankrPreset",
-    inputs: [
-      {
-        name: "flywheel",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
     name: "setBankrSigner",
     inputs: [
       {
@@ -5395,67 +3371,12 @@ export const bankrLaunchpadRegistryAbi = [
   },
   {
     type: "function",
-    name: "setCurveAllowed",
+    name: "setMaxPadUriBytes",
     inputs: [
       {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "key",
-        type: "uint256",
-        internalType: "uint256",
-      },
-      {
-        name: "allowed",
-        type: "bool",
-        internalType: "bool",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setFeeBounds",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "b",
-        type: "tuple",
-        internalType: "struct IBankrLaunchpadRegistry.FeeBounds",
-        components: [
-          {
-            name: "minSteadyPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "maxSteadyPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "maxStartPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "maxDecaySecs",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxReferrerBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-        ],
+        name: "bytes_",
+        type: "uint32",
+        internalType: "uint32",
       },
     ],
     outputs: [],
@@ -5490,169 +3411,6 @@ export const bankrLaunchpadRegistryAbi = [
       },
       {
         name: "paused",
-        type: "bool",
-        internalType: "bool",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setPayees",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "payees",
-        type: "address[]",
-        internalType: "address[]",
-      },
-      {
-        name: "steadySharesWad",
-        type: "uint256[]",
-        internalType: "uint256[]",
-      },
-      {
-        name: "decay",
-        type: "tuple",
-        internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
-        components: [
-          {
-            name: "on",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "autoLpBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "sharesWad",
-            type: "uint256[]",
-            internalType: "uint256[]",
-          },
-        ],
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setPolicy",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "p",
-        type: "tuple",
-        internalType: "struct IBankrLaunchpadRegistry.LaunchpadPolicy",
-        components: [
-          {
-            name: "minHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minAutoLpBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minVestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxVestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "allowBuilderLane",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "allowedExtensions",
-            type: "uint8",
-            internalType: "uint8",
-          },
-          {
-            name: "maxExtensionPips",
-            type: "uint24",
-            internalType: "uint24",
-          },
-          {
-            name: "defaultHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "defaultAutoLpBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "defaultVestBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxVestToHoldersBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minVestToHoldersSecs",
-            type: "uint64",
-            internalType: "uint64",
-          },
-          {
-            name: "maxBuybackBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxStartDelay",
-            type: "uint32",
-            internalType: "uint32",
-          },
-        ],
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setQuoteAllowed",
-    inputs: [
-      {
-        name: "id",
-        type: "uint64",
-        internalType: "uint64",
-      },
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "allowed",
         type: "bool",
         internalType: "bool",
       },
@@ -5905,6 +3663,11 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "error",
+    name: "LegExists",
+    inputs: [],
+  },
+  {
+    type: "error",
     name: "NoPendingCto",
     inputs: [],
   },
@@ -5940,12 +3703,12 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "error",
-    name: "NotHolderLeg",
+    name: "NotHook",
     inputs: [],
   },
   {
     type: "error",
-    name: "NotHook",
+    name: "NotLeg",
     inputs: [],
   },
   {
@@ -5985,7 +3748,7 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "error",
-    name: "TooManyCreators",
+    name: "TooManyEntries",
     inputs: [],
   },
   {
@@ -5996,6 +3759,11 @@ export const bankrFeeLedgerAbi = [
   {
     type: "error",
     name: "UnknownPool",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "WindowExceeded",
     inputs: [],
   },
   {
@@ -6169,6 +3937,18 @@ export const bankrFeeLedgerAbi = [
         indexed: false,
         internalType: "bool",
       },
+      {
+        name: "notice",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
+      },
+      {
+        name: "grace",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
+      },
     ],
     anonymous: false,
   },
@@ -6318,6 +4098,25 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "event",
+    name: "LegAdded",
+    inputs: [
+      {
+        name: "legId",
+        type: "uint16",
+        indexed: true,
+        internalType: "uint16",
+      },
+      {
+        name: "leg",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "PoolTermsRegistered",
     inputs: [
       {
@@ -6327,46 +4126,67 @@ export const bankrFeeLedgerAbi = [
         internalType: "bytes32",
       },
       {
-        name: "hook",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "quoteIs0",
-        type: "bool",
+        name: "terms",
+        type: "tuple",
         indexed: false,
-        internalType: "bool",
-      },
-      {
-        name: "waived",
-        type: "bool",
-        indexed: false,
-        internalType: "bool",
-      },
-      {
-        name: "decaySplit",
-        type: "bool",
-        indexed: false,
-        internalType: "bool",
-      },
-      {
-        name: "referrerBps",
-        type: "uint16",
-        indexed: false,
-        internalType: "uint16",
-      },
-      {
-        name: "treasuryWad",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
-      },
-      {
-        name: "treasuryDecayWad",
-        type: "uint64",
-        indexed: false,
-        internalType: "uint64",
+        internalType: "struct IBankrFeeLedger.PoolTerms",
+        components: [
+          {
+            name: "hook",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "flags",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "referrerBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "legId",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "treasuryWad",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "treasuryDecayWad",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "distributor",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "holderWad",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
       },
     ],
     anonymous: false,
@@ -6613,6 +4433,25 @@ export const bankrFeeLedgerAbi = [
       },
     ],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "addLeg",
+    inputs: [
+      {
+        name: "leg",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "id",
+        type: "uint16",
+        internalType: "uint16",
+      },
+    ],
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -7012,19 +4851,6 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "function",
-    name: "CTO_TIMELOCK",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint64",
-        internalType: "uint64",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "ctoAuthority",
     inputs: [],
     outputs: [
@@ -7083,8 +4909,65 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "function",
+    name: "ctoTermsOf",
+    inputs: [
+      {
+        name: "bucketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "",
+        type: "uint32",
+        internalType: "uint32",
+      },
+      {
+        name: "",
+        type: "uint32",
+        internalType: "uint32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "disableCtoForever",
     inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "drawWindow",
+    inputs: [
+      {
+        name: "q",
+        type: "address",
+        internalType: "Currency",
+      },
+      {
+        name: "spent",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "cap",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "interval",
+        type: "uint32",
+        internalType: "uint32",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -7230,6 +5113,11 @@ export const bankrFeeLedgerAbi = [
     inputs: [
       {
         name: "",
+        type: "uint16",
+        internalType: "uint16",
+      },
+      {
+        name: "",
         type: "address",
         internalType: "Currency",
       },
@@ -7320,6 +5208,25 @@ export const bankrFeeLedgerAbi = [
         name: "",
         type: "bool",
         internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "legIdOf",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint16",
+        internalType: "uint16",
       },
     ],
     stateMutability: "view",
@@ -7444,19 +5351,9 @@ export const bankrFeeLedgerAbi = [
             internalType: "address",
           },
           {
-            name: "quoteIs0",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "waived",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "decaySplit",
-            type: "bool",
-            internalType: "bool",
+            name: "flags",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
             name: "referrerBps",
@@ -7464,14 +5361,24 @@ export const bankrFeeLedgerAbi = [
             internalType: "uint16",
           },
           {
-            name: "treasuryCut",
-            type: "bool",
-            internalType: "bool",
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            name: "holderIntake",
-            type: "bool",
-            internalType: "bool",
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "legId",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
             name: "treasuryWad",
@@ -7521,12 +5428,12 @@ export const bankrFeeLedgerAbi = [
     name: "registerBucket",
     inputs: [
       {
-        name: "bucketId",
+        name: "",
         type: "bytes32",
         internalType: "bytes32",
       },
       {
-        name: "key",
+        name: "",
         type: "tuple",
         internalType: "struct PoolKey",
         components: [
@@ -7558,24 +5465,24 @@ export const bankrFeeLedgerAbi = [
         ],
       },
       {
-        name: "beneficiaries",
+        name: "",
         type: "address[]",
         internalType: "address[]",
       },
       {
-        name: "sharesWad",
+        name: "",
         type: "uint256[]",
         internalType: "uint256[]",
       },
       {
-        name: "creatorShares",
+        name: "",
         type: "uint256[]",
         internalType: "uint256[]",
       },
       {
-        name: "takeover",
-        type: "bool",
-        internalType: "bool",
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     outputs: [],
@@ -7586,22 +5493,22 @@ export const bankrFeeLedgerAbi = [
     name: "registerCurrencyBucket",
     inputs: [
       {
-        name: "bucketId",
+        name: "",
         type: "bytes32",
         internalType: "bytes32",
       },
       {
-        name: "currency",
+        name: "",
         type: "address",
         internalType: "Currency",
       },
       {
-        name: "beneficiaries",
+        name: "",
         type: "address[]",
         internalType: "address[]",
       },
       {
-        name: "sharesWad",
+        name: "",
         type: "uint256[]",
         internalType: "uint256[]",
       },
@@ -7614,12 +5521,12 @@ export const bankrFeeLedgerAbi = [
     name: "registerPoolTerms",
     inputs: [
       {
-        name: "poolId",
+        name: "",
         type: "bytes32",
         internalType: "bytes32",
       },
       {
-        name: "key",
+        name: "",
         type: "tuple",
         internalType: "struct PoolKey",
         components: [
@@ -7651,7 +5558,7 @@ export const bankrFeeLedgerAbi = [
         ],
       },
       {
-        name: "t",
+        name: "",
         type: "tuple",
         internalType: "struct IBankrFeeLedger.PoolTerms",
         components: [
@@ -7661,19 +5568,9 @@ export const bankrFeeLedgerAbi = [
             internalType: "address",
           },
           {
-            name: "quoteIs0",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "waived",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "decaySplit",
-            type: "bool",
-            internalType: "bool",
+            name: "flags",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
             name: "referrerBps",
@@ -7681,14 +5578,24 @@ export const bankrFeeLedgerAbi = [
             internalType: "uint16",
           },
           {
-            name: "treasuryCut",
-            type: "bool",
-            internalType: "bool",
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            name: "holderIntake",
-            type: "bool",
-            internalType: "bool",
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "legId",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
             name: "treasuryWad",
@@ -7712,6 +5619,11 @@ export const bankrFeeLedgerAbi = [
           },
         ],
       },
+      {
+        name: "",
+        type: "uint24",
+        internalType: "uint24",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -7721,12 +5633,12 @@ export const bankrFeeLedgerAbi = [
     name: "registerSoleBucket",
     inputs: [
       {
-        name: "bucketId",
+        name: "",
         type: "bytes32",
         internalType: "bytes32",
       },
       {
-        name: "key",
+        name: "",
         type: "tuple",
         internalType: "struct PoolKey",
         components: [
@@ -7758,12 +5670,12 @@ export const bankrFeeLedgerAbi = [
         ],
       },
       {
-        name: "payee",
+        name: "",
         type: "address",
         internalType: "address",
       },
       {
-        name: "locked",
+        name: "",
         type: "bool",
         internalType: "bool",
       },
@@ -7962,6 +5874,30 @@ export const bankrFeeLedgerAbi = [
   },
   {
     type: "function",
+    name: "windowOf",
+    inputs: [
+      {
+        name: "q",
+        type: "address",
+        internalType: "Currency",
+      },
+    ],
+    outputs: [
+      {
+        name: "until",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "left",
+        type: "uint192",
+        internalType: "uint192",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "withdraw",
     inputs: [
       {
@@ -8087,6 +6023,16 @@ export const holderRewardsDeployerAbi = [
         type: "bool",
         internalType: "bool",
       },
+      {
+        name: "holderLeg",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "terms",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [
       {
@@ -8144,6 +6090,32 @@ export const holderRewardsDeployerAbi = [
         name: "",
         type: "address",
         internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "launchingLeg",
+    inputs: [],
+    outputs: [
+      {
+        name: "l",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "launchingTerms",
+    inputs: [],
+    outputs: [
+      {
+        name: "t",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     stateMutability: "view",
@@ -8250,6 +6222,17 @@ export const holderRewardsDistributorAbi = [
     type: "error",
     name: "ExcludedAccount",
     inputs: [],
+  },
+  {
+    type: "error",
+    name: "HardBound",
+    inputs: [
+      {
+        name: "bound",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
   },
   {
     type: "error",
@@ -8577,19 +6560,6 @@ export const holderRewardsDistributorAbi = [
   },
   {
     type: "function",
-    name: "BNKR_ACTIVATION_DIVISOR",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "bnkr",
     inputs: [],
     outputs: [
@@ -8597,6 +6567,19 @@ export const holderRewardsDistributorAbi = [
         name: "",
         type: "address",
         internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "bnkrActivationDivisor",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     stateMutability: "view",
@@ -8895,19 +6878,6 @@ export const holderRewardsDistributorAbi = [
   },
   {
     type: "function",
-    name: "MIN_RESTART_BPS",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "onLegPush",
     inputs: [
       {
@@ -9113,19 +7083,6 @@ export const holderRewardsDistributorAbi = [
   },
   {
     type: "function",
-    name: "REWARD_STREAM_DURATION",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "rewardExcluded",
     inputs: [
       {
@@ -9139,6 +7096,19 @@ export const holderRewardsDistributorAbi = [
         name: "",
         type: "bool",
         internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "rewardRestartBps",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     stateMutability: "view",
@@ -9182,6 +7152,19 @@ export const holderRewardsDistributorAbi = [
         internalType: "uint8",
       },
     ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "rewardStreamSecs",
+    inputs: [],
     outputs: [
       {
         name: "",
@@ -9269,19 +7252,6 @@ export const holderRewardsDistributorAbi = [
   },
   {
     type: "function",
-    name: "TOKEN_ACTIVATION_DIVISOR",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "token",
     inputs: [],
     outputs: [
@@ -9289,6 +7259,19 @@ export const holderRewardsDistributorAbi = [
         name: "",
         type: "address",
         internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "tokenActivationDivisor",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     stateMutability: "view",
@@ -9905,6 +7888,17 @@ export const bankrLaunchTokenAbi = [
   },
   {
     type: "error",
+    name: "HardBound",
+    inputs: [
+      {
+        name: "bound",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
     name: "MetadataTooLong",
     inputs: [],
   },
@@ -10143,6 +8137,32 @@ export const bankrLaunchTokenAbi = [
   },
   {
     type: "function",
+    name: "capDisabled",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "capEnd",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "controller",
     inputs: [],
     outputs: [
@@ -10241,6 +8261,19 @@ export const bankrLaunchTokenAbi = [
         name: "",
         type: "address",
         internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "metadataMaxBytes",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint32",
+        internalType: "uint32",
       },
     ],
     stateMutability: "view",
@@ -10537,6 +8570,21 @@ export const bankrHookLensAbi = [
             internalType: "uint24",
           },
           {
+            name: "feeCeilingPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "bankrNum",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "bankrDen",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
             name: "codehash",
             type: "bytes32",
             internalType: "bytes32",
@@ -10565,6 +8613,11 @@ export const bankrHookLensAbi = [
             name: "sunsetSecs",
             type: "uint32",
             internalType: "uint32",
+          },
+          {
+            name: "ownerSwitch",
+            type: "bool",
+            internalType: "bool",
           },
         ],
       },
@@ -10639,11 +8692,6 @@ export const bankrHookLensAbi = [
         components: [
           {
             name: "locker",
-            type: "address",
-            internalType: "address",
-          },
-          {
-            name: "weth",
             type: "address",
             internalType: "address",
           },
@@ -10739,6 +8787,21 @@ export const bankrHookLensAbi = [
             internalType: "int24",
           },
           {
+            name: "floorTick",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "edgeTick",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "refTauSecs",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
             name: "heldQuote",
             type: "uint256",
             internalType: "uint256",
@@ -10751,7 +8814,7 @@ export const bankrHookLensAbi = [
           {
             name: "buy",
             type: "tuple",
-            internalType: "struct FeeSchedule",
+            internalType: "struct PoolSide",
             components: [
               {
                 name: "startPips",
@@ -10765,15 +8828,20 @@ export const bankrHookLensAbi = [
               },
               {
                 name: "decaySecs",
-                type: "uint16",
-                internalType: "uint16",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "compoundFloor",
+                type: "uint128",
+                internalType: "uint128",
               },
             ],
           },
           {
             name: "sell",
             type: "tuple",
-            internalType: "struct FeeSchedule",
+            internalType: "struct PoolSide",
             components: [
               {
                 name: "startPips",
@@ -10787,6 +8855,80 @@ export const bankrHookLensAbi = [
               },
               {
                 name: "decaySecs",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "compoundFloor",
+                type: "uint128",
+                internalType: "uint128",
+              },
+            ],
+          },
+          {
+            name: "works",
+            type: "tuple",
+            internalType: "struct PoolWorks",
+            components: [
+              {
+                name: "compoundCap",
+                type: "uint128",
+                internalType: "uint128",
+              },
+              {
+                name: "compoundInterval",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "compoundShareBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "compoundDeviationTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "bandHalfWidth",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "bandGrid",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "swapCapTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+            ],
+          },
+          {
+            name: "fill",
+            type: "tuple",
+            internalType: "struct PoolFill",
+            components: [
+              {
+                name: "buybackInterval",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "buybackRetry",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "fillTravelTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "fillStartGapTicks",
                 type: "uint16",
                 internalType: "uint16",
               },
@@ -10845,62 +8987,6 @@ export const bankrHookLensAbi = [
   },
   {
     type: "function",
-    name: "quoteCache",
-    inputs: [
-      {
-        name: "quote",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "tuple",
-        internalType: "struct QuoteEntry",
-        components: [
-          {
-            name: "allowed",
-            type: "bool",
-            internalType: "bool",
-          },
-          {
-            name: "minCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundQuote",
-            type: "uint128",
-            internalType: "uint128",
-          },
-          {
-            name: "maxCompoundBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "maxCompoundDeviationBps",
-            type: "uint16",
-            internalType: "uint16",
-          },
-          {
-            name: "minCompoundInterval",
-            type: "uint32",
-            internalType: "uint32",
-          },
-          {
-            name: "removalExecuteAfter",
-            type: "uint64",
-            internalType: "uint64",
-          },
-        ],
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "straddleBand",
     inputs: [
       {
@@ -10936,6 +9022,17 @@ export const erc20TokenDeployerAbi = [
       },
     ],
     stateMutability: "nonpayable",
+  },
+  {
+    type: "error",
+    name: "HardBound",
+    inputs: [
+      {
+        name: "bound",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
   },
   {
     type: "error",
@@ -11047,6 +9144,21 @@ export const erc20TokenDeployerAbi = [
             type: "uint64",
             internalType: "uint64",
           },
+          {
+            name: "capAmount",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "capSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "metadataMaxBytes",
+            type: "uint32",
+            internalType: "uint32",
+          },
         ],
       },
       {
@@ -11073,6 +9185,19 @@ export const erc20TokenDeployerAbi = [
         name: "",
         type: "address",
         internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "launchingMetadataMax",
+    inputs: [],
+    outputs: [
+      {
+        name: "m",
+        type: "uint32",
+        internalType: "uint32",
       },
     ],
     stateMutability: "view",
@@ -11162,6 +9287,21 @@ export const erc20TokenDeployerAbi = [
             type: "uint64",
             internalType: "uint64",
           },
+          {
+            name: "capAmount",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "capSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "metadataMaxBytes",
+            type: "uint32",
+            internalType: "uint32",
+          },
         ],
       },
     ],
@@ -11176,6 +9316,4218 @@ export const erc20TokenDeployerAbi = [
   },
 ] as const;
 
+export const bankrLaunchSettingsAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "factory_",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "registry_",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "i",
+        type: "tuple",
+        internalType: "struct IBankrLaunchSettings.SettingsInit",
+        components: [
+          {
+            name: "protocol",
+            type: "tuple",
+            internalType: "struct ProtocolTerms",
+            components: [
+              {
+                name: "bankrFeeBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "bankrMinPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "holdersShareBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "extBankrNum",
+                type: "uint8",
+                internalType: "uint8",
+              },
+              {
+                name: "extBankrDen",
+                type: "uint8",
+                internalType: "uint8",
+              },
+              {
+                name: "ctoNotice",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "ctoGrace",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "tokenActivationDivisor",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "bnkrActivationDivisor",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "maxPadPayees",
+                type: "uint8",
+                internalType: "uint8",
+              },
+            ],
+          },
+          {
+            name: "guards",
+            type: "tuple",
+            internalType: "struct GuardTerms",
+            components: [
+              {
+                name: "refTauSecs",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "compoundSwapMaxTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "fillTravelTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "fillTravelCompoundingTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "fillStartGapTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "minRoundTripPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "curveNearStep",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "maxCompoundUsd",
+                type: "uint32",
+                internalType: "uint32",
+              },
+            ],
+          },
+          {
+            name: "limits",
+            type: "tuple[]",
+            internalType: "struct Limit[]",
+            components: [
+              {
+                name: "min",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "max",
+                type: "uint64",
+                internalType: "uint64",
+              },
+            ],
+          },
+          {
+            name: "templateKnobs",
+            type: "tuple[]",
+            internalType: "struct Range[]",
+            components: [
+              {
+                name: "min",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "max",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "dflt",
+                type: "uint64",
+                internalType: "uint64",
+              },
+            ],
+          },
+          {
+            name: "templateFlags",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "templateCapController",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "templatePresetLimits",
+            type: "tuple[4]",
+            internalType: "struct PresetLimits[4]",
+            components: [
+              {
+                name: "allowed",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "maxWindowSecs",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "minBrakeTicks",
+                type: "int24",
+                internalType: "int24",
+              },
+              {
+                name: "minAnchorTau",
+                type: "uint32",
+                internalType: "uint32",
+              },
+            ],
+          },
+          {
+            name: "presets",
+            type: "tuple[4]",
+            internalType: "struct PresetRecord[4]",
+            components: [
+              {
+                name: "deployer",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "deployerCodeHash",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+              {
+                name: "creationCodeHash",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+              {
+                name: "selfPayee",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "active",
+                type: "bool",
+                internalType: "bool",
+              },
+            ],
+          },
+          {
+            name: "bankrPad",
+            type: "tuple",
+            internalType: "struct PadConfig",
+            components: [
+              {
+                name: "knobs",
+                type: "uint8[]",
+                internalType: "uint8[]",
+              },
+              {
+                name: "ranges",
+                type: "tuple[]",
+                internalType: "struct Range[]",
+                components: [
+                  {
+                    name: "min",
+                    type: "uint64",
+                    internalType: "uint64",
+                  },
+                  {
+                    name: "max",
+                    type: "uint64",
+                    internalType: "uint64",
+                  },
+                  {
+                    name: "dflt",
+                    type: "uint64",
+                    internalType: "uint64",
+                  },
+                ],
+              },
+              {
+                name: "flags",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "capController",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "terms",
+                type: "tuple",
+                internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+                components: [
+                  {
+                    name: "payees",
+                    type: "address[]",
+                    internalType: "address[]",
+                  },
+                  {
+                    name: "steadySharesWad",
+                    type: "uint256[]",
+                    internalType: "uint256[]",
+                  },
+                  {
+                    name: "decay",
+                    type: "tuple",
+                    internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+                    components: [
+                      {
+                        name: "on",
+                        type: "bool",
+                        internalType: "bool",
+                      },
+                      {
+                        name: "autoLpBps",
+                        type: "uint16",
+                        internalType: "uint16",
+                      },
+                      {
+                        name: "sharesWad",
+                        type: "uint256[]",
+                        internalType: "uint256[]",
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                name: "presetIds",
+                type: "uint8[]",
+                internalType: "uint8[]",
+              },
+              {
+                name: "presetLimits",
+                type: "tuple[]",
+                internalType: "struct PresetLimits[]",
+                components: [
+                  {
+                    name: "allowed",
+                    type: "bool",
+                    internalType: "bool",
+                  },
+                  {
+                    name: "maxWindowSecs",
+                    type: "uint32",
+                    internalType: "uint32",
+                  },
+                  {
+                    name: "minBrakeTicks",
+                    type: "int24",
+                    internalType: "int24",
+                  },
+                  {
+                    name: "minAnchorTau",
+                    type: "uint32",
+                    internalType: "uint32",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: "allowedKeys",
+            type: "bytes32[]",
+            internalType: "bytes32[]",
+          },
+        ],
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "error",
+    name: "AutoLpNeedsCompoundTerms",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BankrCutDoesNotFit",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BankrPadIsPreset",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BuybackFeeTooLow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CurveNotAllowedByLaunchpad",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ExtensionNotAllowlisted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "FlagNotAllowed",
+    inputs: [
+      {
+        name: "flag",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "HardBound",
+    inputs: [
+      {
+        name: "bound",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidFeeSchedule",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidGuardTerms",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidOptions",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidPayees",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidPriceAttestation",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidPricing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidProtocolTerms",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSplits",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidVestToHolders",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "KnobOutOfRange",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "LengthMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotAllowedByLaunchpad",
+    inputs: [
+      {
+        name: "flag",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "NotOperator",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotOwner",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotRegistry",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "OperatorPayeesMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "OperatorShareAboveLauncherBound",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "OutsideLaunchpadRange",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "min",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "max",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "PresetCodeChanged",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "PresetOff",
+    inputs: [
+      {
+        name: "presetId",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "QuoteAmountsOutOfRange",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "QuoteHasNoRoute",
+    inputs: [
+      {
+        name: "quote",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "QuoteNotAllowed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "QuoteNotAllowedByLaunchpad",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "StartPassed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "StartPriceUnavailable",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "StartTickOutOfBounds",
+    inputs: [
+      {
+        name: "lowest",
+        type: "int24",
+        internalType: "int24",
+      },
+      {
+        name: "highest",
+        type: "int24",
+        internalType: "int24",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "StartTooFar",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TermsChanged",
+    inputs: [
+      {
+        name: "actual",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "UnknownKnob",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "UnknownKnob",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "UnknownLaunchpad",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "VestBpsTooHigh",
+    inputs: [],
+  },
+  {
+    type: "event",
+    name: "AllowedFlagsSet",
+    inputs: [
+      {
+        name: "flags",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "BnkrPairWaiverSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "waived",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ExtensionAllowedSet",
+    inputs: [
+      {
+        name: "key",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "allowed",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "GuardTermsSet",
+    inputs: [
+      {
+        name: "terms",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct GuardTerms",
+        components: [
+          {
+            name: "refTauSecs",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "compoundSwapMaxTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillTravelTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillTravelCompoundingTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillStartGapTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "minRoundTripPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "curveNearStep",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "maxCompoundUsd",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "LimitSet",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "min",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+      {
+        name: "max",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadCapControllerSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "controller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadCurveSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "key",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "allowed",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadFlagsSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "flags",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadKnobSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "knob",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "min",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+      {
+        name: "max",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+      {
+        name: "dflt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadPayeesSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "terms",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+        components: [
+          {
+            name: "payees",
+            type: "address[]",
+            internalType: "address[]",
+          },
+          {
+            name: "steadySharesWad",
+            type: "uint256[]",
+            internalType: "uint256[]",
+          },
+          {
+            name: "decay",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+            components: [
+              {
+                name: "on",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "autoLpBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "sharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadPresetLimitsSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "presetId",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "limits",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct PresetLimits",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "maxWindowSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minBrakeTicks",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "minAnchorTau",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PadQuoteSet",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
+      },
+      {
+        name: "quote",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "terms",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct PadQuoteTerms",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "ownAmounts",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "compoundFloor",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "compoundCap",
+            type: "uint128",
+            internalType: "uint128",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PresetSet",
+    inputs: [
+      {
+        name: "presetId",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "record",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct PresetRecord",
+        components: [
+          {
+            name: "deployer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "deployerCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "creationCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "selfPayee",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "active",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PriceSignerSet",
+    inputs: [
+      {
+        name: "signer",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ProtocolTermsSet",
+    inputs: [
+      {
+        name: "terms",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct ProtocolTerms",
+        components: [
+          {
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "extBankrNum",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "extBankrDen",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "ctoNotice",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "ctoGrace",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "tokenActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "bnkrActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "maxPadPayees",
+            type: "uint8",
+            internalType: "uint8",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "QuoteRemoved",
+    inputs: [
+      {
+        name: "quote",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "QuoteSet",
+    inputs: [
+      {
+        name: "quote",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "terms",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct QuoteTerms",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "mode",
+            type: "uint8",
+            internalType: "enum PricingMode",
+          },
+          {
+            name: "decimals",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "maxPriceAge",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "feed",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "compoundFloor",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "compoundCap",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "quoteActivation",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "quotePaid",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SequencerUptimeFeedSet",
+    inputs: [
+      {
+        name: "feed",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "graceSecs",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "TemplateFlagsSet",
+    inputs: [
+      {
+        name: "flags",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "capController",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "TemplateKnobSet",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "min",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+      {
+        name: "max",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+      {
+        name: "dflt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "TemplatePresetLimitsSet",
+    inputs: [
+      {
+        name: "presetId",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "limits",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct PresetLimits",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "maxWindowSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minBrakeTicks",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "minAnchorTau",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "function",
+    name: "allowedFlags",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "bnkrPairWaiver",
+    inputs: [
+      {
+        name: "padId",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "capControllerOf",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "configure",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PadConfig",
+        components: [
+          {
+            name: "knobs",
+            type: "uint8[]",
+            internalType: "uint8[]",
+          },
+          {
+            name: "ranges",
+            type: "tuple[]",
+            internalType: "struct Range[]",
+            components: [
+              {
+                name: "min",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "max",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "dflt",
+                type: "uint64",
+                internalType: "uint64",
+              },
+            ],
+          },
+          {
+            name: "flags",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "capController",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "terms",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+            components: [
+              {
+                name: "payees",
+                type: "address[]",
+                internalType: "address[]",
+              },
+              {
+                name: "steadySharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+              {
+                name: "decay",
+                type: "tuple",
+                internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+                components: [
+                  {
+                    name: "on",
+                    type: "bool",
+                    internalType: "bool",
+                  },
+                  {
+                    name: "autoLpBps",
+                    type: "uint16",
+                    internalType: "uint16",
+                  },
+                  {
+                    name: "sharesWad",
+                    type: "uint256[]",
+                    internalType: "uint256[]",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: "presetIds",
+            type: "uint8[]",
+            internalType: "uint8[]",
+          },
+          {
+            name: "presetLimits",
+            type: "tuple[]",
+            internalType: "struct PresetLimits[]",
+            components: [
+              {
+                name: "allowed",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "maxWindowSecs",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "minBrakeTicks",
+                type: "int24",
+                internalType: "int24",
+              },
+              {
+                name: "minAnchorTau",
+                type: "uint32",
+                internalType: "uint32",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "extensionAllowed",
+    inputs: [
+      {
+        name: "key",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "extensionKey",
+    inputs: [
+      {
+        name: "e",
+        type: "tuple",
+        internalType: "struct LaunchExtension",
+        components: [
+          {
+            name: "id",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "params",
+            type: "bytes",
+            internalType: "bytes",
+          },
+          {
+            name: "payee",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "ext",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "codehash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "maxBuyPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "maxSellPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "quoteOnly",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "sunsetSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "quoteGas",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "afterGas",
+            type: "uint24",
+            internalType: "uint24",
+          },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "factory",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "flagsOf",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "guardTerms",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct GuardTerms",
+        components: [
+          {
+            name: "refTauSecs",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "compoundSwapMaxTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillTravelTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillTravelCompoundingTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillStartGapTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "minRoundTripPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "curveNearStep",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "maxCompoundUsd",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "hardBounds",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    stateMutability: "pure",
+  },
+  {
+    type: "function",
+    name: "hashPriceAttestation",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "initPad",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+        components: [
+          {
+            name: "payees",
+            type: "address[]",
+            internalType: "address[]",
+          },
+          {
+            name: "steadySharesWad",
+            type: "uint256[]",
+            internalType: "uint256[]",
+          },
+          {
+            name: "decay",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+            components: [
+              {
+                name: "on",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "autoLpBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "sharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "isCurveAllowed",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "key",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isQuoteAllowed",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "quote",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "knobOf",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct Range",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "dflt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "limitOf",
+    inputs: [
+      {
+        name: "knob",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+    outputs: [
+      {
+        name: "l",
+        type: "tuple",
+        internalType: "struct Limit",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "limits",
+    inputs: [],
+    outputs: [
+      {
+        name: "l",
+        type: "tuple[]",
+        internalType: "struct Limit[]",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "namedAs",
+    inputs: [
+      {
+        name: "a",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "padConfig",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [
+      {
+        name: "c",
+        type: "tuple",
+        internalType: "struct PadConfig",
+        components: [
+          {
+            name: "knobs",
+            type: "uint8[]",
+            internalType: "uint8[]",
+          },
+          {
+            name: "ranges",
+            type: "tuple[]",
+            internalType: "struct Range[]",
+            components: [
+              {
+                name: "min",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "max",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "dflt",
+                type: "uint64",
+                internalType: "uint64",
+              },
+            ],
+          },
+          {
+            name: "flags",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "capController",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "terms",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+            components: [
+              {
+                name: "payees",
+                type: "address[]",
+                internalType: "address[]",
+              },
+              {
+                name: "steadySharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+              {
+                name: "decay",
+                type: "tuple",
+                internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+                components: [
+                  {
+                    name: "on",
+                    type: "bool",
+                    internalType: "bool",
+                  },
+                  {
+                    name: "autoLpBps",
+                    type: "uint16",
+                    internalType: "uint16",
+                  },
+                  {
+                    name: "sharesWad",
+                    type: "uint256[]",
+                    internalType: "uint256[]",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: "presetIds",
+            type: "uint8[]",
+            internalType: "uint8[]",
+          },
+          {
+            name: "presetLimits",
+            type: "tuple[]",
+            internalType: "struct PresetLimits[]",
+            components: [
+              {
+                name: "allowed",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "maxWindowSecs",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "minBrakeTicks",
+                type: "int24",
+                internalType: "int24",
+              },
+              {
+                name: "minAnchorTau",
+                type: "uint32",
+                internalType: "uint32",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "padQuoteTerms",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "quote",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PadQuoteTerms",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "ownAmounts",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "compoundFloor",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "compoundCap",
+            type: "uint128",
+            internalType: "uint128",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "payeesOf",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+        components: [
+          {
+            name: "payees",
+            type: "address[]",
+            internalType: "address[]",
+          },
+          {
+            name: "steadySharesWad",
+            type: "uint256[]",
+            internalType: "uint256[]",
+          },
+          {
+            name: "decay",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+            components: [
+              {
+                name: "on",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "autoLpBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "sharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "presetLimitsOf",
+    inputs: [
+      {
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "presetId",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PresetLimits",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "maxWindowSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minBrakeTicks",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "minAnchorTau",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "presetOf",
+    inputs: [
+      {
+        name: "presetId",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PresetRecord",
+        components: [
+          {
+            name: "deployer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "deployerCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "creationCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "selfPayee",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "active",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "pricingConfig",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "uint32",
+        internalType: "uint32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "protocolTerms",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct ProtocolTerms",
+        components: [
+          {
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "extBankrNum",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "extBankrDen",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "ctoNotice",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "ctoGrace",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "tokenActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "bnkrActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "maxPadPayees",
+            type: "uint8",
+            internalType: "uint8",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "quoteList",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address[]",
+        internalType: "address[]",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "quoteTerms",
+    inputs: [
+      {
+        name: "quote",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct QuoteTerms",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "mode",
+            type: "uint8",
+            internalType: "enum PricingMode",
+          },
+          {
+            name: "decimals",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "maxPriceAge",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "feed",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "compoundFloor",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "compoundCap",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "quoteActivation",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "quotePaid",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "registry",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "removeQuote",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "resolve",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct LaunchParams",
+        components: [
+          {
+            name: "name",
+            type: "string",
+            internalType: "string",
+          },
+          {
+            name: "symbol",
+            type: "string",
+            internalType: "string",
+          },
+          {
+            name: "metadataUri",
+            type: "string",
+            internalType: "string",
+          },
+          {
+            name: "metadataAdmin",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "salt",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "quote",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "totalSupply",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "expectedStartTick",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "curveId",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "econ",
+            type: "tuple",
+            internalType: "struct LaunchEconomics",
+            components: [
+              {
+                name: "buy",
+                type: "tuple",
+                internalType: "struct FeeSchedule",
+                components: [
+                  {
+                    name: "startPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "steadyPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "decaySecs",
+                    type: "uint32",
+                    internalType: "uint32",
+                  },
+                ],
+              },
+              {
+                name: "sell",
+                type: "tuple",
+                internalType: "struct FeeSchedule",
+                components: [
+                  {
+                    name: "startPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "steadyPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "decaySecs",
+                    type: "uint32",
+                    internalType: "uint32",
+                  },
+                ],
+              },
+              {
+                name: "referrerBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "holdersBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "autoLpBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "buybackBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "vestToHoldersBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "vestToHoldersCliff",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "vestToHoldersDuration",
+                type: "uint64",
+                internalType: "uint64",
+              },
+            ],
+          },
+          {
+            name: "feeRecipients",
+            type: "tuple[]",
+            internalType: "struct FeeRecipient[]",
+            components: [
+              {
+                name: "recipient",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "shareBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+            ],
+          },
+          {
+            name: "allowOpenCodeFeeRecipients",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "vestingRecipient",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "vestBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "allowCodeVestingRecipient",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "extraAllocations",
+            type: "tuple[]",
+            internalType: "struct VestingAllocation[]",
+            components: [
+              {
+                name: "recipient",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "cliff",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "duration",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "push",
+                type: "bool",
+                internalType: "bool",
+              },
+            ],
+          },
+          {
+            name: "capExclusions",
+            type: "address[]",
+            internalType: "address[]",
+          },
+          {
+            name: "devBuyAmountIn",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "devBuyMinOut",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "launchpadId",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "maxOperatorShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "operatorPayeesHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "authorization",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.LaunchAuthorization",
+            components: [
+              {
+                name: "nonce",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+              {
+                name: "deadline",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "signature",
+                type: "bytes",
+                internalType: "bytes",
+              },
+            ],
+          },
+          {
+            name: "priceAttestation",
+            type: "tuple",
+            internalType: "struct PriceAttestation",
+            components: [
+              {
+                name: "priceUsdE18",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "observedAt",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "expiresAt",
+                type: "uint64",
+                internalType: "uint64",
+              },
+              {
+                name: "signature",
+                type: "bytes",
+                internalType: "bytes",
+              },
+            ],
+          },
+          {
+            name: "extension",
+            type: "tuple",
+            internalType: "struct LaunchExtension",
+            components: [
+              {
+                name: "id",
+                type: "uint8",
+                internalType: "uint8",
+              },
+              {
+                name: "params",
+                type: "bytes",
+                internalType: "bytes",
+              },
+              {
+                name: "payee",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "ext",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "codehash",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+              {
+                name: "maxBuyPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "maxSellPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "quoteOnly",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "sunsetSecs",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "quoteGas",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "afterGas",
+                type: "uint24",
+                internalType: "uint24",
+              },
+            ],
+          },
+          {
+            name: "startTime",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "options",
+            type: "bytes",
+            internalType: "bytes",
+          },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct CoinTerms",
+        components: [
+          {
+            name: "launchpadId",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "quote",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "padTermsHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "hook",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "holderLeg",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "legId",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "holderConverts",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "presetId",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "presetCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "presetDeployer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "presetDeployerCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "presetSelfPayee",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "presetSite",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "totalSupply",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "capAmount",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "capSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "capController",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "metadataMaxBytes",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "startTime",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "vestCliffSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "vestSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "devBuyMaxBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "maxFeeRecipients",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "holdersBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "autoLpBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "buybackBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "vestBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "vestToHoldersBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "vestToHoldersCliff",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "vestToHoldersDuration",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "vestedAmount",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "waiveBnkrPair",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "takeover",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "ctoNotice",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "ctoGrace",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minRoundTripPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "referrerBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "pool",
+            type: "tuple",
+            internalType: "struct PoolInit",
+            components: [
+              {
+                name: "token",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "startAt",
+                type: "uint40",
+                internalType: "uint40",
+              },
+              {
+                name: "creatorLp",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "decayLp",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "buyback",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "buy",
+                type: "tuple",
+                internalType: "struct FeeSchedule",
+                components: [
+                  {
+                    name: "startPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "steadyPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "decaySecs",
+                    type: "uint32",
+                    internalType: "uint32",
+                  },
+                ],
+              },
+              {
+                name: "sell",
+                type: "tuple",
+                internalType: "struct FeeSchedule",
+                components: [
+                  {
+                    name: "startPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "steadyPips",
+                    type: "uint24",
+                    internalType: "uint24",
+                  },
+                  {
+                    name: "decaySecs",
+                    type: "uint32",
+                    internalType: "uint32",
+                  },
+                ],
+              },
+              {
+                name: "compoundFloor",
+                type: "uint128",
+                internalType: "uint128",
+              },
+              {
+                name: "compoundCap",
+                type: "uint128",
+                internalType: "uint128",
+              },
+              {
+                name: "compoundInterval",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "compoundShareBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "compoundDeviationTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "bandHalfWidth",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "bandGrid",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "swapCapTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "buybackInterval",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "buybackRetry",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "fillTravelTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "fillStartGapTicks",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "refTauSecs",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "ext",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "quoteGas",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "afterGas",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "feeCeilingPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "bankrNum",
+                type: "uint8",
+                internalType: "uint8",
+              },
+              {
+                name: "bankrDen",
+                type: "uint8",
+                internalType: "uint8",
+              },
+              {
+                name: "codehash",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+              {
+                name: "maxBuyPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "maxSellPips",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "payee",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "quoteOnly",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "sunsetSecs",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "ownerSwitch",
+                type: "bool",
+                internalType: "bool",
+              },
+            ],
+          },
+          {
+            name: "extMaxPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "rewardStreamSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "rewardRestartBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "tokenActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "bnkrActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "quoteActivation",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "curve",
+            type: "tuple",
+            internalType: "struct CurveRules",
+            components: [
+              {
+                name: "minDepthDiv",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "maxDensity",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "placeTicks",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "placeBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "nearTicks",
+                type: "uint24",
+                internalType: "uint24",
+              },
+              {
+                name: "nearStep",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "dustPpm",
+                type: "uint32",
+                internalType: "uint32",
+              },
+              {
+                name: "builtIn",
+                type: "bool",
+                internalType: "bool",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+        components: [
+          {
+            name: "payees",
+            type: "address[]",
+            internalType: "address[]",
+          },
+          {
+            name: "steadySharesWad",
+            type: "uint256[]",
+            internalType: "uint256[]",
+          },
+          {
+            name: "decay",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+            components: [
+              {
+                name: "on",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "autoLpBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "sharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setAllowedFlags",
+    inputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setBnkrPairWaiver",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setCapController",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setCurveAllowed",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setExtensionAllowed",
+    inputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setFlags",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setGuardTerms",
+    inputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct GuardTerms",
+        components: [
+          {
+            name: "refTauSecs",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "compoundSwapMaxTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillTravelTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillTravelCompoundingTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "fillStartGapTicks",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "minRoundTripPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "curveNearStep",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "maxCompoundUsd",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setKnobs",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "uint8[]",
+        internalType: "uint8[]",
+      },
+      {
+        name: "",
+        type: "tuple[]",
+        internalType: "struct Range[]",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "dflt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setLimits",
+    inputs: [
+      {
+        name: "",
+        type: "uint8[]",
+        internalType: "uint8[]",
+      },
+      {
+        name: "",
+        type: "tuple[]",
+        internalType: "struct Limit[]",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setPayees",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct IBankrLaunchpadRegistry.PadTerms",
+        components: [
+          {
+            name: "payees",
+            type: "address[]",
+            internalType: "address[]",
+          },
+          {
+            name: "steadySharesWad",
+            type: "uint256[]",
+            internalType: "uint256[]",
+          },
+          {
+            name: "decay",
+            type: "tuple",
+            internalType: "struct IBankrLaunchpadRegistry.DecaySplit",
+            components: [
+              {
+                name: "on",
+                type: "bool",
+                internalType: "bool",
+              },
+              {
+                name: "autoLpBps",
+                type: "uint16",
+                internalType: "uint16",
+              },
+              {
+                name: "sharesWad",
+                type: "uint256[]",
+                internalType: "uint256[]",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setPreset",
+    inputs: [
+      {
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PresetRecord",
+        components: [
+          {
+            name: "deployer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "deployerCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "creationCodeHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "selfPayee",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "active",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setPresetLimits",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PresetLimits",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "maxWindowSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minBrakeTicks",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "minAnchorTau",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setPriceSigner",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setProtocolTerms",
+    inputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct ProtocolTerms",
+        components: [
+          {
+            name: "bankrFeeBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "bankrMinPips",
+            type: "uint24",
+            internalType: "uint24",
+          },
+          {
+            name: "holdersShareBps",
+            type: "uint16",
+            internalType: "uint16",
+          },
+          {
+            name: "extBankrNum",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "extBankrDen",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "ctoNotice",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "ctoGrace",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "tokenActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "bnkrActivationDivisor",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "maxPadPayees",
+            type: "uint8",
+            internalType: "uint8",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setQuote",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct QuoteTerms",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "mode",
+            type: "uint8",
+            internalType: "enum PricingMode",
+          },
+          {
+            name: "decimals",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "maxPriceAge",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "feed",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "compoundFloor",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "compoundCap",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "quoteActivation",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "quotePaid",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setQuoteTerms",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PadQuoteTerms",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "ownAmounts",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "compoundFloor",
+            type: "uint128",
+            internalType: "uint128",
+          },
+          {
+            name: "compoundCap",
+            type: "uint128",
+            internalType: "uint128",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setSequencerUptimeFeed",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "uint32",
+        internalType: "uint32",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setTemplate",
+    inputs: [
+      {
+        name: "",
+        type: "uint8[]",
+        internalType: "uint8[]",
+      },
+      {
+        name: "",
+        type: "tuple[]",
+        internalType: "struct Range[]",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "dflt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setTemplatePresetLimits",
+    inputs: [
+      {
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PresetLimits",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "maxWindowSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minBrakeTicks",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "minAnchorTau",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startTickBounds",
+    inputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PriceAttestation",
+        components: [
+          {
+            name: "priceUsdE18",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "observedAt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "expiresAt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "signature",
+            type: "bytes",
+            internalType: "bytes",
+          },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "int24",
+        internalType: "int24",
+      },
+      {
+        name: "",
+        type: "int24",
+        internalType: "int24",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "template",
+    inputs: [],
+    outputs: [
+      {
+        name: "knobs",
+        type: "tuple[]",
+        internalType: "struct Range[]",
+        components: [
+          {
+            name: "min",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "max",
+            type: "uint64",
+            internalType: "uint64",
+          },
+          {
+            name: "dflt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
+      {
+        name: "flags",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "capController",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "templatePresetLimits",
+    inputs: [
+      {
+        name: "presetId",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PresetLimits",
+        components: [
+          {
+            name: "allowed",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "maxWindowSecs",
+            type: "uint32",
+            internalType: "uint32",
+          },
+          {
+            name: "minBrakeTicks",
+            type: "int24",
+            internalType: "int24",
+          },
+          {
+            name: "minAnchorTau",
+            type: "uint32",
+            internalType: "uint32",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+] as const;
+
 /** `type(BankrLaunchToken).creationCode`: the token deployer CREATE2s it with its constructor arguments. */
 export const bankrLaunchTokenCreationCode: `0x${string}` =
-  "0x610120604052348015610010575f80fd5b50604051611c0e380380611c0e83398101604081905261002f91610769565b8989600361003d83826108fe565b50600461004a82826108fe565b505050610800865111156100715760405163216e38bd60e21b815260040160405180910390fd5b600561007d87826108fe565b50600880546001600160a01b0319166001600160a01b0387169081179091556040515f907f9da2e536323f3df0b7eac8c8f950e4b558f0df1db6a55f516dabcb83c68b7134908290a36001600160a01b03808316608052871660a05260c08490526040805163786c80af60e01b815290515f91339163786c80af916004808201926020929091908290030181865afa15801561011b573d5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061013f91906109b8565b905042816001600160401b031610156101555750425b6001600160401b0381166101005261016d84826109ec565b600680546001600160401b0319166001600160401b03929092169190911790556001600160a01b0388165f908152600760205260408120805460ff191660011790555b825181101561020957600160075f8584815181106101d0576101d0610a11565b6020908102919091018101516001600160a01b031682528101919091526040015f20805460ff19169115159190911790556001016101b0565b50336001600160a01b03166337ff06bc6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610246573d5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061026a9190610a25565b6001600160a01b031660e052610280888a610290565b5050505050505050505050610a51565b6001600160a01b0382166102be5760405163ec442f0560e01b81525f60048201526024015b60405180910390fd5b6102c95f83836102cd565b5050565b610100516001600160401b0316421080156102f057506001600160a01b03831615155b801561031457506001600160a01b0383165f9081526007602052604090205460ff16155b156103325760405163159eeb7d60e31b815260040160405180910390fd5b6001600160a01b0382161580159061035c5750826001600160a01b0316826001600160a01b031614155b801561037257506006546001600160401b031642105b801561039657506001600160a01b0382165f9081526007602052604090205460ff16155b15610402576001600160a01b0382165f908152602081905260408120546103be908390610a3e565b905060c0518111156104005760c0516040516326d1aba160e01b81526001600160a01b03851660048201526024810183905260448101919091526064016102b5565b505b60e0516001600160a01b038116156104cc576001600160a01b03811663c9e4d9b8858585610444836001600160a01b03165f9081526020819052604090205490565b6001600160a01b0389165f908152602081905260409020546040516001600160e01b031960e088901b1681526001600160a01b03958616600482015294909316602485015260448401919091526064830152608482015260a4015f604051808303815f87803b1580156104b5575f80fd5b505af11580156104c7573d5f803e3d5ffd5b505050505b6104d78484846104dd565b50505050565b6001600160a01b038316610507578060025f8282546104fc9190610a3e565b909155506105779050565b6001600160a01b0383165f90815260208190526040902054818110156105595760405163391434e360e21b81526001600160a01b038516600482015260248101829052604481018390526064016102b5565b6001600160a01b0384165f9081526020819052604090209082900390555b6001600160a01b038216610593576002805482900390556105b1565b6001600160a01b0382165f9081526020819052604090208054820190555b816001600160a01b0316836001600160a01b03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516105f691815260200190565b60405180910390a3505050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b038111828210171561063f5761063f610603565b604052919050565b5f82601f830112610656575f80fd5b81516001600160401b0381111561066f5761066f610603565b610682601f8201601f1916602001610617565b818152846020838601011115610696575f80fd5b8160208501602083015e5f918101602001919091529392505050565b80516001600160a01b03811681146106c8575f80fd5b919050565b80516001600160401b03811681146106c8575f80fd5b5f82601f8301126106f2575f80fd5b81516001600160401b0381111561070b5761070b610603565b8060051b61071b60208201610617565b91825260208185018101929081019086841115610736575f80fd5b6020860192505b8383101561075f5761074e836106b2565b82526020928301929091019061073d565b9695505050505050565b5f805f805f805f805f806101408b8d031215610783575f80fd5b8a516001600160401b03811115610798575f80fd5b6107a48d828e01610647565b60208d0151909b5090506001600160401b038111156107c1575f80fd5b6107cd8d828e01610647565b60408d0151909a5098506107e5905060608c016106b2565b60808c01519097506001600160401b03811115610800575f80fd5b61080c8d828e01610647565b96505061081b60a08c016106b2565b60c08c0151909550935061083160e08c016106cd565b92506108406101008c016106b2565b6101208c01519092506001600160401b0381111561085c575f80fd5b6108688d828e016106e3565b9150509295989b9194979a5092959850565b600181811c9082168061088e57607f821691505b6020821081036108ac57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156108f957805f5260205f20601f840160051c810160208510156108d75750805b601f840160051c820191505b818110156108f6575f81556001016108e3565b50505b505050565b81516001600160401b0381111561091757610917610603565b61092b81610925845461087a565b846108b2565b6020601f82116001811461095d575f83156109465750848201515b5f19600385901b1c1916600184901b1784556108f6565b5f84815260208120601f198516915b8281101561098c578785015182556020948501946001909201910161096c565b50848210156109a957868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b5f602082840312156109c8575f80fd5b6109d1826106cd565b9392505050565b634e487b7160e01b5f52601160045260245ffd5b6001600160401b038181168382160190811115610a0b57610a0b6109d8565b92915050565b634e487b7160e01b5f52603260045260245ffd5b5f60208284031215610a35575f80fd5b6109d1826106b2565b80820180821115610a0b57610a0b6109d8565b60805160a05160c05160e05161010051611156610ab85f395f81816103e50152610a7201525f818161029e0152610bff01525f818161019001528181610b840152610bcf01525f818161035901526106ad01525f818161040c015261074101526111565ff3fe608060405234801561000f575f80fd5b5060043610610187575f3560e01c806377a4d559116100d9578063a9059cbb11610093578063cd6106f81161006e578063cd6106f81461037b578063dd62ed3e146103a8578063f11743f6146103e0578063f77c479114610407575f80fd5b8063a9059cbb1461032e578063bfbcde2814610341578063c45a015514610354575f80fd5b806377a4d559146102e85780637b865d2e146102f05780638ac5fa16146102f857806391c463711461030b57806391ecc3d91461031357806395d89b4114610326575f80fd5b806323b872dd116101445780633292bead1161011f5780633292bead146102665780633c130d901461029157806344214ecf1461029957806370a08231146102c0575f80fd5b806323b872dd146102225780632f69a4d814610235578063313ce56714610257575f80fd5b806304dfe79d1461018b57806306fdde03146101c5578063095ea7b3146101da5780631130630c146101fd57806318123b591461021257806318160ddd1461021a575b5f80fd5b6101b27f000000000000000000000000000000000000000000000000000000000000000081565b6040519081526020015b60405180910390f35b6101cd61042e565b6040516101bc9190610e11565b6101ed6101e8366004610e61565b6104be565b60405190151581526020016101bc565b61021061020b366004610e89565b6104d7565b005b61021061057a565b6002546101b2565b6101ed610230366004610ef7565b6105b0565b6101ed610243366004610f31565b60076020525f908152604090205460ff1681565b604051601281526020016101bc565b600854610279906001600160a01b031681565b6040516001600160a01b0390911681526020016101bc565b6101cd6105d3565b6102797f000000000000000000000000000000000000000000000000000000000000000081565b6101b26102ce366004610f31565b6001600160a01b03165f9081526020819052604090205490565b6101cd6105e2565b61021061066e565b610210610306366004610f31565b6106a2565b610210610736565b610210610321366004610f31565b6107ba565b6101cd610830565b6101ed61033c366004610e61565b61083f565b600954610279906001600160a01b031681565b6102797f000000000000000000000000000000000000000000000000000000000000000081565b60065461038f9067ffffffffffffffff1681565b60405167ffffffffffffffff90911681526020016101bc565b6101b26103b6366004610f51565b6001600160a01b039182165f90815260016020908152604080832093909416825291909152205490565b61038f7f000000000000000000000000000000000000000000000000000000000000000081565b6102797f000000000000000000000000000000000000000000000000000000000000000081565b60606003805461043d90610f82565b80601f016020809104026020016040519081016040528092919081815260200182805461046990610f82565b80156104b45780601f1061048b576101008083540402835291602001916104b4565b820191905f5260205f20905b81548152906001019060200180831161049757829003601f168201915b5050505050905090565b5f336104cb81858561084c565b60019150505b92915050565b6008546001600160a01b0316331461050257604051630bcc10ab60e11b815260040160405180910390fd5b6108008111156105255760405163216e38bd60e21b815260040160405180910390fd5b6005610532828483611019565b50336001600160a01b03167f714e7e9a65cdf416499968a5464492e2427486d5153e87d111cd5464476b145b838360405161056e9291906110d3565b60405180910390a25050565b6008546001600160a01b031633146105a557604051630bcc10ab60e11b815260040160405180910390fd5b6105ae5f61085e565b565b5f336105bd8582856108c0565b6105c8858585610941565b506001949350505050565b60606005805461043d90610f82565b600580546105ef90610f82565b80601f016020809104026020016040519081016040528092919081815260200182805461061b90610f82565b80156106665780601f1061063d57610100808354040283529160200191610666565b820191905f5260205f20905b81548152906001019060200180831161064957829003601f168201915b505050505081565b6009546001600160a01b0316331461069957604051630bcc10ab60e11b815260040160405180910390fd5b6105ae3361085e565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146106eb57604051631966391b60e11b815260040160405180910390fd5b6001600160a01b0381165f81815260076020526040808220805460ff19166001179055517f881575f7e98531c179ed97bbf3ca47ba5526a175756f3ab77ba5bcf301349f9c9190a250565b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461077f576040516323019e6760e01b815260040160405180910390fd5b6006805467ffffffffffffffff191690556040517f14e24fc56de914593ddea5ef880df05240cdae41359ad068fdd9847270e5bcf7905f90a1565b6008546001600160a01b031633146107e557604051630bcc10ab60e11b815260040160405180910390fd5b600980546001600160a01b0319166001600160a01b03831690811790915560405133907f2cc92d2ddfa076ab1f0403a9d1971e92aba2886304508c27534fc4314c9dfde9905f90a350565b60606004805461043d90610f82565b5f336104cb818585610941565b610859838383600161099e565b505050565b6008546040516001600160a01b038084169216907f9da2e536323f3df0b7eac8c8f950e4b558f0df1db6a55f516dabcb83c68b7134905f90a3600880546001600160a01b039092166001600160a01b0319928316179055600980549091169055565b6001600160a01b038381165f908152600160209081526040808320938616835292905220545f1981101561093b578181101561092d57604051637dc7a0d960e11b81526001600160a01b038416600482015260248101829052604481018390526064015b60405180910390fd5b61093b84848484035f61099e565b50505050565b6001600160a01b03831661096a57604051634b637e8f60e11b81525f6004820152602401610924565b6001600160a01b0382166109935760405163ec442f0560e01b81525f6004820152602401610924565b610859838383610a70565b6001600160a01b0384166109c75760405163e602df0560e01b81525f6004820152602401610924565b6001600160a01b0383166109f057604051634a1406b160e11b81525f6004820152602401610924565b6001600160a01b038085165f908152600160209081526040808320938716835292905220829055801561093b57826001600160a01b0316846001600160a01b03167f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b92584604051610a6291815260200190565b60405180910390a350505050565b7f000000000000000000000000000000000000000000000000000000000000000067ffffffffffffffff1642108015610ab157506001600160a01b03831615155b8015610ad557506001600160a01b0383165f9081526007602052604090205460ff16155b15610af35760405163159eeb7d60e31b815260040160405180910390fd5b6001600160a01b03821615801590610b1d5750826001600160a01b0316826001600160a01b031614155b8015610b34575060065467ffffffffffffffff1642105b8015610b5857506001600160a01b0382165f9081526007602052604090205460ff16155b15610bfd576001600160a01b0382165f90815260208190526040812054610b80908390611101565b90507f0000000000000000000000000000000000000000000000000000000000000000811115610bfb576040516326d1aba160e01b81526001600160a01b0384166004820152602481018290527f00000000000000000000000000000000000000000000000000000000000000006044820152606401610924565b505b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03811615610ce557806001600160a01b031663c9e4d9b8858585610c5d896001600160a01b03165f9081526020819052604090205490565b6001600160a01b0389165f908152602081905260409020546040516001600160e01b031960e088901b1681526001600160a01b03958616600482015294909316602485015260448401919091526064830152608482015260a4015f604051808303815f87803b158015610cce575f80fd5b505af1158015610ce0573d5f803e3d5ffd5b505050505b61093b8484846001600160a01b038316610d15578060025f828254610d0a9190611101565b90915550610d859050565b6001600160a01b0383165f9081526020819052604090205481811015610d675760405163391434e360e21b81526001600160a01b03851660048201526024810182905260448101839052606401610924565b6001600160a01b0384165f9081526020819052604090209082900390555b6001600160a01b038216610da157600280548290039055610dbf565b6001600160a01b0382165f9081526020819052604090208054820190555b816001600160a01b0316836001600160a01b03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef83604051610e0491815260200190565b60405180910390a3505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b80356001600160a01b0381168114610e5c575f80fd5b919050565b5f8060408385031215610e72575f80fd5b610e7b83610e46565b946020939093013593505050565b5f8060208385031215610e9a575f80fd5b823567ffffffffffffffff811115610eb0575f80fd5b8301601f81018513610ec0575f80fd5b803567ffffffffffffffff811115610ed6575f80fd5b856020828401011115610ee7575f80fd5b6020919091019590945092505050565b5f805f60608486031215610f09575f80fd5b610f1284610e46565b9250610f2060208501610e46565b929592945050506040919091013590565b5f60208284031215610f41575f80fd5b610f4a82610e46565b9392505050565b5f8060408385031215610f62575f80fd5b610f6b83610e46565b9150610f7960208401610e46565b90509250929050565b600181811c90821680610f9657607f821691505b602082108103610fb457634e487b7160e01b5f52602260045260245ffd5b50919050565b634e487b7160e01b5f52604160045260245ffd5b601f82111561085957805f5260205f20601f840160051c81016020851015610ff35750805b601f840160051c820191505b81811015611012575f8155600101610fff565b5050505050565b67ffffffffffffffff83111561103157611031610fba565b6110458361103f8354610f82565b83610fce565b5f601f841160018114611076575f851561105f5750838201355b5f19600387901b1c1916600186901b178355611012565b5f83815260208120601f198716915b828110156110a55786850135825560209485019460019092019101611085565b50868210156110c1575f1960f88860031b161c19848701351681555b505060018560011b0183555050505050565b60208152816020820152818360408301375f818301604090810191909152601f909201601f19160101919050565b808201808211156104d157634e487b7160e01b5f52601160045260245ffdfea26469706673582212204c6c910572f6bc012b7149c4f00ad7b8906406ff826371711d6ec46ee28db58e64736f6c634300081a0033";
+  "0x610160604052348015610010575f80fd5b50604051611e78380380611e7883398101604081905261002f91610861565b8989600361003d83826109f6565b50600461004a82826109f6565b505050336001600160a01b031663e670d1b86040518163ffffffff1660e01b8152600401602060405180830381865afa158015610089573d5f803e3d5ffd5b505050506040513d601f19601f820116820180604052508101906100ad9190610ab0565b63ffffffff166080819052865111156100d95760405163216e38bd60e21b815260040160405180910390fd5b60056100e587826109f6565b50600880546001600160a01b0319166001600160a01b0387169081179091556040515f907f9da2e536323f3df0b7eac8c8f950e4b558f0df1db6a55f516dabcb83c68b7134908290a36001600160a01b0380831660a052871660c05283156001600160401b038416151461017457604051637860f0bd60e11b8152600b60048201526024015b60405180910390fd5b8360e081815250505f336001600160a01b031663786c80af6040518163ffffffff1660e01b8152600401602060405180830381865afa1580156101b9573d5f803e3d5ffd5b505050506040513d601f19601f820116820180604052508101906101dd9190610ada565b905042816001600160401b031610156101f35750425b6001600160401b038082166101205284161580159061022a575060286102256001600160401b03808716908416610b07565b901c15155b1561024b57604051637860f0bd60e11b81526005600482015260240161016b565b6001600160401b03841615610269576102648482610b20565b61026b565b5f5b6001600160401b0316610140526001600160a01b0388165f908152600760205260408120805460ff191660011790555b82518110156102f457600160075f8584815181106102bb576102bb610b3f565b6020908102919091018101516001600160a01b031682528101919091526040015f20805460ff191691151591909117905560010161029b565b50336001600160a01b03166337ff06bc6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610331573d5f803e3d5ffd5b505050506040513d601f19601f820116820180604052508101906103559190610b53565b6001600160a01b03166101005261036c888a61037c565b5050505050505050505050610b6c565b6001600160a01b0382166103a55760405163ec442f0560e01b81525f600482015260240161016b565b6103b05f83836103b4565b5050565b610120516001600160401b0316421080156103d757506001600160a01b03831615155b80156103fb57506001600160a01b0383165f9081526007602052604090205460ff16155b156104195760405163159eeb7d60e31b815260040160405180910390fd5b6001600160a01b038216158015906104435750826001600160a01b0316826001600160a01b031614155b801561045a5750610140516001600160401b031642105b8015610469575060065460ff16155b801561048d57506001600160a01b0382165f9081526007602052604090205460ff16155b156104f9576001600160a01b0382165f908152602081905260408120546104b5908390610b07565b905060e0518111156104f75760e0516040516326d1aba160e01b81526001600160a01b038516600482015260248101839052604481019190915260640161016b565b505b610100516001600160a01b038116156105c4576001600160a01b03811663c9e4d9b885858561053c836001600160a01b03165f9081526020819052604090205490565b6001600160a01b0389165f908152602081905260409020546040516001600160e01b031960e088901b1681526001600160a01b03958616600482015294909316602485015260448401919091526064830152608482015260a4015f604051808303815f87803b1580156105ad575f80fd5b505af11580156105bf573d5f803e3d5ffd5b505050505b6105cf8484846105d5565b50505050565b6001600160a01b0383166105ff578060025f8282546105f49190610b07565b9091555061066f9050565b6001600160a01b0383165f90815260208190526040902054818110156106515760405163391434e360e21b81526001600160a01b0385166004820152602481018290526044810183905260640161016b565b6001600160a01b0384165f9081526020819052604090209082900390555b6001600160a01b03821661068b576002805482900390556106a9565b6001600160a01b0382165f9081526020819052604090208054820190555b816001600160a01b0316836001600160a01b03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516106ee91815260200190565b60405180910390a3505050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715610737576107376106fb565b604052919050565b5f82601f83011261074e575f80fd5b81516001600160401b03811115610767576107676106fb565b61077a601f8201601f191660200161070f565b81815284602083860101111561078e575f80fd5b8160208501602083015e5f918101602001919091529392505050565b80516001600160a01b03811681146107c0575f80fd5b919050565b80516001600160401b03811681146107c0575f80fd5b5f82601f8301126107ea575f80fd5b81516001600160401b03811115610803576108036106fb565b8060051b6108136020820161070f565b9182526020818501810192908101908684111561082e575f80fd5b6020860192505b8383101561085757610846836107aa565b825260209283019290910190610835565b9695505050505050565b5f805f805f805f805f806101408b8d03121561087b575f80fd5b8a516001600160401b03811115610890575f80fd5b61089c8d828e0161073f565b60208d0151909b5090506001600160401b038111156108b9575f80fd5b6108c58d828e0161073f565b60408d0151909a5098506108dd905060608c016107aa565b60808c01519097506001600160401b038111156108f8575f80fd5b6109048d828e0161073f565b96505061091360a08c016107aa565b60c08c0151909550935061092960e08c016107c5565b92506109386101008c016107aa565b6101208c01519092506001600160401b03811115610954575f80fd5b6109608d828e016107db565b9150509295989b9194979a5092959850565b600181811c9082168061098657607f821691505b6020821081036109a457634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156109f157805f5260205f20601f840160051c810160208510156109cf5750805b601f840160051c820191505b818110156109ee575f81556001016109db565b50505b505050565b81516001600160401b03811115610a0f57610a0f6106fb565b610a2381610a1d8454610972565b846109aa565b6020601f821160018114610a55575f8315610a3e5750848201515b5f19600385901b1c1916600184901b1784556109ee565b5f84815260208120601f198516915b82811015610a845787850151825560209485019460019092019101610a64565b5084821015610aa157868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b5f60208284031215610ac0575f80fd5b815163ffffffff81168114610ad3575f80fd5b9392505050565b5f60208284031215610aea575f80fd5b610ad3826107c5565b634e487b7160e01b5f52601160045260245ffd5b80820180821115610b1a57610b1a610af3565b92915050565b6001600160401b038181168382160190811115610b1a57610b1a610af3565b634e487b7160e01b5f52603260045260245ffd5b5f60208284031215610b63575f80fd5b610ad3826107aa565b60805160a05160c05160e05161010051610120516101405161127c610bfc5f395f818161034d0152818161091e0152610c1f01525f81816104880152610b6b01525f81816103190152610d2501525f81816101cf01528181610caa0152610cf501525f8181610421015261077401525f81816104af015261080801525f818161026601526105ac015261127c5ff3fe608060405234801561000f575f80fd5b50600436106101c6575f3560e01c80636a58a607116100fe57806395d89b411161009e578063cd6106f81161006e578063cd6106f814610443578063dd62ed3e1461044b578063f11743f614610483578063f77c4791146104aa575f80fd5b806395d89b41146103ee578063a9059cbb146103f6578063bfbcde2814610409578063c45a01551461041c575f80fd5b80637b865d2e116100d95780637b865d2e146103b85780638ac5fa16146103c057806391c46371146103d357806391ecc3d9146103db575f80fd5b80636a58a6071461034857806370a082311461038857806377a4d559146103b0575f80fd5b806323b872dd116101695780633292bead116101445780633292bead146102e15780633c130d901461030c57806344214ecf146103145780635cd89afb1461033b575f80fd5b806323b872dd1461029d5780632f69a4d8146102b0578063313ce567146102d2575f80fd5b80631130630c116101a45780631130630c1461023c57806318123b591461025157806318160ddd146102595780631e3059b614610261575f80fd5b806304dfe79d146101ca57806306fdde0314610204578063095ea7b314610219575b5f80fd5b6101f17f000000000000000000000000000000000000000000000000000000000000000081565b6040519081526020015b60405180910390f35b61020c6104d1565b6040516101fb9190610f37565b61022c610227366004610f87565b610561565b60405190151581526020016101fb565b61024f61024a366004610faf565b61057a565b005b61024f610641565b6002546101f1565b6102887f000000000000000000000000000000000000000000000000000000000000000081565b60405163ffffffff90911681526020016101fb565b61022c6102ab36600461101d565b610677565b61022c6102be366004611057565b60076020525f908152604090205460ff1681565b604051601281526020016101fb565b6008546102f4906001600160a01b031681565b6040516001600160a01b0390911681526020016101fb565b61020c61069a565b6102f47f000000000000000000000000000000000000000000000000000000000000000081565b60065461022c9060ff1681565b61036f7f000000000000000000000000000000000000000000000000000000000000000081565b60405167ffffffffffffffff90911681526020016101fb565b6101f1610396366004611057565b6001600160a01b03165f9081526020819052604090205490565b61020c6106a9565b61024f610735565b61024f6103ce366004611057565b610769565b61024f6107fd565b61024f6103e9366004611057565b61087d565b61020c6108f3565b61022c610404366004610f87565b610902565b6009546102f4906001600160a01b031681565b6102f47f000000000000000000000000000000000000000000000000000000000000000081565b61036f61090f565b6101f1610459366004611077565b6001600160a01b039182165f90815260016020908152604080832093909416825291909152205490565b61036f7f000000000000000000000000000000000000000000000000000000000000000081565b6102f47f000000000000000000000000000000000000000000000000000000000000000081565b6060600380546104e0906110a8565b80601f016020809104026020016040519081016040528092919081815260200182805461050c906110a8565b80156105575780601f1061052e57610100808354040283529160200191610557565b820191905f5260205f20905b81548152906001019060200180831161053a57829003601f168201915b5050505050905090565b5f3361056e818585610945565b60019150505b92915050565b6008546001600160a01b031633146105a557604051630bcc10ab60e11b815260040160405180910390fd5b63ffffffff7f0000000000000000000000000000000000000000000000000000000000000000168111156105ec5760405163216e38bd60e21b815260040160405180910390fd5b60056105f982848361113f565b50336001600160a01b03167f714e7e9a65cdf416499968a5464492e2427486d5153e87d111cd5464476b145b83836040516106359291906111f9565b60405180910390a25050565b6008546001600160a01b0316331461066c57604051630bcc10ab60e11b815260040160405180910390fd5b6106755f610957565b565b5f336106848582856109b9565b61068f858585610a3a565b506001949350505050565b6060600580546104e0906110a8565b600580546106b6906110a8565b80601f01602080910402602001604051908101604052809291908181526020018280546106e2906110a8565b801561072d5780601f106107045761010080835404028352916020019161072d565b820191905f5260205f20905b81548152906001019060200180831161071057829003601f168201915b505050505081565b6009546001600160a01b0316331461076057604051630bcc10ab60e11b815260040160405180910390fd5b61067533610957565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146107b257604051631966391b60e11b815260040160405180910390fd5b6001600160a01b0381165f81815260076020526040808220805460ff19166001179055517f881575f7e98531c179ed97bbf3ca47ba5526a175756f3ab77ba5bcf301349f9c9190a250565b336001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001614610846576040516323019e6760e01b815260040160405180910390fd5b6006805460ff191660011790556040517f14e24fc56de914593ddea5ef880df05240cdae41359ad068fdd9847270e5bcf7905f90a1565b6008546001600160a01b031633146108a857604051630bcc10ab60e11b815260040160405180910390fd5b600980546001600160a01b0319166001600160a01b03831690811790915560405133907f2cc92d2ddfa076ab1f0403a9d1971e92aba2886304508c27534fc4314c9dfde9905f90a350565b6060600480546104e0906110a8565b5f3361056e818585610a3a565b6006545f9060ff1661094057507f000000000000000000000000000000000000000000000000000000000000000090565b505f90565b6109528383836001610a97565b505050565b6008546040516001600160a01b038084169216907f9da2e536323f3df0b7eac8c8f950e4b558f0df1db6a55f516dabcb83c68b7134905f90a3600880546001600160a01b039092166001600160a01b0319928316179055600980549091169055565b6001600160a01b038381165f908152600160209081526040808320938616835292905220545f19811015610a345781811015610a2657604051637dc7a0d960e11b81526001600160a01b038416600482015260248101829052604481018390526064015b60405180910390fd5b610a3484848484035f610a97565b50505050565b6001600160a01b038316610a6357604051634b637e8f60e11b81525f6004820152602401610a1d565b6001600160a01b038216610a8c5760405163ec442f0560e01b81525f6004820152602401610a1d565b610952838383610b69565b6001600160a01b038416610ac05760405163e602df0560e01b81525f6004820152602401610a1d565b6001600160a01b038316610ae957604051634a1406b160e11b81525f6004820152602401610a1d565b6001600160a01b038085165f9081526001602090815260408083209387168352929052208290558015610a3457826001600160a01b0316846001600160a01b03167f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b92584604051610b5b91815260200190565b60405180910390a350505050565b7f000000000000000000000000000000000000000000000000000000000000000067ffffffffffffffff1642108015610baa57506001600160a01b03831615155b8015610bce57506001600160a01b0383165f9081526007602052604090205460ff16155b15610bec5760405163159eeb7d60e31b815260040160405180910390fd5b6001600160a01b03821615801590610c165750826001600160a01b0316826001600160a01b031614155b8015610c4b57507f000000000000000000000000000000000000000000000000000000000000000067ffffffffffffffff1642105b8015610c5a575060065460ff16155b8015610c7e57506001600160a01b0382165f9081526007602052604090205460ff16155b15610d23576001600160a01b0382165f90815260208190526040812054610ca6908390611227565b90507f0000000000000000000000000000000000000000000000000000000000000000811115610d21576040516326d1aba160e01b81526001600160a01b0384166004820152602481018290527f00000000000000000000000000000000000000000000000000000000000000006044820152606401610a1d565b505b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03811615610e0b57806001600160a01b031663c9e4d9b8858585610d83896001600160a01b03165f9081526020819052604090205490565b6001600160a01b0389165f908152602081905260409020546040516001600160e01b031960e088901b1681526001600160a01b03958616600482015294909316602485015260448401919091526064830152608482015260a4015f604051808303815f87803b158015610df4575f80fd5b505af1158015610e06573d5f803e3d5ffd5b505050505b610a348484846001600160a01b038316610e3b578060025f828254610e309190611227565b90915550610eab9050565b6001600160a01b0383165f9081526020819052604090205481811015610e8d5760405163391434e360e21b81526001600160a01b03851660048201526024810182905260448101839052606401610a1d565b6001600160a01b0384165f9081526020819052604090209082900390555b6001600160a01b038216610ec757600280548290039055610ee5565b6001600160a01b0382165f9081526020819052604090208054820190555b816001600160a01b0316836001600160a01b03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef83604051610f2a91815260200190565b60405180910390a3505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b80356001600160a01b0381168114610f82575f80fd5b919050565b5f8060408385031215610f98575f80fd5b610fa183610f6c565b946020939093013593505050565b5f8060208385031215610fc0575f80fd5b823567ffffffffffffffff811115610fd6575f80fd5b8301601f81018513610fe6575f80fd5b803567ffffffffffffffff811115610ffc575f80fd5b85602082840101111561100d575f80fd5b6020919091019590945092505050565b5f805f6060848603121561102f575f80fd5b61103884610f6c565b925061104660208501610f6c565b929592945050506040919091013590565b5f60208284031215611067575f80fd5b61107082610f6c565b9392505050565b5f8060408385031215611088575f80fd5b61109183610f6c565b915061109f60208401610f6c565b90509250929050565b600181811c908216806110bc57607f821691505b6020821081036110da57634e487b7160e01b5f52602260045260245ffd5b50919050565b634e487b7160e01b5f52604160045260245ffd5b601f82111561095257805f5260205f20601f840160051c810160208510156111195750805b601f840160051c820191505b81811015611138575f8155600101611125565b5050505050565b67ffffffffffffffff831115611157576111576110e0565b61116b8361116583546110a8565b836110f4565b5f601f84116001811461119c575f85156111855750838201355b5f19600387901b1c1916600186901b178355611138565b5f83815260208120601f198716915b828110156111cb57868501358255602094850194600190920191016111ab565b50868210156111e7575f1960f88860031b161c19848701351681555b505060018560011b0183555050505050565b60208152816020820152818360408301375f818301604090810191909152601f909201601f19160101919050565b8082018082111561057457634e487b7160e01b5f52601160045260245ffdfea2646970667358221220a0a000dcf50c1d9d17a3153c07468317bf4e6f3185801cc69c6711f3b2022f6f64736f6c634300081a0033";
