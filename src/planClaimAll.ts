@@ -74,8 +74,8 @@ export interface ClaimAllInput {
   push?: boolean;
   /**
    * Currencies Bankr does not list: a quote the chain does not list that is not a launched token either (any-quote
-   * pairing). None is withdrawn and a bucket owing only them waits (round 9 F4: anyone can make an account owe in a
-   * gas-burning one); `includeUnlisted` pays them last, in withdraws of their own (ISO-4).
+   * pairing). None is withdrawn and a bucket owing only them waits (anyone can make an account owe in a
+   * gas-burning one); `includeUnlisted` pays them last, in withdraws of their own.
    */
   unlisted?: (currency: Address) => boolean;
   includeUnlisted?: boolean;
@@ -192,7 +192,7 @@ export function planClaimAll(
   const paid = ranked.filter((t) => owes(t.amount, t.quote));
 
   // Each balance a transaction touches costs one cold write there: 0 → non-zero the first time any transaction
-  // pays it, a non-zero rewrite in every later one (audit CA-OFF-5).
+  // pays it, a non-zero rewrite in every later one.
   const cost = (b: ClaimAllBucket, touched: ReadonlySet<string>) => {
     let gas = b.bothSides
       ? model.bucketBoth
@@ -245,7 +245,7 @@ export function planClaimAll(
       quotes: g.map((t) => t.quote),
       gas: base + BigInt(g.length) * model.quote,
     });
-    // Unlisted currencies last, in withdraws of their own (round 9 ISO-4): one that burns its payout's gas never
+    // Unlisted currencies last, in withdraws of their own: one that burns its payout's gas never
     // shares a transaction with a listed currency or a settle.
     const withdraws = groups.map(withdraw);
     for (let i = 0; i < trailing.length; i += per)

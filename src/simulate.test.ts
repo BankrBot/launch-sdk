@@ -39,13 +39,13 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
       launcher: LAUNCHER,
       launchpadId: f.padId,
       quote: f.quote,
-      // The altered launches below are not the ones the plan pinned: send them unpinned.
-      pin: false,
     });
     expect(plan.gasEstimate).toBeNull();
     const withAllocations = async (count: number) => {
       const params = {
         ...plan.params,
+        // The altered launches are not the one the plan pinned, and it named no option: no options, so no pin.
+        options: "0x" as const,
         extraAllocations: Array.from({ length: count }, (_, i) => ({
           recipient: getAddress(
             `0x${(0xa110 + i).toString(16).padStart(40, "0")}`,

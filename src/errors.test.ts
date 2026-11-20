@@ -11,7 +11,7 @@ import {
   type LaunchSdkErrorCode,
 } from "./errors.js";
 
-// The SDK's code list (H15 contract §5); a new code is an additive minor, a removed one is a major.
+// The SDK's code list (its public contract); a new code is an additive minor, a removed one is a major.
 const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "PROVIDER_NOT_DEPLOYED",
   "UNSUPPORTED_CHAIN",
@@ -101,7 +101,7 @@ describe("LaunchSdkError hierarchy", () => {
   });
 
   // No message asks the reader to know of a contract set, or points at a way to launch this SDK version has not.
-  test("no code's message names a suite, a mode or Bankr's prepare endpoint", () => {
+  test("no code's message names a contract set, a mode or Bankr's prepare endpoint", () => {
     for (const code of LAUNCH_SDK_ERROR_CODES)
       expect(launchSdkError(code).message, code).not.toMatch(
         /suite|API mode|pure mode|prepare|preparer/i,

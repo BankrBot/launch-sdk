@@ -39,7 +39,7 @@ const rejects = async (run: Promise<unknown>, code: string) => {
 };
 
 describe("settings reads", () => {
-  test("a suite's addresses come from its factory alone", async () => {
+  test("a deployment's addresses come from its factory alone", async () => {
     const fakeSettings = new FakeSettings();
     const read = await readSettingsAddresses(
       fakeSettings.chain.publicClient(),
@@ -188,7 +188,7 @@ describe("settings reads", () => {
     });
   });
 
-  test("presets, the allowlist, pricing and the suite's own levers", async () => {
+  test("presets, the allowlist, pricing and the contracts' own levers", async () => {
     const fakeSettings = new FakeSettings();
     const settings = createSettingsReads(fakeSettings.context());
     const presets = await settings.presets();

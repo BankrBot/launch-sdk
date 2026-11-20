@@ -74,7 +74,7 @@ function check(
 
 const sizes = (plan: ClaimAllPlan) => plan.steps.map((s) => s.bucketIds.length);
 
-describe("planClaimAll: the claim-all model (spec §2, re-measured in the suite's test/claimall)", () => {
+describe("planClaimAll: the claim-all model (re-measured against the contracts' own claim-all test)", () => {
   test("every planned transaction is at most 15M, more than 10 % under EIP-7825's 2^24", () => {
     expect(CLAIM_ALL_MAX_GAS_PER_TX).toBe(15_000_000n);
     expect(
@@ -179,7 +179,7 @@ describe("planClaimAll: the claim-all model (spec §2, re-measured in the suite'
       kind: "withdraw",
       quotes: [WETH],
     });
-    // A settle-only pass: 50 chunks, the count the suite's ClaimAllScale ran under 15M each.
+    // A settle-only pass: 50 chunks, the count the contracts' claim-all scale test ran under 15M each.
     const pass = planClaimAll({ buckets: all, settleOnly: true });
     check(pass, 20_000);
     expect(pass.steps).toHaveLength(50);
@@ -216,7 +216,7 @@ describe("planClaimAll: the claim-all model (spec §2, re-measured in the suite'
     expect(open.totals).toEqual([{ quote: WETH, amount: 3_004n }]);
   });
 
-  test("the worst bucket (credited on both sides): at most 240 a transaction, under the 249 the suite ran inside 2^24", () => {
+  test("the worst bucket (credited on both sides): at most 240 a transaction, under the 249 the contracts ran inside 2^24", () => {
     const token = getAddress(pad("0x7e", { size: 20 }));
     const plan = planClaimAll({
       buckets: buckets(1_000, WETH, { bothSides: true, token: () => token }),
@@ -251,7 +251,7 @@ describe("planClaimAll: the claim-all model (spec §2, re-measured in the suite'
     expect(plan.steps.at(-1)!.quotes).toEqual([WETH, USDC]);
   });
 
-  test("a chunk spanning many open quotes plans one cold write per quote (audit CA-OFF-5)", () => {
+  test("a chunk spanning many open quotes plans one cold write per quote", () => {
     // Robinhood lists 206 quotes: two fresh buckets on each, every balance already open.
     const quotes = Array.from({ length: 206 }, (_, i) => coin(5_000 + i));
     const owed = quotes.flatMap((q, i) =>
@@ -334,7 +334,7 @@ describe("planClaimAll: the claim-all model (spec §2, re-measured in the suite'
   });
 });
 
-describe("any-quote pairing (round 9 ISO-4, F4): currencies Bankr does not list", () => {
+describe("any-quote pairing: currencies Bankr does not list", () => {
   const MEME = getAddress(pad("0x3e3e", { size: 20 }));
   const BOMB = (i: number) =>
     getAddress(pad(toHex(0x3e00_0000 + i), { size: 20 }));
@@ -342,7 +342,7 @@ describe("any-quote pairing (round 9 ISO-4, F4): currencies Bankr does not list"
     q === MEME ||
     q.toLowerCase().startsWith("0x000000000000000000000000000000003e");
   // A WETH coin owed, a MEME coin owed on both sides (its token side is a launch token, listed), and 20 planted
-  // balances in gas-burning currencies (a referrer named by any swapper, ISO-4).
+  // balances in gas-burning currencies (a referrer named by any swapper).
   const input = () => ({
     buckets: [
       ...buckets(3, WETH),

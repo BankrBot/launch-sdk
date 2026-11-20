@@ -1,5 +1,5 @@
 // Test-only: an in-memory JSON-RPC node behind viem's `custom` transport, so tests exercise the real viem encode,
-// decode and revert paths, and a fake v4 suite on it. Excluded from the build; the public export ships it because the
+// decode and revert paths, and a fake v4 deployment on it. Excluded from the build; the public export ships it because the
 // public tests import it (viem and relative imports only).
 import {
   createPublicClient,
@@ -40,7 +40,7 @@ import type { Erc20Slots } from "../data/erc20Slots.js";
 import { HOOK_EXTENSION_ERRORS, PRESET_ERRORS } from "../unvendoredErrors.js";
 import { HOOK_ERRORS } from "../launch/revert.js";
 
-/** Thrown by a handler to revert the call with a named suite error, or `Error(string)` with `new Revert("Error", [reason])`. */
+/** Thrown by a handler to revert the call with a named contract error, or `Error(string)` with `new Revert("Error", [reason])`. */
 export class Revert extends Error {
   constructor(
     readonly errorName: string,
@@ -448,7 +448,7 @@ export class FakeChain {
         ),
       };
     } catch (err) {
-      // A suite revert carries its data; a function the contract lacks reverts empty.
+      // A contract revert carries its data; a function the contract lacks reverts empty.
       return {
         success: false,
         returnData: (err as { data?: Hex }).data ?? "0x",

@@ -75,7 +75,7 @@ export interface ChainCapabilities<C extends LaunchChain = LaunchChain> {
    *  (`msg.value`). False on Arc. */
   readonly nativeDevBuy: boolean;
   /**
-   * The asset the coin holders' half of Bankr's slice pays in (FD-23): BNKR where BNKR trades (Base, Robinhood), the
+   * The asset the coin holders' half of Bankr's slice pays in: BNKR where BNKR trades (Base, Robinhood), the
    * quote elsewhere until it is listed there. A per-chain setting on the holder leg, so read it as a default.
    */
   readonly holderPayout: "bnkr" | "quote";

@@ -62,7 +62,7 @@ describe("CHAINS capability table", () => {
     }
   });
 
-  test("FD-23: holders' half of Bankr's slice pays BNKR on Base and Robinhood, the quote on Arbitrum and Arc", () => {
+  test("holders' half of Bankr's slice pays BNKR on Base and Robinhood, the quote on Arbitrum and Arc", () => {
     expect(CHAINS.base.holderPayout).toBe("bnkr");
     expect(CHAINS.robinhood.holderPayout).toBe("bnkr");
     expect(CHAINS.arbitrum.holderPayout).toBe("quote");

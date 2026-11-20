@@ -215,12 +215,10 @@ async function draftLaunch<C extends LaunchChain>(
   let params: ContractLaunchParams = {
     ...draft,
     salt,
-    options: c.pin
-      ? pinLaunchOptions(draft.options, {
-          expectedTermsHash: resolved.resolvedHash,
-          expectedToken: token,
-        })
-      : draft.options,
+    options: pinLaunchOptions(draft.options, {
+      expectedTermsHash: resolved.resolvedHash,
+      expectedToken: token,
+    }),
   };
   if (signer !== null) {
     const authorization = parseAuthorization(

@@ -13,7 +13,7 @@ import { buildCallTx } from "./tx.js";
 export const CONVERT_GAS = 2_100_000n;
 
 /**
- * Whether a launch's holders' pile is due for its quote's conversion to BNKR, or its forward in quote (Q4), read at
+ * Whether a launch's holders' pile is due for its quote's conversion to BNKR, or its forward in quote, read at
  * the holder leg of the coin's own launch.
  */
 export interface HolderConversion {
@@ -26,7 +26,7 @@ export interface HolderConversion {
    *  unarmed. */
   floor: bigint;
   armed: boolean;
-  /** A factory pause skips the wake (Q5). */
+  /** A factory pause skips the wake. */
   paused: boolean;
   /** The quote's piles convert to BNKR; otherwise they forward to the distributor in quote, with no interval. */
   converts: boolean;

@@ -161,7 +161,7 @@ describe("holderShareBps: bps of the creator's own take", () => {
 });
 
 describe("startTickForFdv", () => {
-  // R7-13 fixup: the factory raises `lowest` to MIN_START_TICK (-560,000) when the min-FDV tick is deeper, so it no
+  // The factory raises `lowest` to MIN_START_TICK (-560,000) when the min-FDV tick is deeper, so it no
   // longer prices minStartFdvUsd there. The target is placed from the unclamped `highest` (maxStartFdvUsd) instead.
   test("a lowest clamped to MIN_START_TICK does not shift the target FDV's tick", () => {
     const step = (usd: number) => Math.log(usd) / Math.log(1.0001);

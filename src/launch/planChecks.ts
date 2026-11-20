@@ -249,9 +249,9 @@ export async function launchQuote<C extends LaunchChain>(
 }
 
 /**
- * Security review 1, finding 3. On a coin that can be taken over, a takeover settles every recipient's share into
- * a balance only the account, or its claim operator, withdraws. A contract that restricted its claims and named no
- * operator may never collect it, so the launch is refused before any call.
+ * On a coin that can be taken over, a takeover settles every recipient's share into a balance only the account, or
+ * its claim operator, withdraws. A contract that restricted its claims and named no operator may never collect it,
+ * so the launch is refused before any call.
  */
 export async function requireClaimOperators<C extends LaunchChain>(
   ctx: Ctx<C>,

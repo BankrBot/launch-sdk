@@ -422,7 +422,7 @@ describe("buildLaunchTx", () => {
       quoteGas: 250_000,
       afterGas: 1_000_000,
     };
-    // 7,214,029: a custom extension bound at both ceilings, measured on the suite.
+    // 7,214,029: a custom extension bound at both ceilings, measured on the contracts.
     const tx = buildLaunchTx(
       CHAINS.base,
       plan({ params: { ...PARAMS, extension }, gasEstimate: 7_214_029n }),

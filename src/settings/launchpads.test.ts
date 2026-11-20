@@ -122,7 +122,7 @@ describe("register", () => {
     );
   });
 
-  test("a suite contract is refused as a payee: no launch on the pad would go through", async () => {
+  test("a launch contract is refused as a payee: no launch on the pad would go through", async () => {
     const { pads } = setup();
     await refuses(
       pads.register({

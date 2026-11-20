@@ -1,4 +1,4 @@
-// Test-only: what a fresh deployment holds for an open launchpad on WETH, as the fake suite's launch check reads it:
+// Test-only: what a fresh deployment holds for an open launchpad on WETH, as the fake contracts' launch check reads it:
 // the template's rows, the owner's limits and terms, one feed-priced quote. Forge's own deploy, value for value
 // (the parity suite holds it to settingsForgeVectors.json). Excluded from the build; viem and relative imports only.
 import { getAddress, zeroHash, type Address } from "viem";
@@ -6,7 +6,7 @@ import { SETTINGS_KNOBS } from "../abis/knobs.js";
 import { PAD_FLAG, type KnobName } from "../launch/settings.js";
 import type { BankrV4ResolverState } from "./fakeResolverState.js";
 
-/** The fake suite's WETH: listed, 18 decimals, priced by a feed at $2,500. */
+/** The fake deployment's WETH: listed, 18 decimals, priced by a feed at $2,500. */
 export const FRESH_QUOTE = getAddress(
   "0xC9E459D48Fb9874A699587A9Cf1Df146e41Ec57F",
 );
@@ -96,7 +96,7 @@ export const TEMPLATE_FLAGS =
 
 const at = (a: string): Address => getAddress(a);
 
-/** The state a launch on the open pad meets on a fresh suite, at `now`. Each call returns its own copy. */
+/** The state a launch on the open pad meets on a fresh deployment, at `now`. Each call returns its own copy. */
 export function freshContractsState(
   o: { chainId?: number; now?: bigint } = {},
 ): BankrV4ResolverState {

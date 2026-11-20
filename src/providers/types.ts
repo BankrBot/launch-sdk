@@ -191,11 +191,6 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
   /** With an extension: the most the base fee and the extension's fee may reach together, in pips. Default: the pad's. */
   feeCeilingPips?: number;
   /**
-   * Pins the launch to the terms and the token the plan showed: if either differs when it lands it reverts
-   * (`TERMS_CHANGED`) and is planned again. Default true; false takes whatever terms are in force at inclusion.
-   */
-  pin?: boolean;
-  /**
    * The claim operator a contract fee recipient with restricted claims has named on the fee ledger. On a coin that
    * can be taken over, a takeover settles its share into a balance only it or its operator withdraws: without one
    * the launch is refused (`CLAIM_OPERATOR_REQUIRED`). A wallet, a Safe and an EIP-7702 account need none.

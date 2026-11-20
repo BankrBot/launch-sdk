@@ -101,16 +101,16 @@ export interface LaunchOptionsInput {
   feeCeilingPips?: number;
 }
 
-/** The pins: the terms `resolve` showed for this launch, and the token address mined for it. */
+/** The pins, always both: the terms `resolve` showed for this launch, and the token address mined for it. */
 export interface LaunchPins {
-  expectedTermsHash?: Hex;
-  expectedToken?: Address;
+  expectedTermsHash: Hex;
+  expectedToken: Address;
 }
 
-/** The struct for what a launch names and pins. */
+/** The struct for what a launch names and pins. Without `pins` it is the base a draft pins before it is sent. */
 export function launchOptions(
   i: LaunchOptionsInput = {},
-  pins: LaunchPins = {},
+  pins?: LaunchPins,
 ): LaunchOptions {
   const o = { ...NO_LAUNCH_OPTIONS };
   const name = (bit: number) => (o.set |= bit);
@@ -155,8 +155,8 @@ export function launchOptions(
     name(LAUNCH_OPTION.feeCeiling);
     o.feeCeilingPips = i.feeCeilingPips;
   }
-  o.expectedTermsHash = pins.expectedTermsHash ?? zeroHash;
-  o.expectedToken = pins.expectedToken ?? zeroAddress;
+  o.expectedTermsHash = pins?.expectedTermsHash ?? zeroHash;
+  o.expectedToken = pins?.expectedToken ?? zeroAddress;
   return o;
 }
 
@@ -202,15 +202,11 @@ export function decodeLaunchOptions(options: Hex): LaunchOptions | null {
   }
 }
 
-/** `options` with the pins set: the terms hash `resolve` returned, the mined token, or both. */
+/** `options` with both pins set: the terms hash `resolve` returned and the mined token. */
 export function pinLaunchOptions(options: Hex, pins: LaunchPins): Hex {
   const o = decodeLaunchOptions(options);
   if (!o) throw new TypeError("not a launch's options");
-  return encodeLaunchOptions({
-    ...o,
-    expectedTermsHash: pins.expectedTermsHash ?? o.expectedTermsHash,
-    expectedToken: pins.expectedToken ?? o.expectedToken,
-  });
+  return encodeLaunchOptions({ ...o, ...pins });
 }
 
 /** The pins a launch's `options` carry; null for each one it does not set (and for bytes that are no options). */

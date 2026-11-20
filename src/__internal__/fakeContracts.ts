@@ -61,7 +61,7 @@ type Pad = {
 export interface ContractsFixture {
   fake: FakeChain;
   deployment: ProviderAddresses;
-  /** The suite's wiring as the factory's getters answer it: what a token's address is predicted from. */
+  /** The deployment's wiring as the factory's getters answer it: what a token's address is predicted from. */
   live: LivePointers;
   /** What `resolve` reads. A test moves the owner's or the pad's settings by changing it. */
   state: BankrV4ResolverState;
@@ -108,7 +108,7 @@ export interface ContractsStart {
 
 /**
  * Contracts whose launch check is the resolver port over `start.state`: the pad, the owner's limits, the quote and
- * the wiring a launch meets. Default: a fresh suite's open pad on WETH. The registry's pad is open: no signer.
+ * the wiring a launch meets. Default: a fresh deployment's open pad on WETH. The registry's pad is open: no signer.
  */
 export function installContracts(
   fake: FakeChain,

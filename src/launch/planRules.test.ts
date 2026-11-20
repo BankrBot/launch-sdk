@@ -31,6 +31,7 @@ import { isLaunchSdkError, type LaunchSdkErrorCode } from "../errors.js";
 import type { LaunchInput } from "../providers/types.js";
 import { HOLDER_LEG_REFERENCES_ABI } from "../recipient.js";
 import { launchTermsHash } from "../terms.js";
+import { launchPinsOf } from "./options.js";
 import { KNOB, PAD_FLAG } from "./settings.js";
 
 const USDC = getAddress(CHAINS.base.quotes.USDC.address);
@@ -262,7 +263,7 @@ describe("who a launch may pay", () => {
     expect(refused.detail).toContain("Bankr launch contract");
   });
 
-  test("R7-18: a fee or vesting recipient with a one-digit typo breaks its EIP-55 checksum and is refused", async () => {
+  test("a fee or vesting recipient with a one-digit typo breaks its EIP-55 checksum and is refused", async () => {
     const f = fixture();
     const intended = getAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
     const typo = `${intended.slice(0, -1)}${intended.endsWith("d") ? "e" : "E"}`;
@@ -483,7 +484,9 @@ describe("a launchpad with a signer", () => {
     expect(r.paramsHash).toBe(launchTermsHash(r.params, LAUNCHER, 0n));
     // What is signed is what is sent: the options with both pins.
     expect(r.params.options).toBe(plan.params.options);
-    expect(plan.resolved.pinned).toBe(true);
+    expect(launchPinsOf(r.params.options).expectedTermsHash).toBe(
+      plan.resolved.resolvedHash,
+    );
     expect(plan.params.authorization.nonce).toBe(signature.nonce);
     expect(plan.predictedToken.toLowerCase().endsWith("a")).toBe(true);
   });

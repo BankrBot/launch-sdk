@@ -54,7 +54,7 @@ export const HOLDER_CLAIM_ALL_GAS = Object.freeze({
   base: 1_560_000n,
   perCoin: 900_000n,
   /** A coin on a quote the factory does not list: a claim whose quote burns its pull and a payout's whole 1,000,000
-   *  (1.45M measured), so the next coin of that quote still lands (round 9 ISO-1). */
+   *  (1.45M measured), so the next coin of that quote still lands. */
   perUnlistedCoin: 1_900_000n,
   /** A poke that only pays a pile on in quote (a quote with no floor, or the leg's forward rule): 270,000 measured,
    *  its floor sync included. */
@@ -91,15 +91,15 @@ const earns = ({ earned }: Pick<HolderClaimCoin, "earned">) =>
 /** Every coin's hold-to-earn rewards for one account, claimed together. */
 export interface HolderClaimAll {
   account: Address;
-  /** `multicall`: an EOA or 7702 wallet Multicall3 may claim for (open, Q9's default), pushed to by `claimFor`.
+  /** `multicall`: an EOA or 7702 wallet Multicall3 may claim for (open, the default), pushed to by `claimFor`.
    *  `direct`: a contract account, or one that turned "anyone can claim" off (Multicall3's `claimFor` would claim
    *  nothing): one `claim()` per coin from the account itself, then one `leg.poke` per due pile at `CONVERT_GAS`. */
   mode: "multicall" | "direct";
   /** Listed-quote coins first, then each unlisted quote's coins together; in each, the coins that are claimed
    *  before the ones that are only poked. */
   coins: HolderClaimCoin[];
-  /** The listed coins' transactions first: a hostile unlisted quote only ever shares a transaction with its own coins
-   *  (round 9 ISO-1). Each transaction's pokes follow its claims (round 9 ISO-3), so a poke starves no claim. */
+  /** The listed coins' transactions first: a hostile unlisted quote only ever shares a transaction with its own
+   *  coins. Each transaction's pokes follow its claims, so a poke starves no claim. */
   txs: UnsignedTx[];
 }
 
@@ -166,7 +166,7 @@ export async function buildHolderClaimAll(
       functionName: "poke",
       args: [c.poolId],
     });
-  // A restricted account refuses Multicall3 as msg.sender (round 9 FF2/RSEC-2): it claims each coin itself.
+  // A restricted account refuses Multicall3 as msg.sender: it claims each coin itself.
   if ((hasCode(code) && !isDelegatedEoa(code)) || !viaMulticall) {
     const claim = encodeFunctionData({
       abi: holderRewardsDistributorAbi,
@@ -318,7 +318,7 @@ async function readCoin(
 
 /** The coins with an earned leg (as built) that no `RewardClaimed` for the account in `receipts` paid: claim them again.
  *  A distributor pays each leg on its own, so a refused leg (a frozen quote) logs 0 beside the legs that paid; a coin on
- *  an unlisted quote whose claim landed with only that quote refused is not retried (round 9 ISO-1: it is the token's
+ *  an unlisted quote whose claim landed with only that quote refused is not retried (it is the token's
  *  own refusal, and retrying it forever spends the claimer's gas). */
 export function unclaimedHolderCoins(
   claimAll: HolderClaimAll,

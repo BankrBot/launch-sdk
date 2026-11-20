@@ -72,7 +72,7 @@ describe("launchInfo", () => {
     expect(info.tradingStart).toBe(1);
   });
 
-  // Live-fork finding 11-07: roles were read from the pad's live payees, so a setPayees after launch relabelled them.
+  // Roles were read from the pad's live payees, so a setPayees after launch relabelled them.
   test("roles come from the ledger's creator parts, not the pad's live payees", async () => {
     const { f, s4, client } = postLaunchFixture();
     const creator = getAddress("0x00000000000000000000000000000000000c0de1");
