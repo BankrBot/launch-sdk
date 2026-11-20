@@ -3,6 +3,9 @@
  * launcher and pays the gas; your route prepares through Bankr with the key it keeps. No API key in this bundle:
  * `remotePreparer` throws API_KEY_IN_BROWSER if one rides in its headers. In your app, import from
  * "@bankr/launch-sdk".
+ *
+ * Not available yet: on Bankr's current contracts this SDK version refuses API mode (`PROVIDER_NOT_DEPLOYED`), so
+ * this example runs once a later version ships it. Until then launch in pure mode (`own-launchpad.ts`).
  */
 import { createWalletClient, custom, type EIP1193Provider } from "viem";
 import { base } from "viem/chains";

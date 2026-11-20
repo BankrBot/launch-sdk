@@ -62,6 +62,7 @@ const client = (
   createLaunchClient({
     chain: "base",
     publicClient: f.fake.publicClient(),
+    suite: 3,
     addresses: SUITE,
     fork: true,
     ...o,
@@ -683,6 +684,7 @@ describe("Arc's suite config", () => {
     const c = createLaunchClient({
       chain: "arc",
       publicClient: f.fake.publicClient(),
+      suite: 3,
       addresses: arcSuite,
       fork: true,
     });
@@ -746,6 +748,7 @@ describe("any-quote pairing (founder 2026-11-07): a pad pairs with any ERC-20", 
     const api = createLaunchClient({
       chain: "base",
       publicClient: f.fake.publicClient(),
+      suite: 3,
       addresses: SUITE,
       fork: true,
       api: {

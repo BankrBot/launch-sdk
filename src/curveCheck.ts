@@ -66,7 +66,31 @@ export interface CheckCurveInput {
   sale: bigint;
   /** {@link curveOwnBuys}: switches the step rule on. */
   ownBuys: boolean;
+  /** A suite 4 coin's own rules (`CoinTerms.curve`); omitted, the figures suite 3 compiled in. */
+  rules?: CurveRules;
 }
+
+/** The numbers a launch's own bands are held to: a suite 4 pad sets them, and `resolve` freezes them per coin. */
+export interface CurveRules {
+  minDepthDiv: number;
+  maxDensity: number;
+  placeTicks: number;
+  placeBps: number;
+  nearTicks: number;
+  nearStep: number;
+  dustPpm: number;
+}
+
+/** Suite 3's rules, as its CurveTable compiled them. */
+export const SUITE3_CURVE_RULES: CurveRules = Object.freeze({
+  minDepthDiv: Number(CURVE_MIN_DEPTH_DIV),
+  maxDensity: Number(CURVE_MAX_DENSITY),
+  placeTicks: CURVE_PLACE_TICKS,
+  placeBps: Number(CURVE_PLACE_BPS),
+  nearTicks: CURVE_NEAR_TICKS,
+  nearStep: Number(CURVE_NEAR_STEP),
+  dustPpm: Number(CURVE_MAX_DUST_PPM),
+});
 
 const Q96 = 1n << 96n;
 const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
@@ -170,9 +194,10 @@ export function checkCurve(i: CheckCurveInput): CurveVerdict {
     return { ok: true, bands, unplaced: unplacedOf(bands, t0, i.sale) };
   }
   if (!checkCurveFormat(i.curve, i.startTick)) return refused("InvalidCurve");
+  const rules = i.rules ?? SUITE3_CURVE_RULES;
   const dir = t0 ? 1 : -1;
   const [start, far] = [dir * i.startTick, dir * MAX_USABLE_TICK];
-  const reach = start + dir * CURVE_PLACE_TICKS;
+  const reach = start + dir * rules.placeTicks;
   const mark = dir * reach > dir * far ? far : reach;
   const flat = bandLiquidity(t0, start, far, i.sale);
   const bands = placeCurve(i);
@@ -182,29 +207,30 @@ export function checkCurve(i: CheckCurveInput): CurveVerdict {
   for (const [row, b] of bands.entries()) {
     const [near, next] = t0 ? [b.lower, b.upper] : [b.upper, b.lower];
     const liq = b.liquidity;
-    if (liq === 0n || liq * CURVE_MIN_DEPTH_DIV < flat) {
+    if (liq === 0n || liq * BigInt(rules.minDepthDiv) < flat) {
       return refused("CurveTooThin", row);
     }
     if (under + liq > CURVE_MAX_TICK_LIQUIDITY) {
       return refused("CurveLiquidity", row);
     }
-    if (liq > CURVE_MAX_DENSITY * bandLiquidity(t0, near, far, i.sale)) {
+    if (liq > BigInt(rules.maxDensity) * bandLiquidity(t0, near, far, i.sale)) {
       return refused("CurveTooDense", row);
     }
     if (i.ownBuys && thin !== null) {
       const off = dir * (near - start);
-      const most = off <= CURVE_NEAR_TICKS ? thin * CURVE_NEAR_STEP : under;
+      const most =
+        off <= rules.nearTicks ? thin * BigInt(rules.nearStep) : under;
       if (liq > most) return refused("CurveStep", row);
     }
     if (thin === null || liq < thin) thin = liq;
     placed += soldBy(t0, near, next, mark, b.amount);
     under = liq;
   }
-  if (placed * 10_000n < i.sale * CURVE_PLACE_BPS) {
+  if (placed * 10_000n < i.sale * BigInt(rules.placeBps)) {
     return refused("CurvePlacement");
   }
   const unplaced = unplacedOf(bands, t0, i.sale);
-  if (unplaced * 1_000_000n > i.sale * CURVE_MAX_DUST_PPM) {
+  if (unplaced * 1_000_000n > i.sale * BigInt(rules.dustPpm)) {
     return refused("CurveDust", null, unplaced);
   }
   return { ok: true, bands, unplaced };

@@ -8,7 +8,8 @@ import {
   type Hex,
 } from "viem";
 import { getBlock, readContract } from "viem/actions";
-import { bankrLaunchTokenAbi } from "./abis/generated.js";
+import { bankrLaunchTokenAbi as suite4TokenAbi } from "./abis/generated.js";
+import { bankrLaunchTokenAbi } from "./abis/suite3.js";
 import { MAX_METADATA_URI_BYTES } from "./economics.js";
 import { LaunchRefusedError } from "./errors.js";
 import { requireLaunch, type SuiteReadContext } from "./lens.js";
@@ -67,7 +68,8 @@ export interface TokenMetadataState {
 export interface LaunchMetadataAdmin {
   /** `NOT_A_LAUNCH` for a token this chain's factory never launched. */
   get(token: Address): Promise<TokenMetadataState>;
-  /** `setMetadataUri(metadataUri)`: at most 2,048 UTF-8 bytes; the name and symbol never change. */
+  /** `setMetadataUri(metadataUri)`: at most the token's own limit in UTF-8 bytes (2,048 on the earlier contracts);
+   *  the name and symbol never change. */
   buildSetUri(
     token: Address,
     account: Address,
@@ -132,16 +134,31 @@ export function createMetadataAdmin(
     },
 
     async buildSetUri(token, account, metadataUri) {
-      // The token counts bytes, not characters (MetadataTooLong).
-      if (
-        typeof metadataUri !== "string" ||
-        stringToBytes(metadataUri).length > MAX_METADATA_URI_BYTES
-      )
+      const tooLong = (max: number) =>
+        new LaunchRefusedError("INVALID_PARAMS", {
+          chain,
+          detail: `The metadata link can be at most ${max.toLocaleString("en-US")} bytes.`,
+        });
+      // The token counts bytes, not characters (MetadataTooLong). Suite 3 compiles the limit in; a suite 4 token
+      // holds the one its launch froze, under the constant or over it.
+      const on4 = ctx.addresses.settings !== undefined;
+      if (typeof metadataUri !== "string")
         throw new LaunchRefusedError("INVALID_PARAMS", {
           chain,
-          detail: `The metadata link can be at most ${MAX_METADATA_URI_BYTES.toLocaleString("en-US")} bytes.`,
+          detail: "The metadata link is a string.",
         });
+      const bytes = stringToBytes(metadataUri).length;
+      if (!on4 && bytes > MAX_METADATA_URI_BYTES)
+        throw tooLong(MAX_METADATA_URI_BYTES);
       const a = await asAdmin(token, account);
+      if (on4) {
+        const max = await readContract(client, {
+          address: a.token,
+          abi: suite4TokenAbi,
+          functionName: "metadataMaxBytes",
+        });
+        if (bytes > max) throw tooLong(max);
+      }
       return tx(
         a.who,
         a.token,

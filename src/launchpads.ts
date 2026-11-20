@@ -11,7 +11,7 @@ import { readContract } from "viem/actions";
 import {
   bankrLaunchFactoryAbi,
   bankrLaunchpadRegistryAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { ANY_CURVE } from "./curve.js";
 import { padAllowsCurve } from "./curveDetail.js";
 import { curveKey, type CurveKeyInput } from "./curveInput.js";
@@ -273,7 +273,7 @@ export function createLaunchpads(ctx: SuiteReadContext): LaunchpadOperations {
     const bad = payees.find((_, i) => rejected[i]);
     if (bad) {
       invalid(
-        `${bad} cannot be a payee: the factory refuses a Bankr suite contract, a launched token or a routing marker, so no launch on the pad would go through.`,
+        `${bad} cannot be a payee: the factory refuses one of Bankr's launch contracts, a launched token or a routing marker, so no launch on the pad would go through.`,
       );
     }
     // Round 9 RSEC-1: as a fee recipient, a contract payee is a Safe, a 7702 wallet or restricted (Q9).

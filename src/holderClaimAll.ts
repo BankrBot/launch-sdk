@@ -15,8 +15,8 @@ import {
   bankrLaunchFactoryAbi,
   holderRewardsDeployerAbi,
   holderRewardsDistributorAbi,
-} from "./abis/generated.js";
-import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+} from "./abis/suite3.js";
+import { CONVERT_GAS, EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { LaunchRefusedError } from "./errors.js";
 import { readHolderPiles } from "./holderPiles.js";
 import type { HolderLeg } from "./holders.js";
@@ -142,6 +142,10 @@ export async function buildHolderClaimAll(
   const pokeOf = new Map(
     mine.map((c, i) => [c.token.toLowerCase(), piles[i]!.poke]),
   );
+  const legOf = new Map(
+    mine.map((c, i) => [c.token.toLowerCase(), piles[i]!.leg]),
+  );
+  const leg = (c: HolderClaimCoin) => legOf.get(c.token.toLowerCase())!;
   const all = mine
     .map((c, i) => ({
       ...c,
@@ -155,10 +159,9 @@ export async function buildHolderClaimAll(
     ...all.filter((c) => !earns(c)),
   ]);
   const coins = groups.flat();
-  const leg = ctx.addresses.holderLeg;
   const poke = (c: HolderClaimCoin) =>
     encodeFunctionData({
-      abi: HOLDER_LEG_WAKE_ABI,
+      abi: EARLIER_HOLDER_LEG_WAKE_ABI,
       functionName: "poke",
       args: [c.poolId],
     });
@@ -182,7 +185,7 @@ export async function buildHolderClaimAll(
           .map((c) => call(c.distributor, claim, HOLDER_GAS.claim)),
         ...coins
           .filter((c) => c.poke)
-          .map((c) => call(leg, poke(c), CONVERT_GAS)),
+          .map((c) => call(leg(c), poke(c), CONVERT_GAS)),
       ],
     };
   }
@@ -218,7 +221,11 @@ export async function buildHolderClaimAll(
         })),
         ...batch
           .filter((c) => c.poke)
-          .map((c) => ({ target: leg, allowFailure: true, callData: poke(c) })),
+          .map((c) => ({
+            target: leg(c),
+            allowFailure: true,
+            callData: poke(c),
+          })),
       ];
       txs.push({
         ...buildCallTx(

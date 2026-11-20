@@ -5,7 +5,7 @@ import {
   type Address,
 } from "viem";
 import { readContract } from "viem/actions";
-import { creatorVestingEscrowAbi } from "./abis/generated.js";
+import { creatorVestingEscrowAbi } from "./abis/suite3.js";
 import { LaunchRefusedError } from "./errors.js";
 import { requireLaunch, type SuiteReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";
@@ -38,7 +38,8 @@ export interface VestingState {
   schedules: VestingSchedule[];
 }
 
-/** Vesting after launch: the creator's pull schedule (365-day linear, 30-day cliff) and the holders' push schedule. */
+/** Vesting after launch: the creator's pull schedule and the holders' push schedule, each with the cliff and
+ *  duration its launch froze (a 30-day cliff and 365 days unless the launchpad set others). */
 export interface LaunchVesting {
   /** `NOT_A_LAUNCH` for a token this chain's factory never launched. */
   get(token: Address): Promise<VestingState>;

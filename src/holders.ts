@@ -9,7 +9,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { readContract } from "viem/actions";
-import { holderRewardsDistributorAbi } from "./abis/generated.js";
+import { holderRewardsDistributorAbi } from "./abis/suite3.js";
 import { LaunchRefusedError } from "./errors.js";
 import {
   HOLDER_GAS,
@@ -131,8 +131,9 @@ export interface LaunchHolders {
   ): Promise<UnsignedTx>;
   /**
    * Whether the launch's holders' pile is due (Q4): the quote's conversion to BNKR is open, or the pile forwards in
-   * quote. `options.now` is the chain's time in Unix seconds (default the clock's). Only a swap whose hookData asks
-   * for the wake and that carries its gas runs it; {@link LaunchHolders.buildConvert} runs it for anyone.
+   * quote. `options.now` is the chain's time in Unix seconds (default the latest block's; on the earlier contracts,
+   * the clock's). The pile is read at the holder leg of the coin's own launch. Only a swap whose hookData asks for
+   * the wake and that carries its gas runs it; {@link LaunchHolders.buildConvert} runs it for anyone.
    */
   getConversion(
     token: Address,

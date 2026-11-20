@@ -8,6 +8,8 @@ import {
   LaunchRefusedError,
 } from "./errors.js";
 import type { LaunchMetadata } from "./providers/types.js";
+import { isRecord } from "./isRecord.js";
+import { iterateLaunches, type LaunchIterationOptions } from "./indexPages.js";
 
 /** Bankr's public API. */
 export const DEFAULT_BANKR_API_URL = "https://api.bankr.bot";
@@ -148,6 +150,8 @@ export interface IndexedLaunch {
   provider: "bankr_v4" | "bankr_v3" | "doppler";
   /** The launch's pad (decimal uint64) on bankr_v4; null on other providers. */
   launchpadId: string | null;
+  /** The token the bankr_v4 pool quotes (lowercase); null on other providers. */
+  quoteAddress: Address | null;
   launcher: Address;
   feeRecipient: Address | null;
   /** Builder slug; null when unattributed, or for a code claim under `attribution: "verified"`. */
@@ -179,8 +183,16 @@ export interface LaunchQuery {
   /** An ERC-8021 builder code. */
   code?: string;
   provider?: IndexedLaunch["provider"];
-  /** bankr_v4 launches on one pad (a decimal id). */
+  /** bankr_v4 launches on one pad (a decimal id), on the chain's latest suite whatever the client's `suite`. */
   launchpad?: bigint | string;
+  /** bankr_v4 launches whose pool quotes this token. */
+  quote?: Address;
+  /** 1–64 characters: a case-insensitive part of the name or symbol, or a whole token address. */
+  q?: string;
+  /** Deployed at or after this instant (a `Date`, or an ISO 8601 date-time). */
+  deployedAfter?: Date | string;
+  /** Deployed at or before this instant. */
+  deployedBefore?: Date | string;
   /** Default `"verified"`: code claims are not shown as attribution. */
   attribution?: "verified" | "all";
   /** Default `"listed"`: launches hidden by moderation are left out. */
@@ -220,6 +232,27 @@ export interface BuilderProfile {
   byChain: Partial<Record<LaunchChain, BuilderStats>>;
 }
 
+/** `GET /launchpads/:chain/:id/stats`: one pad's totals on the chain's latest suite. An unknown pad reads zeros. */
+export interface LaunchpadStats {
+  chain: LaunchChain;
+  launchpadId: string;
+  window: "all" | "24h" | "7d" | "30d";
+  visibility: "listed" | "all";
+  stats: {
+    /** Launches deployed inside `window`. */
+    launches: number;
+    /** Their current rolling 24h volume in USD, SDK launches included (best effort, as `market`). */
+    volume24hUsd: number;
+  };
+}
+
+export interface LaunchpadStatsQuery {
+  /** Default `"all"`: every launch on the pad. */
+  window?: LaunchpadStats["window"];
+  /** Default `"all"`, unlike the launch list: SDK launches stay hidden until Bankr lists them. */
+  visibility?: "listed" | "all";
+}
+
 export interface BuilderQuery {
   window?: BuilderProfile["window"];
   visibility?: "listed" | "all";
@@ -254,12 +287,15 @@ export interface AccountFeeBucket {
 }
 
 /**
- * `GET /bankr-v4/accounts/:account/fees?chainId=`: what an account is owed on one chain's fee ledger, from Bankr's
+ * `GET /bankr-v4/accounts/:account/fees?chainId=&ledger=`: what an account is owed on one fee ledger, from Bankr's
  * bucket-share index (claimable read on-chain). Amounts are decimal strings.
  */
 export interface AccountFeesResponse {
   chainId: number;
   account: Address;
+  /** The ledger answered for: the one asked, else the chain's latest suite's. Each suite has its own, never
+   *  summed. */
+  ledger: Address;
   /** Pull balances: referral slices and settled shares. */
   balances: { quote: Address; amount: string }[];
   buckets: AccountFeeBucket[];
@@ -290,9 +326,6 @@ export class BankrApiResponseError extends Error {
     this.retryAfterSeconds = i.retryAfterSeconds;
   }
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
 
 const MAX_ERROR_TEXT = 500;
 
@@ -495,6 +528,11 @@ export interface BankrApi {
   readonly url: string;
   /** `GET /launches`, newest first. Page with `nextCursor`. */
   launches(query?: LaunchQuery): Promise<LaunchPage>;
+  /** Every launch matching `query`, newest first, fetched a page (default 100) at a time; `iterateLaunches` has the stop rules. */
+  allLaunches(
+    query?: LaunchQuery,
+    options?: LaunchIterationOptions,
+  ): AsyncIterableIterator<IndexedLaunch>;
   /** `GET /launches/:chain/:token`, hidden launches included; null when Bankr has not indexed it. */
   launch(
     chain: LaunchChain,
@@ -503,6 +541,12 @@ export interface BankrApi {
   ): Promise<IndexedLaunch | null>;
   /** `GET /builders/:slug`; null for an unknown builder. */
   builder(slug: string, query?: BuilderQuery): Promise<BuilderProfile | null>;
+  /** `GET /launchpads/:chain/:id/stats`: the pad on the chain's latest suite; zeros for an unknown pad. */
+  launchpadStats(
+    chain: LaunchChain,
+    id: bigint | string,
+    query?: LaunchpadStatsQuery,
+  ): Promise<LaunchpadStats>;
   /**
    * `POST /launches/register`: index a launch at 5 confirmations instead of the indexer's full depth. Idempotent.
    * `signal` cancels the request.
@@ -512,14 +556,33 @@ export interface BankrApi {
     txHash: Hex,
     options?: { signal?: AbortSignal },
   ): Promise<RegisterResult>;
-  /** `GET /bankr-v4/accounts/:account/fees`: the account's owed fees on the chain's ledger; null for a 404. */
+  /**
+   * `GET /bankr-v4/accounts/:account/fees`: the account's owed fees on one suite's `ledger`, unnamed the chain's
+   * latest suite's; null for a 404 (no such ledger there, or not indexed).
+   */
   accountFees(
     chain: LaunchChain,
     account: Address,
+    ledger?: Address,
   ): Promise<AccountFeesResponse | null>;
 }
 
 type Query = Record<string, string | number | bigint | undefined>;
+
+/** A date filter as the API reads it; `INVALID_PARAMS` for an invalid `Date`. */
+function isoDate(
+  d: Date | string | undefined,
+  chain: LaunchChain | undefined,
+): string | undefined {
+  if (!(d instanceof Date)) return d;
+  if (Number.isNaN(d.getTime())) {
+    throw new LaunchRefusedError("INVALID_PARAMS", {
+      chain,
+      detail: "deployedAfter and deployedBefore must be valid dates.",
+    });
+  }
+  return d.toISOString();
+}
 
 /** A client for Bankr's public launch API. `INVALID_PARAMS` for a `url` that is not http(s). */
 export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
@@ -547,10 +610,14 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
     reply.status === 404 ? null : expectBody<T>(reply, isShape, chain);
   const segment = encodeURIComponent;
 
-  return {
+  const api: BankrApi = {
     url: base,
     async launches(query = {}) {
-      const reply = await get("/launches", { ...query });
+      const reply = await get("/launches", {
+        ...query,
+        deployedAfter: isoDate(query.deployedAfter, query.chain),
+        deployedBefore: isoDate(query.deployedBefore, query.chain),
+      });
       return expectBody<LaunchPage>(
         reply,
         (b) =>
@@ -560,6 +627,7 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
         query.chain,
       );
     },
+    allLaunches: (query, options) => iterateLaunches(api, query, options),
     async launch(chain, token, query = {}) {
       const reply = await get(
         `/launches/${segment(chain)}/${segment(token)}`,
@@ -575,6 +643,23 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
     async builder(slug, query = {}) {
       const reply = await get(`/builders/${segment(slug)}`, { ...query });
       return found(reply, (b) => isRecord(b) && typeof b.slug === "string");
+    },
+    async launchpadStats(chain, id, query = {}) {
+      const reply = await get(
+        `/launchpads/${segment(chain)}/${segment(String(id))}/stats`,
+        { ...query },
+        chain,
+      );
+      return expectBody<LaunchpadStats>(
+        reply,
+        (b) =>
+          isRecord(b) &&
+          typeof b.launchpadId === "string" &&
+          isRecord(b.stats) &&
+          typeof b.stats.launches === "number" &&
+          typeof b.stats.volume24hUsd === "number",
+        chain,
+      );
     },
     async register(chain, txHash, options = {}) {
       const reply = await send(
@@ -597,10 +682,10 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
         chain,
       );
     },
-    async accountFees(chain, account) {
+    async accountFees(chain, account, ledger) {
       const reply = await get(
         `/bankr-v4/accounts/${segment(account)}/fees`,
-        { chainId: getChain(chain).chainId },
+        { chainId: getChain(chain).chainId, ledger },
         chain,
       );
       return found(
@@ -614,4 +699,5 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       );
     },
   };
+  return api;
 }

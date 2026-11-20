@@ -4,7 +4,7 @@ import {
   type Hex,
   type LocalAccount,
 } from "viem";
-import { BANKR_V4_ADDRESSES } from "./addresses.js";
+import { chooseSuite } from "./addresses.js";
 import { refuseInBrowser } from "./api.js";
 import {
   authorizationRequestFromJson,
@@ -12,13 +12,13 @@ import {
   type Authorizer,
 } from "./authorizer.js";
 import { CHAINS, isLaunchChain, type LaunchChain } from "./chains/index.js";
-import type { LaunchParams } from "./economics.js";
 import { LaunchConfigError } from "./errors.js";
 import { randomSalt } from "./salt.js";
 import { MAX_BODY_BYTES, isJsonRequest, json, readBody } from "./serverHttp.js";
 import {
   launchAuthorizationTypedData,
   launchTermsHash,
+  type AnyLaunchParams,
   type LaunchAuthorization,
 } from "./terms.js";
 
@@ -37,7 +37,8 @@ export interface SignLaunchAuthorizationInput {
   registry: Address;
   launchpadId: bigint;
   launcher: Address;
-  params: LaunchParams;
+  /** A suite 4 launch's carry `options`: its pins are part of what is signed. */
+  params: AnyLaunchParams;
   /** `msg.value` of the launch (a native dev buy); folded into the signed terms. */
   nativeDevBuy: bigint;
   /** One-use; default 32 random bytes. */
@@ -107,7 +108,8 @@ export interface AuthorizeHandlerOptions {
   account: PadSigner;
   chain: LaunchChain;
   launchpadId: bigint;
-  /** The chain's launchpad registry; default the SDK's record (required while the chain has none). */
+  /** The chain's launchpad registry; default the SDK's record of the latest contracts (required while the chain
+   *  has none). */
   registry?: Address;
   /**
    * Required, with no default allow: authenticate the end user and apply your pad's admission policy to the terms
@@ -138,11 +140,13 @@ export function createAuthorizeHandler(
     );
   }
   if (!isLaunchChain(o.chain)) throw new LaunchConfigError("UNSUPPORTED_CHAIN");
-  const registry = o.registry ?? BANKR_V4_ADDRESSES[o.chain]?.launchpadRegistry;
+  // The registry a default client's requests name: the latest contracts'.
+  const registry =
+    o.registry ?? chooseSuite(o.chain, {}).addresses.launchpadRegistry;
   if (!registry)
     throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
       chain: o.chain,
-      detail: `Bankr's suite on ${o.chain} is not in this SDK version yet: pass the launchpad registry's address as \`registry\`.`,
+      detail: `Bankr's contracts on ${o.chain} are not in this SDK version yet: pass the launchpad registry's address as \`registry\`.`,
     });
   const chainId = CHAINS[o.chain].chainId;
 

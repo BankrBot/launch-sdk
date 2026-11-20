@@ -53,14 +53,18 @@ try {
 const sdk = await import("@bankr/launch-sdk");
 const server = await import("@bankr/launch-sdk/server");
 assert.deepEqual([...sdk.LAUNCH_CHAINS], ["base", "robinhood", "arbitrum", "arc"]);
-// Base ships its v4 record and is deployed; every other chain is undeployed and has no record.
+// Every chain ships the latest contracts' record, and a client that names nothing is on it. The earlier contracts
+// (suite: 3, the deployed flag) are on Base alone.
 assert.equal(sdk.CHAINS.base.deployed, true);
-assert.equal(sdk.BANKR_V4_ADDRESSES.base.chainId, 8453);
-assert.deepEqual(sdk.createLaunchClient({ chain: "base", rpcUrl: "http://127.0.0.1:1" }).provider.addresses, sdk.BANKR_V4_ADDRESSES.base);
+assert.equal(sdk.BANKR_V4_EARLIER_ADDRESSES.base.chainId, 8453);
+for (const chain of sdk.LAUNCH_CHAINS) {
+  assert.equal(sdk.BANKR_V4_LAUNCH_ADDRESSES[chain].chainId, sdk.CHAINS[chain].chainId, chain);
+  assert.deepEqual(sdk.createLaunchClient({ chain, rpcUrl: "http://127.0.0.1:1" }).provider.addresses, sdk.BANKR_V4_LAUNCH_ADDRESSES[chain]);
+}
 for (const chain of sdk.LAUNCH_CHAINS.filter((c) => c !== "base")) {
   assert.equal(sdk.CHAINS[chain].deployed, false, chain);
-  assert.equal(sdk.BANKR_V4_ADDRESSES[chain], null, chain);
-  assert.throws(() => sdk.createLaunchClient({ chain, rpcUrl: "http://127.0.0.1:1" }), (e) => sdk.isLaunchSdkError(e, "PROVIDER_NOT_DEPLOYED"));
+  assert.equal(sdk.BANKR_V4_EARLIER_ADDRESSES[chain], null, chain);
+  assert.throws(() => sdk.createLaunchClient({ chain, suite: 3, rpcUrl: "http://127.0.0.1:1" }), (e) => sdk.isLaunchSdkError(e, "PROVIDER_NOT_DEPLOYED"));
 }
 // The public holderShareBps meaning: bps of the creator's own take, converted to the contract's creator-side bps.
 assert.equal(sdk.holderShareToHoldersBps(10_000, 3_000, 0), 7_000);

@@ -1,9 +1,8 @@
 import { isHex, type Address, type Hex } from "viem";
 import { launchParamsFromJson, launchParamsToJson } from "./abiJson.js";
 import type { LaunchChain } from "./chains/index.js";
-import type { LaunchParams } from "./economics.js";
 import { LaunchApiError, isLaunchSdkError } from "./errors.js";
-import type { LaunchAuthorization } from "./terms.js";
+import type { AnyLaunchParams, LaunchAuthorization } from "./terms.js";
 
 // Third-party pads with a signer: the client's `authorizer` option and its browser half, `remoteAuthorizer`.
 // The server half (signing with the pad signer's key, and its HTTP handler) is in `@bankr/launch-sdk/server`.
@@ -16,8 +15,9 @@ export interface AuthorizationRequest {
   factory: Address;
   launchpadId: bigint;
   launcher: Address;
-  /** The final terms; `deadline`, `devBuyMinOut` and the signatures are blanked in what is signed. */
-  params: LaunchParams;
+  /** The final terms; `deadline`, `devBuyMinOut` and the signatures are blanked in what is signed. A suite 4
+   *  launch's carry `options`, with both pins. */
+  params: AnyLaunchParams;
   /** `msg.value`: a native dev buy, folded into the signed terms. */
   nativeDevBuy: bigint;
   /** `factory.hashLaunchTerms(params, launcher, nativeDevBuy)`, computed locally. An authorizer should recompute it. */

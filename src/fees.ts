@@ -11,18 +11,23 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   holderRewardsDeployerAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import type { BankrApi } from "./api.js";
-import { LaunchRefusedError, type CodeOfKind } from "./errors.js";
 import {
+  LaunchConfigError,
+  LaunchRefusedError,
+  type CodeOfKind,
+} from "./errors.js";
+import {
+  readQuoteListed,
   requireLaunch,
   type BeneficiaryRole,
   type LaunchInfo,
   type SuiteReadContext,
 } from "./lens.js";
-import { HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+import { EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { PUBLIC_FORWARDERS } from "./normalize.js";
-import { readOwed, type OwedOptions, type OwedState } from "./owed.js";
+import { readOwed, type OwedState } from "./owed.js";
 import {
   CLAIM_ALL_MAX_GAS_PER_TX,
   planClaimAll,
@@ -35,7 +40,7 @@ import {
   requireAddress,
   suiteContracts,
 } from "./recipient.js";
-import { readLiveSuite } from "./predict.js";
+import { readEarlierLivePointers, readLivePointers } from "./predict.js";
 import { buildCallTx } from "./tx.js";
 
 /** One account's share of one of a launch's fee buckets. */
@@ -76,8 +81,8 @@ export interface ClaimPolicy {
   mayClaim: boolean | null;
 }
 
-/** {@link LaunchFees.buildClaimAll}'s options: the plan's dust floor and gas cap, and where `getOwed` reads. */
-export interface ClaimAllOptions extends OwedOptions {
+/** {@link LaunchFees.buildClaimAll}'s options: the plan's dust floor, gas cap, unlisted currencies and sender. */
+export interface ClaimAllOptions {
   /** Per currency: a share owing less on every side waits, and a currency totalling less is not withdrawn. */
   dust?: (quote: Address) => bigint;
   /** Default 15,000,000; at most the chain's per-transaction ceiling. */
@@ -116,14 +121,15 @@ export interface LaunchFees {
   ): Promise<UnsignedTx[]>;
   /**
    * Everything `account` is owed on this chain's ledger: its pull balances and every launch's bucket share with
-   * something claimable. Reads Bankr's account index, and falls back to a ledger log scan (a small account: at most
-   * 500 shares) when the index cannot answer; a fork client always scans.
+   * something claimable, from Bankr's account index (`API_ERROR` when it cannot answer). A fork client is refused
+   * (`INDEX_UNAVAILABLE`): read and claim one launch with `get` and `buildClaim`.
    */
-  getOwed(account: Address, options?: OwedOptions): Promise<OwedState>;
+  getOwed(account: Address): Promise<OwedState>;
   /**
-   * Claims everything `account` is owed on this chain, referral slices included: `settle(ids, [account])` chunks,
-   * then `withdraw(lastIds, quotes)`, one transaction when it all fits. Send them in order from `account`, or from
-   * `options.sender`, which pushes (settles, then `withdrawFor`: never one transaction); each carries the gas limit. A quote that refuses its payout is `Withheld` and stays in the balance. Currencies
+   * Claims everything `account` is owed on this chain, as `getOwed` reads it, referral slices included:
+   * `settle(ids, [account])` chunks, then `withdraw(lastIds, quotes)`, one transaction when it all fits. Send them in
+   * order from `account`, or from `options.sender`, which pushes (settles, then `withdrawFor`: never one transaction);
+   * each carries the gas limit. A quote that refuses its payout is `Withheld` and stays in the balance. Currencies
    * the factory does not list are left (`plan.unlisted`) unless `includeUnlisted`, then paid in trailing withdraws.
    */
   buildClaimAll(
@@ -180,15 +186,16 @@ export interface LaunchFees {
   ): Promise<UnsignedTx>;
 }
 
-/** The fee namespace for one chain's suite; `index` is Bankr's API, which `getOwed` reads first. */
-export function createFees(
-  ctx: SuiteReadContext,
-  index?: BankrApi,
-): LaunchFees {
+/** The fee namespace for one chain's suite; `index` is Bankr's API, which `getOwed` and `buildClaimAll` read. */
+export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
   const { addresses: a, client } = ctx;
   const chain = ctx.chain.chain;
   const refuse = (code: CodeOfKind<"refused">): never => {
     throw new LaunchRefusedError(code, { chain });
+  };
+  // A fork's state is not the live chain the index reads, so its answer would be another chain's.
+  const requireIndex = () => {
+    if (ctx.fork) throw new LaunchConfigError("INDEX_UNAVAILABLE", { chain });
   };
   const call = (from: Address, data: Hex) =>
     buildCallTx(ctx.chain.chainId, from, a.ledger, data);
@@ -323,19 +330,13 @@ export function createFees(
     if (unknown.length === 0) return new Set();
     const bnkr = await readContract(client, {
       address: a.holderLeg,
-      abi: HOLDER_LEG_WAKE_ABI,
+      abi: EARLIER_HOLDER_LEG_WAKE_ABI,
       functionName: "bnkr",
     }).catch(() => zeroAddress);
     const others = unknown.filter((q) => q !== bnkr.toLowerCase());
     const flags = await Promise.all(
       others.map(async (q) => {
-        const entry = await readContract(client, {
-          address: a.factory,
-          abi: bankrLaunchFactoryAbi,
-          functionName: "quoteEntry",
-          args: [getAddress(q)],
-        });
-        if (entry.allowed) return false;
+        if (await readQuoteListed(ctx, getAddress(q))) return false;
         const distributor = await readContract(client, {
           address: a.holderRewardsDeployer,
           abi: holderRewardsDeployerAbi,
@@ -390,11 +391,15 @@ export function createFees(
       );
     },
 
-    getOwed: (account, options) =>
-      readOwed(ctx, index, requireAddress(account, chain), options),
+    async getOwed(account) {
+      const who = requireAddress(account, chain);
+      requireIndex();
+      return readOwed(ctx, index, who);
+    },
 
     async buildClaimAll(account, options = {}) {
       const who = requireAddress(account, chain);
+      requireIndex();
       const from =
         options.sender === undefined
           ? who
@@ -410,7 +415,7 @@ export function createFees(
       if (typeof maxGasPerTx !== "bigint" || maxGasPerTx > ctx.chain.maxTxGas)
         refuse("INVALID_PARAMS");
       const [owed, pushable] = await Promise.all([
-        readOwed(ctx, index, who, options),
+        readOwed(ctx, index, who),
         push ? readPushable(who, from) : null,
       ]);
       const unlisted = await unlistedOf(owed);
@@ -550,8 +555,11 @@ export function createFees(
       const buckets = held(state);
       if (buckets.length === 0) refuse("NOT_A_BENEFICIARY");
       const info = await requireLaunch(ctx, token);
+      // A suite 4 factory holds no cap controller, so its pointers are read by its own list.
       const [live, references] = await Promise.all([
-        readLiveSuite(client, a.factory),
+        a.settings === undefined
+          ? readEarlierLivePointers(client, a.factory)
+          : readLivePointers(client, a.factory),
         readLegReferences(client, a.holderLeg),
       ]);
       // The ledger refuses an existing beneficiary; the factory's payee rules apply to the new one.

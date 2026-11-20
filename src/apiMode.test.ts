@@ -3,7 +3,7 @@ import { getAddress, zeroAddress, type Address } from "viem";
 import { readContract } from "viem/actions";
 import { base } from "viem/chains";
 import { launchParamsToJson } from "./abiJson.js";
-import { bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import { requireCapExclusions } from "./addresses.js";
 import type {
   FetchLike,
@@ -290,6 +290,7 @@ function apiClient(
 ) {
   return createLaunchClient({
     chain: "base",
+    suite: 3,
     addresses: SUITE,
     fork: true,
     publicClient: f.fake.publicClient(),
@@ -766,6 +767,7 @@ describe("API mode: market-cap ranges", () => {
     // Each is the launch pure mode plans for the same ranges: the same start tick and the same bands.
     const pure = createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       fork: true,
       publicClient: f.fake.publicClient(),
@@ -1012,5 +1014,32 @@ describe("index", () => {
     );
     await expectCode(c.index.launch("0xnope" as Address), "INVALID_PARAMS");
     expect(zeroAddress).toBeDefined();
+  });
+
+  test("launchpadStats reads the pad on the client's chain", async () => {
+    const f = fixture();
+    const api = fakeApi();
+    const c = apiClient(f, { fetch: api.fetch, url: `${API_URL}/` });
+    // The fake API serves no stats: the call is what this pins.
+    await expectCode(
+      c.index.launchpadStats(3n, { visibility: "listed" }),
+      "API_ERROR",
+    );
+    expect(api.calls[0]!.url.pathname).toBe("/launchpads/base/3/stats");
+    expect(api.calls[0]!.url.searchParams.get("visibility")).toBe("listed");
+  });
+
+  test("all walks the client's chain", async () => {
+    const f = fixture();
+    const api = fakeApi();
+    const c = apiClient(f, { fetch: api.fetch, url: `${API_URL}/` });
+    const seen = [];
+    for await (const l of c.index.all({ launchpad: 3n })) seen.push(l);
+    expect(seen).toEqual([]);
+    expect(Object.fromEntries(api.calls[0]!.url.searchParams)).toEqual({
+      launchpad: "3",
+      chain: "base",
+      limit: "100",
+    });
   });
 });

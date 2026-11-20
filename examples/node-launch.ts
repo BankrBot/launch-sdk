@@ -9,6 +9,9 @@
  *
  * BANKR_PREPARE_KEY must be prepare-scoped (wallet and agent APIs disabled), or Bankr answers
  * API_KEY_OVERPRIVILEGED. In your app, import from "@bankr/launch-sdk" and "@bankr/launch-sdk/server".
+ *
+ * Not available yet: on Bankr's current contracts this SDK version refuses API mode (`PROVIDER_NOT_DEPLOYED`), so
+ * this example runs once a later version ships it. Until then launch in pure mode (`own-launchpad.ts`).
  */
 import { createDecipheriv, pbkdf2Sync, scryptSync } from "node:crypto";
 import { readFileSync } from "node:fs";

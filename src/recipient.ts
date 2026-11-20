@@ -7,12 +7,12 @@ import {
   type Hex,
 } from "viem";
 import { getCode, readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { LaunchChain } from "./chains/index.js";
 import { LaunchRefusedError } from "./errors.js";
 import { PAD_TREASURY_MARKER } from "./launchpad.js";
-import type { LiveSuite } from "./predict.js";
+import type { EarlierLivePointers } from "./predict.js";
 import type { ReadClient } from "./providers/types.js";
 
 const SAFE_ABI = [
@@ -134,7 +134,7 @@ export function suiteContracts(
     | "create3Factory"
   >,
   live: Pick<
-    LiveSuite,
+    EarlierLivePointers,
     | "hook"
     | "ledger"
     | "locker"
@@ -197,7 +197,7 @@ export const RESTRICT_OR_WAIVE =
 
 /** Why a Bankr launch contract is refused as a recipient: the factory's `isSuite` holds every one, and none can claim. */
 const BANKR_LAUNCH_CONTRACT =
-  "A Bankr launch contract (a suite contract, a launched token, its vesting escrow or holder distributor) can never claim fees.";
+  "A Bankr launch contract (the factory, ledger, hook or another of Bankr's own contracts, a launched token, its vesting escrow or holder distributor) can never claim fees.";
 
 /** Why a launch's `quote` is refused as its recipient: the ledger's `InvalidBeneficiary` for a pool's own currency,
  *  which the launch's open-code waiver does not lift. */

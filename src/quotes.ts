@@ -9,7 +9,7 @@ import { readContract } from "viem/actions";
 import {
   bankrLaunchFactoryAbi,
   bankrLaunchpadRegistryAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import type { ChainCapabilities } from "./chains/index.js";
 import { LaunchRefusedError } from "./errors.js";
 import { requireRegisteredPad } from "./launchpad.js";

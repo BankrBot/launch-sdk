@@ -233,7 +233,8 @@ function verifyPrepared(
  * terms; a prepare-scoped key earns `prepared` attribution). The SDK holds the response to its own input and suite,
  * has a third-party pad's `authorizer` sign when Bankr returns the terms unsigned, simulates the launch itself and
  * sets the dev-buy floor (blanked in the signed terms), then sends only calldata it encoded. A caller's `salt` is
- * `INVALID_PARAMS`: the salt is Bankr's. Market-cap ranges are prepared as bands placed from the start tick.
+ * `INVALID_PARAMS`: the salt is Bankr's. So is an `extension`: the endpoint takes none. Market-cap ranges are
+ * prepared as bands placed from the start tick.
  */
 export async function planWithPreparer<C extends LaunchChain>(
   ctx: PlanContext<C>,
@@ -245,6 +246,12 @@ export async function planWithPreparer<C extends LaunchChain>(
     throw new LaunchRefusedError("INVALID_PARAMS", {
       chain,
       detail: "In API mode the salt is Bankr's: omit salt.",
+    });
+  if (input.extension !== undefined)
+    throw new LaunchRefusedError("INVALID_PARAMS", {
+      chain,
+      detail:
+        "Bankr's prepare endpoint takes no extension: launch one in pure mode, on a launchpad other than Bankr's own.",
     });
   if (input.metadata !== undefined && input.metadataUri)
     throw new LaunchRefusedError("INVALID_PARAMS", {

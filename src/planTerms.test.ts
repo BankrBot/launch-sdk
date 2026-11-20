@@ -46,6 +46,7 @@ const client = (
   createLaunchClient({
     chain: "base",
     publicClient: f.fake.publicClient(),
+    suite: 3,
     addresses: SUITE,
     fork: true,
     ...o,

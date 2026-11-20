@@ -34,9 +34,14 @@ import {
   erc20TokenDeployerAbi,
   holderRewardsDeployerAbi,
   holderRewardsDistributorAbi,
+} from "../abis/suite3.js";
+import {
+  bankrLaunchFactoryAbi as suite4FactoryAbi,
+  bankrLaunchSettingsAbi as suite4SettingsAbi,
 } from "../abis/generated.js";
 import type { Erc20Slots } from "../data/erc20Slots.js";
-import { HOOK_EXTENSION_ERRORS } from "../simulate.js";
+import { HOOK_EXTENSION_ERRORS, PRESET_ERRORS } from "../unvendoredErrors.js";
+import { SUITE4_HOOK_ERRORS } from "../suite4/revert.js";
 
 /** Thrown by a handler to revert the call with a named suite error, or `Error(string)` with `new Revert("Error", [reason])`. */
 export class Revert extends Error {
@@ -96,6 +101,9 @@ interface FakeContract {
   fns: Record<string, Handler | unknown>;
 }
 
+const entryKey = (e: Abi[number]): string =>
+  `${e.type}:${"name" in e ? e.name : ""}`;
+
 export interface RpcLog {
   address: Address;
   topics: [Hex, ...Hex[]];
@@ -132,6 +140,11 @@ const REVERT_ABI: Abi = [
   ...holderRewardsDistributorAbi,
   ...bankrLaunchTokenAbi,
   ...HOOK_EXTENSION_ERRORS,
+  ...PRESET_ERRORS,
+  // Suite 4's own errors, after suite 3's: a name both suites raise encodes as before.
+  ...suite4SettingsAbi,
+  ...suite4FactoryAbi,
+  ...SUITE4_HOOK_ERRORS,
 ].filter((item) => item.type === "error");
 
 const lower = (a: string): string => a.toLowerCase();
@@ -185,6 +198,10 @@ export class FakeChain {
   blockNumber = 100n;
   /** The head block's timestamp (`eth_getBlockByNumber`); null follows the wall clock. */
   timestamp: bigint | null = null;
+  /** Each block's timestamp by number, the head's included, when a test gives the chain a history. */
+  blockTime: ((blockNumber: bigint) => bigint) | null = null;
+  /** The number of every block `eth_getBlockByNumber` served. */
+  readonly blockRequests: bigint[] = [];
   /** Like an RPC without `eth_call` state overrides: any call carrying one fails with an RPC error. */
   rejectsStateOverrides = false;
   /** Logs (and status) the receipt of a sent transaction carries. */
@@ -198,8 +215,15 @@ export class FakeChain {
 
   contract(address: Address, abi: Abi, fns: Record<string, unknown>): void {
     const existing = this.contracts.get(lower(address));
-    if (existing) Object.assign(existing.fns, fns);
-    else this.contracts.set(lower(address), { abi, fns: { ...fns } });
+    if (existing) {
+      Object.assign(existing.fns, fns);
+      // A later registration adds what the first did not name; an entry it named keeps its first encoding.
+      const named = new Set(existing.abi.map(entryKey));
+      existing.abi = [
+        ...existing.abi,
+        ...abi.filter((e) => !named.has(entryKey(e))),
+      ];
+    } else this.contracts.set(lower(address), { abi, fns: { ...fns } });
     if (!this.code.has(lower(address))) this.code.set(lower(address), "0x60");
   }
 
@@ -532,15 +556,23 @@ export class FakeChain {
         return numberToHex(this.chain.id);
       case "eth_blockNumber":
         return numberToHex(this.blockNumber);
-      case "eth_getBlockByNumber":
+      case "eth_getBlockByNumber": {
+        const asked =
+          typeof p[0] === "string" && p[0].startsWith("0x")
+            ? hexToBigInt(p[0] as Hex)
+            : this.blockNumber;
+        this.blockRequests.push(asked);
         return {
-          number: numberToHex(this.blockNumber),
+          number: numberToHex(asked),
           hash: keccak256(toHex("block")),
           timestamp: numberToHex(
-            this.timestamp ?? BigInt(Math.floor(Date.now() / 1_000)),
+            this.blockTime?.(asked) ??
+              this.timestamp ??
+              BigInt(Math.floor(Date.now() / 1_000)),
           ),
           transactions: [],
         };
+      }
       case "eth_call":
       case "eth_estimateGas": {
         const tx = p[0] as { to: Address; data: Hex; from?: Address };

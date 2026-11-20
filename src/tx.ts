@@ -8,7 +8,8 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrLaunchFactoryAbi as suite4FactoryAbi } from "./abis/generated.js";
+import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import type { ChainCapabilities } from "./chains/index.js";
 import { LaunchExecutionError, LaunchRefusedError } from "./errors.js";
 import {
@@ -65,13 +66,54 @@ export function builderCodeSuffix(o: {
 const GAS_HEADROOM_NUM = 12n;
 const GAS_HEADROOM_DEN = 10n;
 
-/** The lowest gas limit the heaviest launch the factory accepts lands at, without a builder allocation: measured on
- *  Base with the chain's seven cap exclusions and eight liquidity bands (13,640,185 on a built-in curve). */
-const LAUNCH_HEAVIEST_GAS = 13_684_692n;
+/** The lowest gas limit the heaviest launch measured on Bankr's pad (id 0, the default) lands at, without a builder
+ *  allocation: on Base with its seven cap exclusions, seven band edges crossed by the dev buy, as a quote's first
+ *  launch. Not a bound for every pad: more pad payees, a decay split or a longer link each weigh more. */
+const LAUNCH_HEAVIEST_GAS = 15_174_754n;
 
-/** What one builder allocation adds to that landing limit (13,684,692 without one). The factory caps their number by
- *  gas alone: 23 fit Base's 16,777,216, and the 24th does not. */
-export const LAUNCH_ALLOCATION_GAS = 131_150n;
+/** What one builder allocation adds to that landing limit (15,174,754 without one). The factory caps their number by
+ *  gas alone: 12 fit Base's 16,777,216 on Bankr's pad, and the 13th does not. */
+export const LAUNCH_ALLOCATION_GAS = 129_400n;
+
+/** What each launchpad payee past Bankr's two adds to the landing limit, on a steady and a decay share: forge's
+ *  four-payee pin lands 9 allocations on Base as a quote's first launch, and 10 do not. A fit between that pin and
+ *  Bankr's pad's figure, not a payee's measured cost. */
+export const LAUNCH_PAD_PAYEE_GAS = 184_000n;
+
+/** What a byte of metadata link past 2,048 adds to it (forge measures about 724 for a 4,096-byte link). */
+export const LAUNCH_LINK_BYTE_GAS = 730n;
+
+/** What the fallback's base is measured with: Bankr's two payees and a 2,048-byte link. */
+const BASE_PAD_PAYEES = 2;
+const BASE_LINK_BYTES = 2_048;
+
+/** What makes a suite 4 launch weigh more than the measured one: its pad's payees and its link's length. */
+export interface LaunchGasWeight {
+  /** The launchpad's payee count (`padConfig(id).terms.payees.length`). */
+  padPayees: number;
+  /** The metadata link's length in bytes. */
+  linkBytes: number;
+}
+
+/**
+ * The gas limit that stands in for a launch a node gave no estimate for: the heaviest launch measured on Bankr's pad,
+ * each builder allocation, and on suite 4 what its own pad adds (payees past two, a link past 2,048 bytes). Never
+ * under the measured figure, so a lighter pad is held to Bankr's count, which lands there too.
+ */
+export function launchGasFallback(
+  allocations: number,
+  weight?: LaunchGasWeight,
+): bigint {
+  const more = (n: number, base: number) => BigInt(Math.max(n - base, 0));
+  return (
+    LAUNCH_HEAVIEST_GAS +
+    BigInt(allocations) * LAUNCH_ALLOCATION_GAS +
+    (weight
+      ? more(weight.padPayees, BASE_PAD_PAYEES) * LAUNCH_PAD_PAYEE_GAS +
+        more(weight.linkBytes, BASE_LINK_BYTES) * LAUNCH_LINK_BYTE_GAS
+      : 0n)
+  );
+}
 
 const grouped = (n: bigint): string => n.toLocaleString("en-US");
 
@@ -85,15 +127,13 @@ export function clampLaunchGas(
   estimate: bigint | null,
   devBuy = false,
   allocations = 0,
+  weight?: LaunchGasWeight,
 ): bigint {
   const cap = chain.maxTxGas;
   // No estimate can mean a launch over the node's cap, which it refuses to estimate, or only an RPC that gives
-  // none: the heaviest launch stands in for it as the worst case.
+  // none: the heaviest launch stands in for it as the worst case, sized from the launch's own pad on suite 4.
   const need =
-    estimate ??
-    (allocations > 0
-      ? LAUNCH_HEAVIEST_GAS + BigInt(allocations) * LAUNCH_ALLOCATION_GAS
-      : 0n);
+    estimate ?? (allocations > 0 ? launchGasFallback(allocations, weight) : 0n);
   if (need > cap) {
     const cause = { gasEstimate: estimate, maxTxGas: cap };
     if (allocations === 0)
@@ -111,7 +151,7 @@ export function clampLaunchGas(
       cause,
       detail:
         estimate === null
-          ? `The node gave no gas estimate for this launch, so the heaviest launch the factory accepts stands in for it: a gas limit of about ${grouped(need)} with its ${allocations} builder allocations, and this chain takes at most ${grouped(cap)} in one transaction. ${adds} at that figure ${fit} of the ${allocations} fit. A lighter launch can fit as it is: set the plan's gasEstimate to your own estimate, or pass buildLaunchTx your own gas limit.`
+          ? `The node gave no gas estimate for this launch, so the heaviest launch on Bankr's launchpad${weight && launchGasFallback(0, weight) > LAUNCH_HEAVIEST_GAS ? ", with what this launchpad's payees and this metadata link add," : ""} stands in for it: a gas limit of about ${grouped(need)} with its ${allocations} builder allocations, and this chain takes at most ${grouped(cap)} in one transaction. ${adds} at that figure ${fit} of the ${allocations} fit. A lighter launch can fit as it is: set the plan's gasEstimate to your own estimate, or pass buildLaunchTx your own gas limit.`
           : `This launch needs about ${grouped(need)} gas, and this chain takes at most ${grouped(cap)} in one transaction. ${adds} ${fit} of its ${allocations} builder allocations fit.`,
     });
   }
@@ -127,14 +167,23 @@ export function clampLaunchGas(
 
 /** `factory.launch(params)` calldata, with the builder-code suffix when there is one. */
 export function encodeLaunchCalldata(
-  params: LaunchParams,
+  params: LaunchParams & { options?: Hex },
   dataSuffix?: Hex,
 ): Hex {
-  const data = encodeFunctionData({
-    abi: bankrLaunchFactoryAbi,
-    functionName: "launch",
-    args: [params],
-  });
+  // A suite 4 launch's tuple ends with `options`; suite 3's factory takes none.
+  const { options } = params;
+  const data =
+    options === undefined
+      ? encodeFunctionData({
+          abi: bankrLaunchFactoryAbi,
+          functionName: "launch",
+          args: [params],
+        })
+      : encodeFunctionData({
+          abi: suite4FactoryAbi,
+          functionName: "launch",
+          args: [{ ...params, options }],
+        });
   return dataSuffix ? concatHex([data, dataSuffix]) : data;
 }
 
@@ -170,6 +219,7 @@ export function buildLaunchTx(
       plan.gasEstimate,
       hasDevBuy(plan),
       plan.params.extraAllocations.length,
+      plan.resolved?.gasWeight,
     );
     gas = own === undefined ? clamped : own > cap ? cap : own;
   }

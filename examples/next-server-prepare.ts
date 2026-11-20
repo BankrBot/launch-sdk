@@ -6,6 +6,9 @@
  *
  * Env: BANKR_PREPARE_KEY (wallet and agent APIs disabled), SESSION_SECRET (your session cookie's HMAC key).
  * In your app, import from "@bankr/launch-sdk/server".
+ *
+ * Not available yet: on Bankr's current contracts this SDK version refuses API mode (`PROVIDER_NOT_DEPLOYED`), so
+ * the browser half runs once a later version ships it. Until then launch in pure mode (`own-launchpad.ts`).
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createPrepareHandler } from "../src/server.js";

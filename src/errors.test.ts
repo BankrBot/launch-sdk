@@ -18,6 +18,7 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "RPC_REQUIRED",
   "WALLET_REQUIRED",
   "API_KEY_IN_BROWSER",
+  "INDEX_UNAVAILABLE",
   "PAUSED",
   "LAUNCHPAD_GATED",
   "UNKNOWN_LAUNCHPAD",
@@ -26,6 +27,8 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "PRICE_ATTESTATION_REQUIRED",
   "QUOTE_NOT_ALLOWED",
   "CURVE_NOT_ALLOWED",
+  "EXTENSION_NOT_ALLOWED",
+  "EXTENSION_OUT_OF_BOUNDS",
   "DEV_BUY_UNAVAILABLE",
   "INVALID_PARAMS",
   "INVALID_PERCENT",
@@ -33,6 +36,13 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "SPLIT_OUT_OF_BOUNDS",
   "VESTING_OUT_OF_BOUNDS",
   "BUILDER_LANE_NOT_ALLOWED",
+  // Suite 4: the launch check's refusals carry their own arguments in `detail`.
+  "OUTSIDE_LAUNCHPAD_RANGE",
+  "NOT_ALLOWED_BY_LAUNCHPAD",
+  "HARD_BOUND",
+  "OPTION_FOR_FEATURE_OFF",
+  "CLAIM_OPERATOR_REQUIRED",
+  "LAUNCH_REFUSED",
   "CREATOR_CAP_EXCEEDED",
   "LAUNCHER_IS_FORWARDER",
   "LAUNCHER_MISMATCH",
@@ -43,6 +53,7 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "NO_VESTING",
   "NOT_METADATA_ADMIN",
   "INVALID_LAUNCHPAD_CONFIG",
+  "INVALID_SETTINGS",
   "SIMULATION_REVERTED",
   "POOL_ALREADY_INITIALIZED",
   "START_TICK_CHANGED",
@@ -50,6 +61,7 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "VANITY_UNAVAILABLE",
   "AUTHORIZATION_INVALID",
   "LAUNCHPAD_TERMS_CHANGED",
+  "TERMS_CHANGED",
   "STALE_POLICY",
   "RECEIPT_MISSING_LAUNCH",
   "RECEIPT_MISSING_LAUNCHPAD",
@@ -87,6 +99,12 @@ describe("LaunchSdkError hierarchy", () => {
       ).toHaveLength(1);
       expect(err.name).toBe(err.constructor.name);
     }
+  });
+
+  // Which contract set a client is on is the SDK's business: no message asks the reader to know of one.
+  test("no code's message names a suite", () => {
+    for (const code of LAUNCH_SDK_ERROR_CODES)
+      expect(launchSdkError(code).message, code).not.toMatch(/suite/i);
   });
 
   test("codes land in the category the plan's refusal model implies", () => {
