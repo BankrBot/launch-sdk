@@ -25,7 +25,7 @@ const SAFE_ABI = [
   },
 ] as const;
 
-/** BnkrHolderLeg.references: the price references in force, which a BNKR swap replaces (founder 11-05). */
+/** BnkrHolderLeg.references: the price references in force, which a BNKR swap replaces. */
 export const HOLDER_LEG_REFERENCES_ABI = [
   {
     type: "function",
@@ -120,7 +120,7 @@ async function isSafe(client: ReadClient, address: Address): Promise<boolean> {
 }
 
 /** Every launch contract and the pool manager: the factory's `_isSuite`, which none of a launch's payees may be, and
- *  the contracts' CREATE3 factory, which `isSuite` does not hold and could never collect either (NS-18 FACTORY-3).
+ *  the contracts' CREATE3 factory, which `isSuite` does not hold and could never collect either.
  *  `references` is the holder leg's, read live (readLegReferences). */
 export function bankrContracts(
   a: Pick<
@@ -164,14 +164,14 @@ export function bankrContracts(
   ].filter((x) => !isAddressEqual(x, zeroAddress));
 }
 
-/** Why an open contract payee is refused (round 9 RSEC-1). */
+/** Why an open contract payee is refused. */
 export const RESTRICT_CONTRACT_FIRST =
   "The contract lets anyone claim for it: restrict it first (it calls the fee ledger's setClaimRestricted(true), ideally in its constructor), since a stranger's settle moves its share where collectFees never returns it.";
 
 /**
  * Whether `account` may be named as a payee whatever it does with its share: an EOA, an EIP-7702 wallet, a Safe, or a
- * contract that turned "anyone can claim" off on `ledger` (Q9). An open contract that accounts by `collectFees`'
- * return value loses its share to a stranger's `settle`, which lands it in a pull balance instead (round 9 RSEC-1).
+ * contract that turned "anyone can claim" off on `ledger`. An open contract that accounts by `collectFees`'
+ * return value loses its share to a stranger's `settle`, which lands it in a pull balance instead.
  */
 export async function namedPayeeOk(
   client: ReadClient,
@@ -208,7 +208,7 @@ const QUOTE_TOKEN_RECIPIENT =
  * The claim-capability refusal: `FEE_RECIPIENT_CANNOT_CLAIM` for a recipient the factory refuses (the sentinel
  * family, any of `deadEnds`, anything its `isSuite` holds) and for a contract that may never call the ledger's
  * `collectFees` (a passive split wallet strands its share). An EOA, an EIP-7702 wallet and a Safe can claim;
- * `allowContract` admits a contract only once it restricted its claim policy on `ledger` (round 9 RSEC-1).
+ * `allowContract` admits a contract only once it restricted its claim policy on `ledger`.
  * `launch`: the factory also holds a launch's own recipients, a Safe included, to restricted claims unless `allowOpen`.
  */
 export async function refuseUnclaimableRecipient(

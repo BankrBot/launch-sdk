@@ -15,6 +15,7 @@ import { curveMarketCaps } from "./curveMarketCaps.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import * as sdk from "./index.js";
 import type { LaunchInput, LaunchParams } from "./providers/types.js";
+import { launchPinsOf } from "./launch/options.js";
 import { KNOB } from "./launch/settings.js";
 import { encodeBuilderCodeSuffix } from "./tx.js";
 import { FakeChain, Revert } from "./__internal__/fakeRpc.js";
@@ -518,6 +519,26 @@ describe("launch", () => {
     expect(f.fake.sent).toHaveLength(1);
   });
 
+  test("re-plans once when the terms move between plan and send, and the retry carries its own pins", async () => {
+    const f = fixture();
+    const c = launchClient(f);
+    const first = launchPinsOf((await c.plan(input(f))).params.options);
+    let moved = false;
+    onLaunch(f, (p, call) => {
+      if (!moved && launchPinsOf(p.options).expectedToken && call >= 2) {
+        moved = true;
+        throw new Revert("TermsChanged", [`0x${"11".repeat(32)}`]);
+      }
+    });
+    await c.launch(input(f));
+    expect(moved).toBe(true);
+    expect(f.fake.sent).toHaveLength(1);
+    const sent = launchPinsOf(sentLaunch(f, f.fake.sent[0]!)!.options);
+    expect(sent.expectedTermsHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(sent.expectedToken).not.toBeNull();
+    expect(sent.expectedToken).not.toBe(first.expectedToken);
+  });
+
   test("re-salts once when the predicted token is taken before sending", async () => {
     const f = fixture();
     const c = launchClient(f);
@@ -754,7 +775,7 @@ describe("parseLaunchReceipt", () => {
 
 describe("public surface", () => {
   // Which contracts a client is on is the SDK's business: a caller types no name that says so.
-  test("no export, client method or plan field a caller types carries the word suite", () => {
+  test("no export, client method or plan field a caller types carries the old contract-set name", () => {
     expect(Object.keys(sdk).filter((k) => /suite/i.test(k))).toEqual([]);
     const client = createLaunchClient({ chain: "base" });
     const reach = [

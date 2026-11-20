@@ -89,12 +89,12 @@ export interface ClaimAllOptions {
   maxGasPerTx?: bigint;
   /**
    * Also withdraw currencies the factory does not list that are not launched tokens either (any-quote pairing), last
-   * and in withdraws of their own. Off by default (round 9 F4): anyone can make an account owe in a gas-burning one, as
+   * and in withdraws of their own. Off by default: anyone can make an account owe in a gas-burning one, as
    * a launch's fee recipient or a swap's referrer, and its payout burns up to 1,000,000 gas every claim-all.
    */
   includeUnlisted?: boolean;
   /**
-   * Who sends the transactions; default `account`. Another wallet pushes the account its fees (decision 5): `settle`
+   * Who sends the transactions; default `account`. Another wallet pushes the account its fees: `settle`
    * for it, then `withdrawFor`, paid only to `account`. `CLAIM_NOT_ALLOWED` while the account's claim policy bars it.
    */
   sender?: Address;
@@ -535,7 +535,7 @@ export function createFees(ctx: ReadContext, index: BankrApi): LaunchFees {
       // Naming yourself changes nothing (an account always claims for itself), so it is refused as a mistake.
       if (isAddressEqual(who, op) || typeof allowed !== "boolean")
         refuse("INVALID_PARAMS");
-      // A public forwarder is msg.sender for every caller: naming it would let anyone claim (round 9 FF2/RSEC-2).
+      // A public forwarder is msg.sender for every caller: naming it would let anyone claim.
       if (allowed && publicForwarders().some((f) => isAddressEqual(f, op)))
         throw new LaunchRefusedError("INVALID_PARAMS", {
           chain,

@@ -413,7 +413,7 @@ function installReaders(f: LaunchFixture, launches: Map<string, FakeLaunch>) {
     deployment.launchpadRegistry,
     bankrLaunchpadRegistryAbi as Abi,
     {
-      // Batch F: a token the suite never launched reverts UnknownLaunch, never reads as id 0.
+      // A token the contracts never launched reverts UnknownLaunch, never reads as id 0.
       launchpadOf: ([t]: readonly unknown[]) => {
         const l = get(t);
         if (!l) throw new Revert("UnknownLaunch", []);
@@ -543,7 +543,7 @@ function installReaders(f: LaunchFixture, launches: Map<string, FakeLaunch>) {
         lastCompoundTs: 0,
         creatorLp: true,
         refFrac: 0,
-        buybackAt: 0, // no buyback share: no in-swap fill (decision 3)
+        buybackAt: 0, // no buyback share: no in-swap fill
         openTick: 0,
         heldQuote: 0n,
         heldToken: 0n,

@@ -128,7 +128,7 @@ describe("fees", () => {
       client.fees.buildSetFeeRecipient(l.token, LAUNCHER, OTHER),
       "FEE_RECIPIENT_CANNOT_CLAIM",
     );
-    // Round 9 RSEC-1: allowContractFeeRecipient admits a contract only once it restricted its claim policy.
+    // allowContractFeeRecipient admits a contract only once it restricted its claim policy.
     const allow = { allowContractFeeRecipient: true };
     await expectCode(
       client.fees.buildSetFeeRecipient(l.token, LAUNCHER, OTHER, allow),
@@ -157,7 +157,7 @@ describe("fees", () => {
       client.fees.buildSetFeeRecipient(l.token, OTHER, LAUNCHER),
       "NOT_A_BENEFICIARY",
     );
-    // The suite's CREATE3 factory could never collect, and the factory's isSuite does not hold it.
+    // The contracts' CREATE3 factory could never collect, and the factory's isSuite does not hold it.
     f.fake.setCode(SUITE.create3Factory, "0x6080");
     f.fake.contract(SUITE.ledger, bankrFeeLedgerAbi, { claimRestricted: true });
     await expectCode(
@@ -217,7 +217,7 @@ describe("fees", () => {
     expect((thrown as { detail?: string }).detail).toContain("never merges");
   });
 
-  // Live-fork finding 11-07: another launch's token got the open-contract advice, though no launch contract can
+  // Another launch's token got the open-contract advice, though no launch contract can
   // ever restrict itself or claim (the factory's isSuite refuses it).
   test("a fee recipient that is a Bankr launch contract is refused as one, not told to restrict itself", async () => {
     const { f, client } = postLaunchFixture();
@@ -296,7 +296,7 @@ describe("fees", () => {
       functionName: "setClaimOperator",
       args: [LAUNCHER, true],
     });
-    // A public forwarder (Multicall3, Multicall2, Multicall) calls for anyone: naming one is naming everyone (FF2/RSEC-2).
+    // A public forwarder (Multicall3, Multicall2, Multicall) calls for anyone: naming one is naming everyone.
     for (const bad of [
       OTHER,
       zeroAddress,
@@ -458,7 +458,7 @@ describe("claim all", () => {
     expect(new Set(ids).size).toBe(1_000);
   });
 
-  test("buildClaimAll with any-quote pairing (round 9 ISO-4, F4): unlisted currencies only on includeUnlisted, then in a trailing withdraw of their own", async () => {
+  test("buildClaimAll with any-quote pairing: unlisted currencies only on includeUnlisted, then in a trailing withdraw of their own", async () => {
     const MEME = getAddress(pad("0x3e3e", { size: 20 }));
     const BOMB = getAddress(pad("0x3e3f", { size: 20 }));
     const answer: { body?: unknown } = {};
@@ -495,7 +495,7 @@ describe("claim all", () => {
     expect(all.plan.unlisted).toEqual([]);
   });
 
-  // Live-fork finding 11-07: decision 5 lets anyone push an open account its fees, but the SDK built only the
+  // The claim policy lets anyone push an open account its fees, but the SDK built only the
   // account's own withdraw, so a third party could push only with raw calldata.
   test("buildClaimAll for another account: settle(ids, [account]) then withdrawFor(account, quotes), all from the sender", async () => {
     const SENDER = getAddress("0x3333333333333333333333333333333333333333");
@@ -547,7 +547,7 @@ describe("claim all", () => {
       client.fees.buildClaimAll(OTHER, { sender: SENDER }),
       "CLAIM_NOT_ALLOWED",
     );
-    // A puller (the hook's auto-LP, a protocol sink, a suite contract) is never pushed, whatever its policy.
+    // A puller (the hook's auto-LP, a protocol sink, a launch contract) is never pushed, whatever its policy.
     f.set("ledger", "mayClaimFor", true);
     f.set("ledger", "isProtocolSink", true);
     await expectCode(

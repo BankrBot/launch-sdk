@@ -52,7 +52,7 @@ export const BPS = 10_000n;
 export const WAD = 10n ** 18n;
 export const WAD_PER_BPS = 10n ** 14n;
 
-/** SettingsCold's compiled floors and tops (B4, B7, B14, B16 to B18). */
+/** SettingsCold's compiled floors and tops. */
 export const SETTINGS_FLOORS = Object.freeze({
   minCtoNotice: 3_600,
   minTokenActivationDivisor: 10_000,
@@ -106,7 +106,7 @@ export function guardTermsProblem(g: GuardTerms): string | null {
   return null;
 }
 
-/** B2: Bankr's slice beside the referrer's, and its floor inside what the referrer leaves of the fee. */
+/** Bankr's slice beside the referrer's, and its floor inside what the referrer leaves of the fee. */
 export const cutFits = (
   t: Pick<ProtocolTerms, "bankrFeeBps" | "bankrMinPips">,
   steadyPips: bigint,
@@ -288,7 +288,7 @@ export function newPayeesProblem(
     : "No launch on the pad would go through with these payees: the treasury marker's share must be under the whole, and the other shares, rescaled over what the marker leaves and rounded up, must fit the remainder.";
 }
 
-/** `_setPresetLimits`' own bound (B14): an allowed preset's anchor floor sits inside Raffle Run's range. */
+/** `_setPresetLimits`' own bound: an allowed preset's anchor floor sits inside Raffle Run's range. */
 export function presetLimitsProblem(l: PresetLimits): string | null {
   const f = SETTINGS_FLOORS;
   return l.allowed &&

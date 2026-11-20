@@ -245,7 +245,7 @@ describe("createBankrApi: the launch index", () => {
     expect(calls[0]!.url.href).toBe(
       `https://api.bankr.bot/bankr-v4/accounts/${TOKEN}/fees?chainId=8453`,
     );
-    // A suite's client names its own ledger: on a chain with two suites the answer is that ledger's alone.
+    // A client names its own ledger: on a chain with two deployments the answer is that ledger's alone.
     await createBankrApi({ fetch }).accountFees("base", TOKEN, LEDGER);
     expect(calls[1]!.url.href).toBe(
       `https://api.bankr.bot/bankr-v4/accounts/${TOKEN}/fees?chainId=8453&ledger=${LEDGER}`,

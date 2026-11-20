@@ -127,7 +127,7 @@ export interface LaunchHolders {
     options?: { sender?: Address },
   ): Promise<UnsignedTx>;
   /**
-   * Whether the launch's holders' pile is due (Q4): the quote's conversion to BNKR is open, or the pile forwards in
+   * Whether the launch's holders' pile is due: the quote's conversion to BNKR is open, or the pile forwards in
    * quote. `options.now` is the chain's time in Unix seconds (default the latest block's). The pile is read at the
    * holder leg of the coin's own launch. Only a swap whose hookData asks for the wake and that carries its gas runs
    * it; {@link LaunchHolders.buildConvert} runs it for anyone.

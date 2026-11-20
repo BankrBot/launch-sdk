@@ -37,10 +37,8 @@ const MAX_REPLANS = 2;
 export interface ResolvedLaunch {
   /** The terms the coin will freeze, as the chain's launch check resolved them: fees, shares, cap, clocks, takeover. */
   terms: CoinTerms;
-  /** The hash of `terms`; a pinned launch reverts where another is in force when it lands. */
+  /** The hash of `terms`. The launch is pinned to it and to its token: it reverts where either differs when it lands. */
   resolvedHash: Hex;
-  /** Whether the launch carries both pins (`pin`, default true). */
-  pinned: boolean;
   /** The launchpad's payees the launch is held to (`operatorPayeesHash`). */
   padTerms: PadTerms;
   /** What sizes the gas limit that stands in when a node gives no estimate. */
@@ -190,7 +188,6 @@ export async function planLaunch<C extends LaunchChain>(
       resolved: {
         terms: t,
         resolvedHash: resolved.resolvedHash,
-        pinned: n.choices.pin,
         padTerms: resolved.padTerms,
         gasWeight,
       },

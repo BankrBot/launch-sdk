@@ -148,7 +148,7 @@ describe("fees owed and claim all read Bankr's index alone", () => {
     expect(f.fake.calls).toEqual([]);
   });
 
-  test("audit REG-1: a settled share's balance on a non-major quote, as the index lists it, is withdrawn", async () => {
+  test("a settled share's balance on a non-major quote, as the index lists it, is withdrawn", async () => {
     const { client } = apiFixture(() => ({
       body: accountBody(
         LAUNCHER,
@@ -167,7 +167,7 @@ describe("fees owed and claim all read Bankr's index alone", () => {
     ]);
   });
 
-  test("round 9 ISO-4 / ISO-5: a referral slice in an unlisted quote is left by default and paid last on includeUnlisted", async () => {
+  test("a referral slice in an unlisted quote is left by default and paid last on includeUnlisted", async () => {
     const { client } = apiFixture(() => ({
       body: accountBody(REF, SUITE.ledger, [], [{ quote: MEME, amount: "7" }]),
     }));
@@ -192,7 +192,7 @@ describe("fees owed and claim all read Bankr's index alone", () => {
   });
 });
 
-describe("two ledgers live on one chain: a client reads and claims its own (A2's review, 1)", () => {
+describe("two ledgers live on one chain: a client reads and claims its own", () => {
   test("a wallet owed on a coin of each: each client shows and plans its own ledger's, and the two claim-alls pay each amount once", async () => {
     const coinA = apiShare("ledger-a", 105n);
     const coinB = apiShare("ledger-b", 970_000n);
@@ -277,7 +277,7 @@ describe("two ledgers live on one chain: a client reads and claims its own (A2's
   }
 });
 
-// An account answer names the ledger it is for (the API has since #8354): one that names none is no answer.
+// An account answer names the ledger it is for (the API does the same): one that names none is no answer.
 describe("an answer that names no ledger is refused", () => {
   test("a default client reads no amount from it: API_ERROR", async () => {
     const { fetch, asked } = accountRoute(() => ({

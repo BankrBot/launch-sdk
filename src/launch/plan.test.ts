@@ -77,7 +77,7 @@ describe("a launch on a launchpad of your own", () => {
   test("with nothing set it freezes the pad's defaults, pinned to those terms and to its token", async () => {
     const { client, input } = fixture();
     const plan = await client.plan(input());
-    const { terms, resolvedHash, pinned } = plan.resolved!;
+    const { terms, resolvedHash } = plan.resolved!;
     // The template a new pad copies: a 0.05 % fee, 100 B supply, a 2 % wallet cap for a day, 15 % vested.
     expect(terms.pool.buy.steadyPips).toBe(500);
     expect(terms.totalSupply).toBe(100_000_000_000n * 10n ** 18n);
@@ -92,7 +92,6 @@ describe("a launch on a launchpad of your own", () => {
     ]);
     // A pad other than Bankr's starts with takeover off: nobody can take its coins over.
     expect(terms.takeover).toBe(false);
-    expect(pinned).toBe(true);
     expect(launchPinsOf(plan.params.options!)).toEqual({
       expectedTermsHash: resolvedHash,
       expectedToken: plan.predictedToken,

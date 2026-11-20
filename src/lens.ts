@@ -185,7 +185,7 @@ export interface LaunchInfo {
    * that equal a built-in curve's read as that built-in; a launch's receipt carries the word the launch named.
    */
   curve: LaunchCurve;
-  /** Decision 3: the Unix second from which a swap may run the pool's next in-swap buyback fill; null without a buyback
+  /** The Unix second from which a swap may run the pool's next in-swap buyback fill; null without a buyback
    *  share. A swap at or after it with the fill's gas free fills once, then this moves an interval on (a minute on a
    *  refusal). */
   buybackAt: number | null;

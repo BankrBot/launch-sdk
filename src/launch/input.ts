@@ -28,7 +28,6 @@ export interface LaunchChoices {
   /** The launch's own exemptions; undefined: the chain's settlers, where the launch has a cap and the pad allows them. */
   capExclusions: readonly Address[] | undefined;
   feeCeilingPips: number | undefined;
-  pin: boolean;
   claimOperator: Address | undefined;
 }
 
@@ -208,8 +207,6 @@ export function normalizeChoices(
     !isInt(input.feeCeilingPips, 0, 999_999)
   )
     invalid("feeCeilingPips must be whole pips, under 100%.");
-  if (input.pin !== undefined && typeof input.pin !== "boolean")
-    invalid("pin must be true or false.");
 
   return {
     supply: input.supply,
@@ -235,7 +232,6 @@ export function normalizeChoices(
             getAddress(address(a, `capExclusions[${i}]`)),
           ),
     feeCeilingPips: input.feeCeilingPips,
-    pin: input.pin !== false,
     claimOperator:
       input.claimOperator === undefined
         ? undefined

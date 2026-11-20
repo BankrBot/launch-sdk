@@ -20,7 +20,7 @@ const rows = (...r: [number, number][]): CurveBand[] =>
 const word = (head: string) => BigInt(`0x${head.padEnd(64, "0")}`);
 
 describe("a launch's own bands as one word", () => {
-  // The suite's design note, 2.1: the words forge launches with.
+  // The words forge launches with.
   const NOTE: [string, CurveBand[], string][] = [
     [
       "runner_v1's own rows",

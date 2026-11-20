@@ -225,7 +225,7 @@ describe("fees on the latest contracts", () => {
     };
     const all = await client.fees.buildClaimAll(OTHER);
     expect(urls[0]!.searchParams.get("ledger")).toBe(s4.deployment.ledger);
-    // The suite's quote is listed by its settings row; MEME has none and is left for includeUnlisted.
+    // The deployment's quote is listed by its settings row; MEME has none and is left for includeUnlisted.
     expect(all.plan.unlisted).toEqual([{ quote: MEME, amount: 900n }]);
     expect(all.txs.map((t) => ledgerCall(t.data).args![1])).toEqual([
       [s4.quote],

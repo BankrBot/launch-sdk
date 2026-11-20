@@ -24,7 +24,7 @@ export const EXTENSION_PRESET_WORDS: Readonly<Record<PresetKey, number>> = {
   raffle_run: 6,
 };
 
-/** B14's three compiled figures: Raffle Run's anchor is six hours to a year, its buyback minimum at least 2 units. */
+/** Three compiled figures: Raffle Run's anchor is six hours to a year, its buyback minimum at least 2 units. */
 export const PRESET_MIN_ANCHOR_TAU_SECS = 21_600;
 export const PRESET_MAX_ANCHOR_TAU_SECS = 31_536_000;
 export const PRESET_MIN_DUST_FLOOR = 2n;

@@ -213,13 +213,13 @@ describe("holders", () => {
         ).data,
       ).functionName,
     ).toBe("claimForMany");
-    // Decision 1: holder rewards accrue in every swap and a claim pulls them, so there is no keeper call to build.
+    // Holder rewards accrue in every swap and a claim pulls them, so there is no keeper call to build.
     expect("buildDistribute" in client.holders).toBe(false);
-    // Q9: the distributor has no operator surface; the fee ledger's one policy covers it (client.fees).
+    // The distributor has no operator surface; the fee ledger's one policy covers it (client.fees).
     expect("buildSetClaimOperator" in client.holders).toBe(false);
   });
 
-  test("HOLDER_GAS models claim(), claimFor and each further claimForMany account, the lazy pull included (R8-GAS-4)", () => {
+  test("HOLDER_GAS models claim(), claimFor and each further claimForMany account, the lazy pull included", () => {
     expect(HOLDER_GAS).toEqual({
       claim: 1_750_000n,
       claimFor: 2_450_000n,
@@ -281,7 +281,7 @@ describe("holders", () => {
     }
   });
 
-  test("buildClaimAll: an EOA's coins with rewards, claimFor(account) batched through Multicall3, 14 a transaction in 15M (R8-GAS-4)", async () => {
+  test("buildClaimAll: an EOA's coins with rewards, claimFor(account) batched through Multicall3, 14 a transaction in 15M", async () => {
     const { client, launches } = coins(30, 26);
     launches[3]!.excluded.add(OTHER.toLowerCase());
     const all = await client.holders.buildClaimAll(
@@ -328,7 +328,7 @@ describe("holders", () => {
     );
   });
 
-  test("buildClaimAll: an EOA or 7702 wallet whose claim policy refuses Multicall3 (Q9, round 9 FF2/RSEC-2) gets one claim() per coin from itself", async () => {
+  test("buildClaimAll: an EOA or 7702 wallet whose claim policy refuses Multicall3 gets one claim() per coin from itself", async () => {
     const { f, client, launches } = coins(3, 2);
     const tokens = launches.map((l) => l.token);
     const asked: string[] = [];
@@ -398,7 +398,7 @@ describe("holders", () => {
     expect(isLaunchSdkError(thrown, "NOT_A_LAUNCH")).toBe(true);
   });
 
-  test("buildClaimAll with any-quote pairing (round 9 ISO-1, ISO-3): listed coins first, each unlisted quote's coins in their own transaction at the hostile budget, a poke per pile no swap wakes", async () => {
+  test("buildClaimAll with any-quote pairing: listed coins first, each unlisted quote's coins in their own transaction at the hostile budget, a poke per pile no swap wakes", async () => {
     const t = anyQuoteCoins();
     const all = await t.client.holders.buildClaimAll(
       OTHER,
@@ -511,7 +511,7 @@ describe("holders", () => {
     ]);
   });
 
-  test("unclaimed (round 9 ISO-1): an unlisted coin whose claim landed with its quote refused is not retried; a listed one is (REG-5)", async () => {
+  test("unclaimed: an unlisted coin whose claim landed with its quote refused is not retried; a listed one is", async () => {
     const t = anyQuoteCoins();
     t.meme0.earned.set(`0:${OTHER.toLowerCase()}`, 5n);
     t.weth0.earned.set(`0:${OTHER.toLowerCase()}`, 5n);
@@ -561,7 +561,7 @@ describe("holders", () => {
     ]);
   });
 
-  test("unclaimed: a coin whose claim paid some legs but not an earned one (a refused quote) is listed to retry (audit REG-5)", async () => {
+  test("unclaimed: a coin whose claim paid some legs but not an earned one (a refused quote) is listed to retry", async () => {
     const { f, client } = postLaunchFixture();
     const l = installLaunch(f, { launcher: LAUNCHER, quote: WETH });
     l.earned.set(`0:${OTHER.toLowerCase()}`, 5n); // the token leg

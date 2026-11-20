@@ -117,7 +117,7 @@ const knob = (name: string): number =>
   SETTINGS_KNOBS.find((k) => k.name === name)!.id;
 const pin = (v: bigint): Range => ({ min: v, max: v, dflt: v });
 
-/** The settings a fresh fake suite starts with. */
+/** The settings a fresh fake deployment starts with. */
 export class FakeSettings {
   readonly chain = new FakeChain(base);
   owner = OWNER;
@@ -435,7 +435,7 @@ export class FakeSettings {
     const a = call.args ?? [];
     const write = this.writers(tx)[`${to}:${call.functionName}`];
     if (!write)
-      throw new Error(`the fake suite does not apply ${call.functionName}`);
+      throw new Error(`the fake contracts do not apply ${call.functionName}`);
     write(a);
     return { functionName: call.functionName, args: a };
   }
