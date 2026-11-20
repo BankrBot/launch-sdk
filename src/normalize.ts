@@ -1,7 +1,6 @@
 import {
   getAddress,
   isAddressEqual,
-  stringToBytes,
   zeroAddress,
   zeroHash,
   type Address,
@@ -9,27 +8,17 @@ import {
 } from "viem";
 import type { ChainCapabilities, LaunchChain } from "./chains/index.js";
 import { normalizeCurve, type NormalizedCurve } from "./curveInput.js";
-import {
-  MAX_FEE_RECIPIENTS,
-  MAX_METADATA_URI_BYTES,
-  MAX_START_DELAY_SECS,
-  MAX_VEST_BPS,
-  holderShareToHoldersBps,
-  type FeeRecipient,
-  type FeeSchedule,
-  type LaunchEconomics,
-  type LaunchParams,
+import type {
+  FeeRecipient,
+  FeeSchedule,
+  LaunchEconomics,
+  LaunchParams,
 } from "./economics.js";
 import { LaunchRefusedError, type CodeOfKind } from "./errors.js";
 import { normalizeExtension, type NormalizedExtension } from "./extension.js";
-import { padEconomics, type PadState } from "./launchpad.js";
 import type { LaunchInput } from "./providers/types.js";
 import { resolveQuote, type QuoteRef } from "./quotes.js";
-import {
-  SUITE4_ONLY_FIELDS,
-  normalizeSuite4Choices,
-  type Suite4Choices,
-} from "./suite4/input.js";
+import { normalizeChoices, type LaunchChoices } from "./launch/input.js";
 import { requireAddress } from "./recipient.js";
 import {
   EMPTY_AUTHORIZATION,
@@ -93,8 +82,8 @@ export interface NormalizedLaunch<C extends LaunchChain = LaunchChain> {
   extension: NormalizedExtension | null;
   salt: Hex | undefined;
   deadlineSeconds: number;
-  /** A suite 4 launch's own choices; null on suite 3, which can carry none of them. */
-  suite4: Suite4Choices | null;
+  /** What the launch names beyond its launchpad's defaults. */
+  choices: LaunchChoices;
 }
 
 const isInt = (v: unknown, min: number, max: number): v is number =>
@@ -107,7 +96,7 @@ function normalizeFeeRecipients(
   launcher: Address,
   address: (v: unknown, what: string) => Address,
   invalid: (detail: string) => never,
-  most: number = MAX_FEE_RECIPIENTS,
+  most: number,
 ): FeeRecipient[] {
   const raw: unknown = input.feeRecipients;
   if (raw === undefined) {
@@ -143,55 +132,18 @@ function normalizeFeeRecipients(
   return out;
 }
 
-/** 86,400 → "1 day"; whole days, else whole hours, else seconds. */
-function spell(secs: number): string {
-  const n = (v: number, unit: string) => `${v} ${unit}${v === 1 ? "" : "s"}`;
-  if (secs % 86_400 === 0) return n(secs / 86_400, "day");
-  return secs % 3_600 === 0 ? n(secs / 3_600, "hour") : n(secs, "second");
-}
-
-/**
- * A scheduled start against the clock and the pad: LaunchEconomics.checkStartTick (`StartPassed`, `StartTooFar`) and
- * the registry's `StartDelayAboveLaunchpadMax`. `maxStartDelaySecs` is the pad's `policy.maxStartDelay` (0 = no
- * scheduled start there); omitted, the protocol's 7 days alone. The chain's own block is never before `nowSeconds`.
- */
-export function checkStartTime(i: {
-  startTime: number;
-  nowSeconds: number;
-  maxStartDelaySecs?: number;
-  chain?: LaunchChain;
-}): void {
-  const refuse = (detail: string): never => {
-    throw new LaunchRefusedError("INVALID_PARAMS", { chain: i.chain, detail });
-  };
-  if (i.startTime === 0) return;
-  if (!Number.isSafeInteger(i.startTime) || i.startTime <= i.nowSeconds)
-    refuse("The trading start must be in the future.");
-  const padMax = i.maxStartDelaySecs ?? MAX_START_DELAY_SECS;
-  if (padMax === 0)
-    refuse("This launchpad does not allow a scheduled trading start.");
-  const max = Math.min(padMax, MAX_START_DELAY_SECS);
-  if (i.startTime > i.nowSeconds + max)
-    refuse(
-      `Trading can start at most ${spell(max)} after the launch${padMax < MAX_START_DELAY_SECS ? " on this launchpad" : ""}.`,
-    );
-}
-
 /**
  * Applies the refusals that need no chain state: name and symbol, metadata and its admin, launcher, pad id, quote,
  * recipients' shape and split, fee and split fields' shape, vesting, dev-buy amount, the start time's shape, the
- * curve's form, the extension's form and bounds, salt and deadline. `metadata` is refused unless `allowMetadata` (API
- * mode, where Bankr pins it).
+ * curve's form, the extension's form, salt and deadline. Every range is the launchpad's, held by the chain's launch
+ * check.
  */
 export function normalizeLaunchInput<C extends LaunchChain>(
   caps: ChainCapabilities<C>,
   input: LaunchInput<C>,
   usedSalts: ReadonlySet<string>,
-  options: { allowMetadata?: boolean; suite?: 3 | 4 } = {},
 ): NormalizedLaunch<C> {
   const chain = caps.chain;
-  // Suite 3 compiles its bounds in, and they are held here; a suite 4 launch's are its pad's, held by `resolve`.
-  const suite4 = options.suite === 4;
   const refuse = (code: CodeOfKind<"refused">, detail?: string): never => {
     throw new LaunchRefusedError(code, { chain, detail });
   };
@@ -205,19 +157,6 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     return v as number;
   };
 
-  if (!suite4) {
-    const named = [
-      ...SUITE4_ONLY_FIELDS.filter((k) => input[k] !== undefined),
-      ...(input.vesting?.cliffSeconds !== undefined ||
-      input.vesting?.durationSeconds !== undefined
-        ? ["vesting.cliffSeconds and vesting.durationSeconds"]
-        : []),
-    ];
-    if (named.length > 0)
-      invalid(
-        `${named.join(", ")}: this chain's suite takes no such option. It is a term of the configurable suite (suite 4), which this client is not on.`,
-      );
-  }
   if (typeof input.name !== "string" || !isInt(input.name.length, 1, NAME_MAX))
     invalid("The name must be 1–100 characters.");
   if (
@@ -225,17 +164,8 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     !isInt(input.symbol.length, 1, SYMBOL_MAX)
   )
     invalid("The symbol must be 1–20 characters.");
-  if (input.metadata !== undefined && !options.allowMetadata)
-    invalid(
-      "Pinning metadata needs Bankr's API: pass a ready metadataUri in pure mode.",
-    );
   const metadataUri = input.metadataUri ?? "";
   if (typeof metadataUri !== "string") invalid("metadataUri must be a string.");
-  // The token's deployer counts bytes, not characters (MetadataTooLong).
-  if (!suite4 && stringToBytes(metadataUri).length > MAX_METADATA_URI_BYTES)
-    invalid(
-      `The metadata link can be at most ${MAX_METADATA_URI_BYTES.toLocaleString("en-US")} bytes.`,
-    );
   const metadataAdmin =
     input.metadataAdmin === undefined
       ? zeroAddress
@@ -258,7 +188,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     address,
     invalid,
     // The ledger's own ceiling for one bucket; a pad's limit is its feeRecipients knob.
-    suite4 ? 255 : MAX_FEE_RECIPIENTS,
+    255,
   );
 
   if (input.fees !== undefined && input.schedule !== undefined)
@@ -275,7 +205,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
         s === null ||
         !isInt(s.startPips, 0, 1_000_000) ||
         !isInt(s.steadyPips, 0, 1_000_000) ||
-        !isInt(s.decaySecs, 0, suite4 ? 0xffff_ffff : 65_535)
+        !isInt(s.decaySecs, 0, 0xffff_ffff)
       )
         invalid(
           "A fee schedule is { startPips, steadyPips, decaySecs }, each a non-negative integer.",
@@ -291,7 +221,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   const v = input.vestToHolders;
   if (
     v !== undefined &&
-    (!isInt(v.bps, 0, suite4 ? BPS : MAX_VEST_BPS) ||
+    (!isInt(v.bps, 0, BPS) ||
       !isInt(v.cliffSeconds, 0, Number.MAX_SAFE_INTEGER) ||
       !isInt(v.durationSeconds, 0, Number.MAX_SAFE_INTEGER))
   )
@@ -318,7 +248,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   const extension =
     input.extension === undefined
       ? null
-      : normalizeExtension(input.extension, chain, suite4 ? 4 : 3);
+      : normalizeExtension(input.extension, chain);
   // LaunchRegistry._feeRecipients (ExtensionPayeeUnnamed): with several recipients none stands in for the payee.
   if (
     extension &&
@@ -349,9 +279,7 @@ export function normalizeLaunchInput<C extends LaunchChain>(
   const deadlineSeconds = input.deadlineSeconds ?? DEFAULT_DEADLINE_SECONDS;
   if (!isInt(deadlineSeconds, 1, Number.MAX_SAFE_INTEGER))
     invalid("deadlineSeconds must be a positive integer.");
-  const choices = suite4
-    ? normalizeSuite4Choices(input, address, invalid)
-    : null;
+  const choices = normalizeChoices(input, address, invalid);
 
   return {
     chain,
@@ -369,10 +297,8 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     schedule,
     referrerBps: bps(input.referrerBps, "referrerBps"),
     holderShareBps: bps(input.holderShareBps, "holderShareBps"),
-    autoLpBps: choices ? choices.autoLpBps : bps(input.autoLpBps, "autoLpBps"),
-    buybackBps: choices
-      ? choices.buybackBps
-      : bps(input.buybackBps, "buybackBps"),
+    autoLpBps: choices.autoLpBps,
+    buybackBps: choices.buybackBps,
     vestBps,
     vestingRecipient,
     allowContractVestingRecipient:
@@ -392,60 +318,8 @@ export function normalizeLaunchInput<C extends LaunchChain>(
     extension,
     salt,
     deadlineSeconds,
-    suite4: choices,
+    choices,
   };
-}
-
-/**
- * The launch's economics on its pad: each field the input set, the pad's default otherwise. `holderShareBps` is
- * converted to the contract's creator-side `holdersBps`; omitted, the pad's default `holdersBps` stands. A quote the
- * factory does not list takes no auto-LP (the factory's `UnlistedQuoteAutoLp`): nothing compounds it.
- */
-export function resolveEconomics(
-  n: NormalizedLaunch,
-  pad: Pick<PadState, "id" | "pad" | "terms">,
-  listed = true,
-): LaunchEconomics {
-  const defaults = padEconomics(pad);
-  if (!listed) {
-    const why =
-      (n.autoLpBps ?? 0) > 0
-        ? "takes no auto-liquidity: set autoLpBps to 0"
-        : pad.pad.policy.minAutoLpBps > 0
-          ? "takes no auto-liquidity, and this launchpad requires some"
-          : pad.terms.decay.on && pad.terms.decay.autoLpBps > 0
-            ? "takes no auto-liquidity, and this launchpad's decay split has some"
-            : null;
-    if (why !== null)
-      throw new LaunchRefusedError("SPLIT_OUT_OF_BOUNDS", {
-        chain: n.chain,
-        detail: `A quote the factory does not list ${why}.`,
-      });
-  }
-  const autoLpBps = n.autoLpBps ?? (listed ? defaults.autoLpBps : 0);
-  const buybackBps = n.buybackBps ?? defaults.buybackBps;
-  if (autoLpBps + buybackBps > BPS) {
-    throw new LaunchRefusedError("SPLIT_OUT_OF_BOUNDS", {
-      chain: n.chain,
-      detail:
-        "Auto-liquidity and buyback can total at most 100% of the creator side.",
-    });
-  }
-  return padEconomics(
-    pad,
-    {
-      schedule: n.schedule,
-      holdersBps:
-        n.holderShareBps === undefined
-          ? undefined
-          : holderShareToHoldersBps(n.holderShareBps, autoLpBps, buybackBps),
-      autoLpBps,
-      buybackBps,
-      referrerBps: n.referrerBps,
-      vestToHolders: n.vestToHolders,
-    },
-    n.chain,
-  );
 }
 
 /** What {@link buildLaunchParams} needs beyond the economics: the pieces read from the chain or mined. */
@@ -480,8 +354,10 @@ export interface LaunchParamsInput {
   extension?: Pick<NormalizedExtension, "params"> | null;
 }
 
-/** `factory.launch`'s tuple for an SDK launch: default supply, no allocations, unsigned. */
-export function buildLaunchParams(i: LaunchParamsInput): LaunchParams {
+/** `factory.launch`'s tuple before the launch's own supply, allocations and options: the pad's defaults, unsigned. */
+export function buildLaunchParams(
+  i: LaunchParamsInput,
+): Omit<LaunchParams, "options"> {
   return {
     name: i.name,
     symbol: i.symbol,

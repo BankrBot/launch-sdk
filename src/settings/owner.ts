@@ -86,7 +86,7 @@ export interface OwnerSettingsAdmin {
   configureBankrPad(changes: PadChanges): Promise<UnsignedTx>;
 }
 
-/** The settings contract's owner setters for one chain's suite. */
+/** The settings contract's owner setters for one chain's contracts. */
 export function createOwnerSettingsAdmin(
   ctx: SettingsContext,
 ): OwnerSettingsAdmin {

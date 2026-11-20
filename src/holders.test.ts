@@ -11,13 +11,15 @@ import {
 import {
   bankrFeeLedgerAbi,
   holderRewardsDistributorAbi,
-} from "./abis/suite3.js";
+} from "./abis/generated.js";
+import { bnkrHolderLegAbi } from "./abis/settings.js";
 import { isLaunchSdkError } from "./errors.js";
 import { EIP_7825_MAX_TX_GAS } from "./chains/index.js";
 import { HOLDER_CLAIM_ALL_GAS, HOLDER_GAS } from "./index.js";
-import { CONVERT_GAS, EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+import { CONVERT_GAS } from "./conversion.js";
 import { bucketIds } from "./lens.js";
 import {
+  COIN_LEG,
   FAKE_BNKR,
   LAUNCHER,
   OTHER,
@@ -27,11 +29,11 @@ import {
   postLaunchFixture,
 } from "./__internal__/fakeLaunch.js";
 import { eventLog } from "./__internal__/fakeRpc.js";
-import { fakeAddress } from "./__internal__/fakeSuite.js";
+import { fakeAddress } from "./__internal__/fakeRecord.js";
 
 const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
 
-/** `n` launches on one suite; the first `earning` pay OTHER rewards on some leg. */
+/** `n` launches on one chain; the first `earning` pay OTHER rewards on some leg. */
 function coins(n: number, earning: number) {
   const fixture = postLaunchFixture();
   const launches = Array.from({ length: n }, (_, i) =>
@@ -56,13 +58,12 @@ const claimFor = encodeFunctionData({
 const decode = (data: `0x${string}`) =>
   decodeFunctionData({ abi: holderRewardsDistributorAbi, data });
 
-const UNLISTED_FLOOR = (1n << 96n) - 1n;
-
-/** Coins on WETH (listed) and on two quotes the factory does not list, all earning for OTHER; the MEME coins' holder
- *  piles wait in the ledger (no swap wakes an unlisted quote's), the first with a pile, the second without. */
-function anyQuoteCoins(o: { wake?: bigint } = {}) {
+/** Coins on WETH (listed) and on two quotes Bankr does not list, all earning for OTHER; the MEME coins' holder
+ *  piles wait in the ledger (no swap wakes an unlisted quote's), the first with a pile, the second without, and
+ *  HOSTILE's first has one staged in the leg. `memeFloor`: the leg's floor for MEME (default: never floored). */
+function anyQuoteCoins(o: { memeFloor?: bigint; mode?: number } = {}) {
   const fixture = postLaunchFixture();
-  const { f } = fixture;
+  const { f, leg } = fixture;
   const MEME = fakeAddress(0x3e3e);
   const HOSTILE = fakeAddress(0x3e3f);
   const mk = (quote: `0x${string}`, i: number) => {
@@ -79,21 +80,24 @@ function anyQuoteCoins(o: { wake?: bigint } = {}) {
   const weth0 = mk(WETH, 2);
   const meme1 = mk(MEME, 3);
   const weth1 = mk(WETH, 4);
+  leg.payoutMode = o.mode ?? 0;
+  const memeFloor = o.memeFloor ?? 0n;
+  const isMeme = (q: unknown) => String(q).toLowerCase() === MEME.toLowerCase();
+  // A quote the leg was never floored for has no floor at all (MEME by default, HOSTILE always).
+  f.fake.contract(COIN_LEG, bnkrHolderLegAbi, {
+    minPile: ([q]: readonly unknown[]) => (isMeme(q) ? memeFloor : 0n),
+  });
   f.fake.contract(SUITE.ledger, bankrFeeLedgerAbi, {
-    // An unlisted quote's floor is type(uint96).max once the leg synced it (MEME), unarmed before (HOSTILE).
-    holdersWake: ([q]: readonly unknown[]) =>
-      String(q).toLowerCase() === MEME.toLowerCase()
-        ? (o.wake ?? (UNLISTED_FLOOR << 160n) | BigInt(SUITE.holderLeg))
+    holdersWake: ([, q]: readonly unknown[]) =>
+      isMeme(q) && memeFloor !== 0n
+        ? (memeFloor << 160n) | BigInt(COIN_LEG)
         : 0n,
-    claimable: ([bucket, who]: readonly unknown[]) =>
-      bucket === bucketIds.holders(meme0.poolId) &&
-      String(who).toLowerCase() === SUITE.holderLeg.toLowerCase()
-        ? [0n, 40n]
-        : [0n, 0n],
   });
-  f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
-    pending: ([p]: readonly unknown[]) => (p === hostile0.poolId ? 3n : 0n),
-  });
+  meme0.claimable.set(
+    `${bucketIds.holders(meme0.poolId)}:${COIN_LEG.toLowerCase()}`,
+    meme0.tokenIsCurrency0 ? [0n, 40n] : [40n, 0n],
+  );
+  leg.pending.set(hostile0.poolId, [3n, 0n]);
   return { ...fixture, MEME, HOSTILE, meme0, meme1, hostile0, weth0, weth1 };
 }
 
@@ -107,7 +111,7 @@ const aggregate = (data: `0x${string}`) =>
 
 const poke = (poolId: `0x${string}`) =>
   encodeFunctionData({
-    abi: EARLIER_HOLDER_LEG_WAKE_ABI,
+    abi: bnkrHolderLegAbi,
     functionName: "poke",
     args: [poolId],
   });
@@ -428,11 +432,11 @@ describe("holders", () => {
       [
         call(t.meme0.distributor),
         call(t.meme1.distributor),
-        { target: SUITE.holderLeg, callData: poke(t.meme0.poolId) },
+        { target: COIN_LEG, callData: poke(t.meme0.poolId) },
       ],
       [
         call(t.hostile0.distributor),
-        { target: SUITE.holderLeg, callData: poke(t.hostile0.poolId) },
+        { target: COIN_LEG, callData: poke(t.hostile0.poolId) },
       ],
     ]);
     // A budget that holds a listed coin (3M) but not an unlisted coin and its poke is refused, never a short limit.
@@ -451,31 +455,15 @@ describe("holders", () => {
       refused = err;
     }
     expect(isLaunchSdkError(refused, "INVALID_PARAMS")).toBe(true);
-    // A quote's wake armed at a real floor: a pile under it waits. One at it is poked too, since only a swap that asks
-    // wakes it (always-on; holderClaimAll.test.ts walks that rule).
-    const under = anyQuoteCoins({
-      wake: (41n << 160n) | BigInt(SUITE.holderLeg),
-    });
+    // A quote the leg holds a real floor for: a pile under it waits. One at it is poked too, since only a swap that
+    // asks wakes it (always-on; holderClaimAll.test.ts walks that rule).
+    const under = anyQuoteCoins({ memeFloor: 41n });
     const b = await under.client.holders.buildClaimAll(OTHER, [
       under.meme0.token,
     ]);
     expect(b.coins[0]!.poke).toBe(false);
-    const armed = anyQuoteCoins({
-      wake: (40n << 160n) | BigInt(SUITE.holderLeg),
-    });
     // The leg pays in quote (QUOTE mode): the forward rule, so the forward-only budget.
-    armed.f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
-      payoutMode: 1,
-      bnkr: FAKE_BNKR,
-      retiredBnkr: false,
-      lastConvertAt: 0n,
-      MIN_CONVERT_INTERVAL: 1_800,
-      STALE_AFTER: 604_800n,
-      bnkrExecuteAfter: 0n,
-      routeExecuteAfter: 0n,
-      pendingRouteOf: [],
-      routeOf: [],
-    });
+    const armed = anyQuoteCoins({ memeFloor: 40n, mode: 1 });
     const c = await armed.client.holders.buildClaimAll(OTHER, [
       armed.meme0.token,
     ]);
@@ -495,8 +483,8 @@ describe("holders", () => {
       [t.weth0.distributor, HOLDER_GAS.claim],
       [t.hostile0.distributor, HOLDER_GAS.claim],
       [t.meme0.distributor, HOLDER_GAS.claim],
-      [SUITE.holderLeg, CONVERT_GAS],
-      [SUITE.holderLeg, CONVERT_GAS],
+      [COIN_LEG, CONVERT_GAS],
+      [COIN_LEG, CONVERT_GAS],
     ]);
     expect(all.txs.slice(3).map((x) => x.data)).toEqual([
       poke(t.hostile0.poolId),
@@ -519,7 +507,7 @@ describe("holders", () => {
     ]);
     expect(all.txs.map((x) => x.gas)).toEqual([base + perCoin, base + perPoke]);
     expect(aggregate(all.txs[1]!.data)).toEqual([
-      { target: SUITE.holderLeg, callData: poke(t.meme0.poolId) },
+      { target: COIN_LEG, callData: poke(t.meme0.poolId) },
     ]);
   });
 

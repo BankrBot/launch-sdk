@@ -87,77 +87,18 @@ describe("shipped source", () => {
     expect(offenders).toEqual([]);
   });
 
-  // Which contract set a client is on is the SDK's business. A sentence it can show a caller (a message, a detail)
-  // says "suite" only where the caller chose the earlier contracts, or is told the option that reaches them.
-  test("no sentence the SDK can show a caller says suite, the `suite: 3` paths aside", () => {
-    const allowed = (file: string, text: string) =>
-      /suite: 3/.test(text) ||
-      SUITE_3_ONLY.some(([f, has]) => file === f && text.includes(has));
+  // The SDK knows one contract set per chain, so nothing that ships says which: no identifier, message or comment
+  // (comments reach `dist/` in the .js and .d.ts files). The contracts' own ABI names are theirs to keep.
+  test("nothing in shipped source says suite, the contracts' own ABI names aside", () => {
+    const ABI_NAMES =
+      /\b(?:_?isSuite|setSuite|SuiteAlreadySet|SuiteUnset|SuiteAddrs)\b/g;
     const offenders: string[] = [];
     for (const file of shippedSources()) {
-      const name = relative(SRC, file);
-      if (name.startsWith("abis")) continue;
-      for (const text of proseLiterals(readFileSync(file, "utf8")))
-        if (/suite/i.test(text) && !allowed(name, text))
-          offenders.push(`${name}: ${text}`);
+      const lines = readFileSync(file, "utf8").split("\n");
+      for (const [i, line] of lines.entries())
+        if (/suite/i.test(line.replace(ABI_NAMES, "")))
+          offenders.push(`${relative(SRC, file)}:${i + 1}: ${line.trim()}`);
     }
     expect(offenders).toEqual([]);
   });
-
-  test("the scan reads sentences and nothing else: no comment, name, path or template expression", () => {
-    const source = [
-      'import { x } from "./suite4/plan.js";',
-      "// a suite in a comment",
-      "/* another suite */",
-      'const name = "isSuite";',
-      "const said = `Launches on ${suite ? `the ${chain} suite` : chain} are closed.`;",
-      "const quoted = 'it\\'s a suite here';",
-    ].join("\n");
-    expect(proseLiterals(source)).toEqual([
-      "the   suite",
-      "Launches on   are closed.",
-      "it's a suite here",
-    ]);
-  });
 });
-
-/** Sentences a `suite: 3` client alone reaches, by file and a phrase of theirs. */
-const SUITE_3_ONLY: ReadonlyArray<readonly [file: string, has: string]> = [
-  // An option of the latest contracts named on a client that asked for the earlier ones.
-  ["normalize.ts", "this chain's suite takes no such option"],
-  // A caller's range with one end; the frozen-terms lookup removes the fallback and this sentence with it.
-  ["settings/coinTerms.ts", "the suite's deploy block"],
-];
-
-/** Every string and template literal with a space in it (a sentence, not a name or a path), comments left out. */
-function proseLiterals(source: string): string[] {
-  const found: string[] = [];
-  // What the scanner is inside, innermost last: a literal (its quote and its text so far), or a template's `${ }`.
-  const inside: Array<{ quote: string; text: string }> = [];
-  for (let i = 0; i < source.length; i++) {
-    const c = source[i]!;
-    const top = inside.at(-1);
-    if (top === undefined || top.quote === "{") {
-      const skipTo = source.startsWith("//", i)
-        ? source.indexOf("\n", i)
-        : source.startsWith("/*", i)
-          ? source.indexOf("*/", i) + 1
-          : i;
-      if (skipTo < i) break;
-      if (skipTo > i) i = skipTo;
-      else if (c === '"' || c === "'" || c === "`")
-        inside.push({ quote: c, text: "" });
-      else if (c === "{" && top) inside.push({ quote: "{", text: "" });
-      else if (c === "}" && top) inside.pop();
-    } else if (c === "\\") top.text += source[++i] ?? "";
-    else if (c === top.quote) {
-      inside.pop();
-      if (top.text.includes(" ")) found.push(top.text);
-    } else if (top.quote === "`" && source.startsWith("${", i)) {
-      inside.push({ quote: "{", text: "" });
-      top.text += " ";
-      i++;
-    } else top.text += c;
-  }
-  return found;
-}

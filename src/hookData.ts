@@ -8,7 +8,7 @@ import {
 } from "viem";
 import { LaunchRefusedError } from "./errors.js";
 
-// What a router passes the Bankr hook as a swap's hookData, vendored from core's bankr-v4 hookData.ts (the suite's
+// What a router passes the Bankr hook as a swap's hookData, vendored from core's bankr-v4 hookData.ts (the contracts'
 // HookData.sol); src/__internal__ holds the encoder byte-equal to core's. Pure: viem only.
 
 /** The prefix that marks Bankr's fields; without it the whole hookData is the extension's own data. */

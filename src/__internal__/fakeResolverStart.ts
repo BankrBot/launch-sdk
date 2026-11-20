@@ -8,7 +8,7 @@ import {
   TICK_SPACING as BANKR_V4_TICK_SPACING,
 } from "../economics.js";
 import { PRICING_MODE as BANKR_V4_PRICING_MODE } from "../settings/rules.js";
-import { KNOB as K, PAD_FLAG as F } from "../suite4/settings.js";
+import { KNOB as K, PAD_FLAG as F } from "../launch/settings.js";
 import * as B from "./fakeHardBounds.js";
 import {
   BANKR_V4_OPTION as O,

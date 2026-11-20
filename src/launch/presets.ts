@@ -9,23 +9,14 @@ import {
 } from "../presets.js";
 import type { LaunchExtension } from "../terms.js";
 
-// Suite 4's presets, vendored from core's bankr-v4 presetParamsSuite4.ts and extensionsSuite4.ts (src/__internal__
+// The contracts' presets, vendored from core's bankr-v4 preset modules (src/__internal__
 // holds each equal). A preset is held to the limits its constructor is handed, the coin's `presetSite` word: the
 // pad's own limits, its extension ceiling, the launch's fee decay and the quote's compound floor. None is typed here.
 
-type Raffle = Extract<PresetParams, { preset: "raffle_run" }>;
+/** Each preset's constructor arguments: {@link PresetParams} under the name the encoders use. */
+export type ExtensionPresetParams = PresetParams;
 
-/** Each preset's constructor arguments on suite 4: suite 3's, and Raffle Run's dust floor and anchor. */
-export type ExtensionPresetParams =
-  | Exclude<PresetParams, Raffle>
-  | (Raffle & {
-      /** The least quote a buyback spends: at least 2, at most the site's dust ceiling. */
-      minBuyback: bigint;
-      /** How slowly the buyback's price ceiling follows the market, in seconds: six hours to a year. */
-      anchorTauSecs: number;
-    });
-
-/** How many ABI words each preset's constructor decodes on suite 4. */
+/** How many ABI words each preset's constructor decodes. */
 export const EXTENSION_PRESET_WORDS: Readonly<Record<PresetKey, number>> = {
   sniper_tax: 3,
   decay_tax: 3,
@@ -41,7 +32,7 @@ export const PRESET_MIN_DUST_FLOOR = 2n;
 const count = (v: number | bigint) => v.toLocaleString("en-US");
 
 /** A value the ABI can carry at all: what the encoding holds before any pad is read. */
-export function checkSuite4PresetShape(
+export function checkPresetShape(
   p: ExtensionPresetParams,
   chain?: LaunchChain,
 ): void {
@@ -93,7 +84,7 @@ export function encodeExtensionPresetParams(
   p: ExtensionPresetParams,
   chain?: LaunchChain,
 ): Hex {
-  checkSuite4PresetShape(p, chain);
+  checkPresetShape(p, chain);
   switch (p.preset) {
     case "sniper_tax":
       return encodeAbiParameters(
@@ -125,7 +116,7 @@ export function encodeExtensionPresetParams(
   }
 }
 
-/** A suite 4 launch's preset id and params back to values; null for an unknown id, another length, or a word wider
+/** A launch's preset id and params back to values; null for an unknown id, another length, or a word wider
  *  than its parameter. */
 export function decodeExtensionPresetParams(
   id: number,
@@ -198,7 +189,7 @@ export function validateExtensionPresetParams(
   site: PresetSite,
   chain?: LaunchChain,
 ): void {
-  checkSuite4PresetShape(p, chain);
+  checkPresetShape(p, chain);
   const refuse = (detail: string): never =>
     refuseExtension("EXTENSION_OUT_OF_BOUNDS", detail, chain);
   const fee = (pips: number, what: string) => {
@@ -263,7 +254,7 @@ export function validateExtensionPresetParams(
  * A launch's preset against the site its coin will freeze (`CoinTerms.presetSite`): `resolve` runs no preset
  * constructor, so a launch it passes can still revert when the preset is built. Nothing to hold without a preset.
  */
-export function checkSuite4LaunchPreset(
+export function checkLaunchPreset(
   e: Pick<LaunchExtension, "id" | "params">,
   presetSite: bigint,
   chain?: LaunchChain,

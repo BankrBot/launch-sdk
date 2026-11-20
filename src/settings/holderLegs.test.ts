@@ -34,10 +34,10 @@ interface Coin {
 
 /** Two leg generations on one ledger: the first converts WETH and pays USDC in quote, the second converts both. */
 function setup() {
-  const suite = new FakeSettings();
-  const legOne = suite.holderLeg;
+  const fakeSettings = new FakeSettings();
+  const legOne = fakeSettings.holderLeg;
   const legTwo = at(0xd2);
-  suite.legIds.set(lower(legTwo), 2);
+  fakeSettings.legIds.set(lower(legTwo), 2);
   const coins: Coin[] = [
     {
       token: at(0x71),
@@ -79,8 +79,9 @@ function setup() {
     cleared: new Set<string>(),
     staleAfter: 604_800,
   };
-  for (const c of coins) suite.termsHashes.set(lower(c.token), pool(0xff));
-  suite.chain.contract(SUITE.factory, bankrLaunchFactoryAbi, {
+  for (const c of coins)
+    fakeSettings.termsHashes.set(lower(c.token), pool(0xff));
+  fakeSettings.chain.contract(SUITE.factory, bankrLaunchFactoryAbi, {
     poolOf: ([token]: readonly unknown[]) => {
       const c = byToken(token as Address);
       return [
@@ -90,15 +91,15 @@ function setup() {
           currency1: c?.quote ?? zeroAddress,
           fee: 0,
           tickSpacing: 200,
-          hooks: suite.hook,
+          hooks: fakeSettings.hook,
         },
       ];
     },
   });
   const holders = new Map(coins.map((c) => [bucketIds.holders(c.poolId), c]));
-  suite.chain.contract(SUITE.ledger, bankrFeeLedgerAbi, {
+  fakeSettings.chain.contract(SUITE.ledger, bankrFeeLedgerAbi, {
     poolTerms: ([id]: readonly unknown[]) => ({
-      hook: suite.hook,
+      hook: fakeSettings.hook,
       flags: 0,
       referrerBps: 0,
       bankrFeeBps: 1_000,
@@ -147,7 +148,7 @@ function setup() {
     [legOne, false],
     [legTwo, true],
   ] as const) {
-    suite.chain.contract(leg, bnkrHolderLegAbi, {
+    fakeSettings.chain.contract(leg, bnkrHolderLegAbi, {
       payoutMode: 0,
       bnkr: BNKR,
       legTerms: () => ({
@@ -177,8 +178,8 @@ function setup() {
     });
   }
   return {
-    suite,
-    legs: createHolderLegs(suite.context()),
+    fakeSettings,
+    legs: createHolderLegs(fakeSettings.context()),
     coins,
     state,
     legOne,
@@ -237,14 +238,14 @@ describe("holder legs, per generation", () => {
   });
 
   test("a pile is asked about at the coin's own leg", async () => {
-    const { suite, legs, coins, state } = setup();
+    const { fakeSettings, legs, coins, state } = setup();
     // the factory starts paused: a pause skips the wake
     expect(await legs.pile(coins[0]!.token, 1_000)).toMatchObject({
       paused: true,
       wakes: false,
       due: false,
     });
-    suite.paused = false;
+    fakeSettings.paused = false;
     // over the floor on a converting quote with the window open: a swap's wake converts it
     expect(await legs.pile(coins[0]!.token, 1_000)).toMatchObject({
       legId: 1,
@@ -310,23 +311,23 @@ describe("holder legs, per generation", () => {
   });
 
   test("an address that is no leg is refused by name, with or without code, before any of a leg's views is read", async () => {
-    const { suite, legs } = setup();
+    const { fakeSettings, legs } = setup();
     const sender = at(0x5e);
     // no code at all, and a contract that is not a leg: the ledger answers 0 for both
     const stranger = at(0x99);
     const token = at(0x9a);
-    suite.chain.setCode(token, "0x60");
+    fakeSettings.chain.setCode(token, "0x60");
     for (const address of [stranger, token]) {
       expect(await code(legs.get(address))).toBe("INVALID_PARAMS");
       expect(await code(legs.buildConvert(address, WETH, sender))).toBe(
         "INVALID_PARAMS",
       );
     }
-    expect(suite.chain.callsTo("payoutMode")).toEqual([]);
+    expect(fakeSettings.chain.callsTo("payoutMode")).toEqual([]);
     // a leg is asked for its id once: the answer that let it through is the one returned
-    const asked = suite.chain.callsTo("legIdOf").length;
-    expect((await legs.get(suite.holderLeg)).legId).toBe(1);
-    expect(suite.chain.callsTo("legIdOf").length).toBe(asked + 1);
+    const asked = fakeSettings.chain.callsTo("legIdOf").length;
+    expect((await legs.get(fakeSettings.holderLeg)).legId).toBe(1);
+    expect(fakeSettings.chain.callsTo("legIdOf").length).toBe(asked + 1);
     expect(await code(legs.get("0x1" as never))).toBe("INVALID_PARAMS");
   });
 });

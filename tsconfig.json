@@ -5,7 +5,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    // DOM for the Fetch API (fetch, Request, Response, Headers, URL) that API mode and ./server use; Node >= 22 and
+    // DOM for the Fetch API (fetch, Request, Response, Headers, URL) that the index client and ./server use; Node >= 22 and
     // browsers both provide it at runtime.
     "lib": ["ES2022", "DOM"],
     "types": [],
@@ -21,6 +21,6 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*.ts"],
-  // Tests and the core-parity suite never ship (src/__internal__ imports @bankr/core).
+  // Tests and the core-parity tests never ship (src/__internal__ imports @bankr/core).
   "exclude": ["src/**/*.test.ts", "src/__internal__/**"]
 }

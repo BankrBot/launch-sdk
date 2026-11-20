@@ -242,7 +242,7 @@ export function payeeTerms(
 }
 
 /**
- * The factory refuses a suite contract, a launched token or a routing marker as a pad payee at every launch, so
+ * The factory refuses one of Bankr's launch contracts, a launched token or a routing marker as a pad payee at every launch, so
  * such a pad could never launch; the treasury marker alone is a marker a pad may name. A contract payee that lets
  * anyone claim for it can lose its share to a stranger's settle.
  */
@@ -258,7 +258,7 @@ export async function refuseRejectedPayees(
       !isAddressEqual(p, PAD_TREASURY_MARKER) &&
       !stored.some((s) => isAddressEqual(s, p)),
   );
-  const [suite, named] = await Promise.all([
+  const [ours, named] = await Promise.all([
     Promise.all(
       real.map(
         async (p) =>
@@ -274,7 +274,7 @@ export async function refuseRejectedPayees(
       real.map((p) => namedPayeeOk(kit.client, kit.addresses.ledger, p)),
     ),
   ]);
-  const bad = real.find((_, i) => suite[i]);
+  const bad = real.find((_, i) => ours[i]);
   if (bad)
     fail(
       `${bad} cannot be a payee: the factory refuses one of Bankr's launch contracts, a launched token or a routing marker, so no launch on the pad would go through.`,

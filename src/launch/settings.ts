@@ -17,7 +17,7 @@ import {
 } from "../abis/generated.js";
 import type { ReadClient } from "../providers/types.js";
 
-// What a suite 4 launch is held to, read from the settings contract and never typed: the pad's row and the owner's
+// What a launch is held to, read from the settings contract and never typed: the pad's row and the owner's
 // limits (the defaults a launch takes), and `resolve`, which judges one launch and returns the terms its coin will
 // freeze. Vendored from core's bankr-v4 settings.ts and launchResolverState.ts; every type is the ABI's own.
 
@@ -35,7 +35,7 @@ export type KnobLimit = View<"limitOf">;
 export type KnobRange = View<"knobOf">;
 
 /** A pad's payees, their shares and its decay split. */
-export type Suite4PadTerms = View<"payeesOf">;
+export type PadTerms = View<"payeesOf">;
 
 /** The owner's row for a quote; `allowed` false for one that is not listed. */
 export type QuoteTerms = View<"quoteTerms">;
@@ -43,8 +43,8 @@ export type QuoteTerms = View<"quoteTerms">;
 /** A coin's whole record: what `resolve` returns for a launch, and what the coin stores, hashes and logs once. */
 export type CoinTerms = View<"resolve">[0];
 
-/** Suite 4's `LaunchParams`: suite 3's fields (a fee's decay in 32 bits) and `options`. */
-export type Suite4LaunchParams = ContractFunctionArgs<
+/** `LaunchParams` as the contracts take it: the launch's own fields and its encoded `options`. */
+export type ContractLaunchParams = ContractFunctionArgs<
   typeof bankrLaunchSettingsAbi,
   "view",
   "resolve"
@@ -143,13 +143,13 @@ const PAD_TERMS_PARAM = (
 ) as AbiParameter;
 
 /** keccak256(abi.encode(terms)): a launch's `operatorPayeesHash` and a coin's `padTermsHash`. */
-export function suite4PadTermsHash(terms: Suite4PadTerms): Hex {
+export function padTermsHash(terms: PadTerms): Hex {
   return keccak256(encodeAbiParameters([PAD_TERMS_PARAM], [terms]));
 }
 
 /** The smallest `maxOperatorShareBps` the pad's payees pass: the larger of its two share lists, rounded up. */
-export function suite4OperatorShareBps(
-  terms: Pick<Suite4PadTerms, "steadySharesWad" | "decay">,
+export function maxOperatorShareBps(
+  terms: Pick<PadTerms, "steadySharesWad" | "decay">,
 ): number {
   const sum = (shares: readonly bigint[]) => shares.reduce((a, s) => a + s, 0n);
   const steady = sum(terms.steadySharesWad);
@@ -176,7 +176,7 @@ export function decodeCoinTerms(terms: Hex): CoinTerms {
 }
 
 /** The settings contract's and the pad registry's answers a plan needs, read in one round. */
-export interface Suite4LaunchState {
+export interface LaunchState {
   paused: boolean;
   gated: boolean;
   weth: Address;
@@ -196,11 +196,11 @@ export interface Suite4LaunchState {
   padTakesQuote: boolean;
 }
 
-export async function readSuite4LaunchState(
+export async function readLaunchState(
   client: ReadClient,
   a: { factory: Address; launchpadRegistry: Address; settings: Address },
   i: { padId: bigint; quote: Address },
-): Promise<Suite4LaunchState> {
+): Promise<LaunchState> {
   const f = { address: a.factory, abi: bankrLaunchFactoryAbi } as const;
   const r = {
     address: a.launchpadRegistry,
@@ -258,7 +258,7 @@ export async function readSuite4LaunchState(
 
 /** Whether pad and owner both leave `flag` on for a launch landing now. */
 export const flagInForce = (
-  s: Pick<Suite4LaunchState, "pad" | "allowedFlags">,
+  s: Pick<LaunchState, "pad" | "allowedFlags">,
   flag: PadFlagName,
 ): boolean => (s.pad.flags & s.allowedFlags & PAD_FLAG[flag]) !== 0n;
 
@@ -267,7 +267,7 @@ export interface ResolvedTerms {
   /** What `LaunchOptions.expectedTermsHash` pins: the hash of `terms` as resolved, before the factory's fill. */
   resolvedHash: Hex;
   /** The pad's payees the launch would be signed against. */
-  padTerms: Suite4PadTerms;
+  padTerms: PadTerms;
 }
 
 /**
@@ -280,7 +280,7 @@ export async function resolveLaunchTerms(
   i: {
     launcher: Address;
     nativeDevBuy: bigint;
-    params: Suite4LaunchParams;
+    params: ContractLaunchParams;
     blockNumber?: bigint;
   },
 ): Promise<ResolvedTerms> {

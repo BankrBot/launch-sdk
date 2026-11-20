@@ -1,4 +1,4 @@
-// Errors a launch can revert with from contracts whose ABI the SDK doesn't vendor; simulate.ts and suite4/revert.ts
+// Errors a launch can revert with from contracts whose ABI the SDK doesn't vendor; simulate.ts and launch/revert.ts
 // both decode with them.
 
 /** The hook's extension errors a launch or a buy can surface; the hook's ABI is not vendored. Held equal to core's

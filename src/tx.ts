@@ -8,8 +8,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { bankrLaunchFactoryAbi as suite4FactoryAbi } from "./abis/generated.js";
-import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
+import { bankrLaunchFactoryAbi } from "./abis/generated.js";
 import type { ChainCapabilities } from "./chains/index.js";
 import { LaunchExecutionError, LaunchRefusedError } from "./errors.js";
 import {
@@ -68,7 +67,8 @@ const GAS_HEADROOM_DEN = 10n;
 
 /** The lowest gas limit the heaviest launch measured on Bankr's pad (id 0, the default) lands at, without a builder
  *  allocation: on Base with its seven cap exclusions, seven band edges crossed by the dev buy, as a quote's first
- *  launch. Not a bound for every pad: more pad payees, a decay split or a longer link each weigh more. */
+ *  launch. Not a bound for every pad: more pad payees, a decay split or a longer link each weigh more. Measured on
+ *  Base only: every chain runs the same bytecode, and no other chain has its own measurement. */
 const LAUNCH_HEAVIEST_GAS = 15_174_754n;
 
 /** What one builder allocation adds to that landing limit (15,174,754 without one). The factory caps their number by
@@ -87,7 +87,7 @@ export const LAUNCH_LINK_BYTE_GAS = 730n;
 const BASE_PAD_PAYEES = 2;
 const BASE_LINK_BYTES = 2_048;
 
-/** What makes a suite 4 launch weigh more than the measured one: its pad's payees and its link's length. */
+/** What makes a launch weigh more than the measured one: its pad's payees and its link's length. */
 export interface LaunchGasWeight {
   /** The launchpad's payee count (`padConfig(id).terms.payees.length`). */
   padPayees: number;
@@ -97,8 +97,9 @@ export interface LaunchGasWeight {
 
 /**
  * The gas limit that stands in for a launch a node gave no estimate for: the heaviest launch measured on Bankr's pad,
- * each builder allocation, and on suite 4 what its own pad adds (payees past two, a link past 2,048 bytes). Never
- * under the measured figure, so a lighter pad is held to Bankr's count, which lands there too.
+ * each builder allocation, and what its own pad adds (payees past two, a link past 2,048 bytes). Never
+ * under the measured figure, so a lighter pad is held to Bankr's count, which lands there too. Base's figure on
+ * every chain: a worst case to refuse allocations by, not a measurement of Ethereum's or BNB Chain's launches.
  */
 export function launchGasFallback(
   allocations: number,
@@ -131,7 +132,7 @@ export function clampLaunchGas(
 ): bigint {
   const cap = chain.maxTxGas;
   // No estimate can mean a launch over the node's cap, which it refuses to estimate, or only an RPC that gives
-  // none: the heaviest launch stands in for it as the worst case, sized from the launch's own pad on suite 4.
+  // none: the heaviest launch stands in for it as the worst case, sized from the launch's own pad.
   const need =
     estimate ?? (allocations > 0 ? launchGasFallback(allocations, weight) : 0n);
   if (need > cap) {
@@ -167,23 +168,14 @@ export function clampLaunchGas(
 
 /** `factory.launch(params)` calldata, with the builder-code suffix when there is one. */
 export function encodeLaunchCalldata(
-  params: LaunchParams & { options?: Hex },
+  params: LaunchParams,
   dataSuffix?: Hex,
 ): Hex {
-  // A suite 4 launch's tuple ends with `options`; suite 3's factory takes none.
-  const { options } = params;
-  const data =
-    options === undefined
-      ? encodeFunctionData({
-          abi: bankrLaunchFactoryAbi,
-          functionName: "launch",
-          args: [params],
-        })
-      : encodeFunctionData({
-          abi: suite4FactoryAbi,
-          functionName: "launch",
-          args: [{ ...params, options }],
-        });
+  const data = encodeFunctionData({
+    abi: bankrLaunchFactoryAbi,
+    functionName: "launch",
+    args: [params],
+  });
   return dataSuffix ? concatHex([data, dataSuffix]) : data;
 }
 
@@ -219,7 +211,7 @@ export function buildLaunchTx(
       plan.gasEstimate,
       hasDevBuy(plan),
       plan.params.extraAllocations.length,
-      plan.resolved?.gasWeight,
+      plan.resolved.gasWeight,
     );
     gas = own === undefined ? clamped : own > cap ? cap : own;
   }

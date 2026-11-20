@@ -73,7 +73,7 @@ export interface SettingsReads {
   ): Promise<LaunchPreview>;
 }
 
-/** The settings of one chain's suite, read live. No wallet needed. */
+/** The settings of one chain's contracts, read live. No wallet needed. */
 export function createSettingsReads(ctx: SettingsContext): SettingsReads {
   const kit: SettingsKit = settingsKit(ctx);
   const r = settingsReaders(kit);

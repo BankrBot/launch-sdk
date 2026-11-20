@@ -16,7 +16,7 @@ import {
 import { isLaunchSdkError } from "../errors.js";
 import { knobId, switchWord } from "./names.js";
 import { createOwnerSettingsAdmin } from "./owner.js";
-import { createOwnerLeversAdmin } from "./ownerSuite.js";
+import { createOwnerLeversAdmin } from "./ownerLevers.js";
 import { createSettingsReads } from "./reads.js";
 import { WAD, type ChainPadTerms } from "./rules.js";
 
@@ -42,18 +42,18 @@ const payees = (n: number, each: bigint): ChainPadTerms => ({
 });
 
 const setup = () => {
-  const suite = new FakeSettings();
+  const fakeSettings = new FakeSettings();
   return {
-    suite,
-    owner: createOwnerSettingsAdmin(suite.context()),
-    levers: createOwnerLeversAdmin(suite.context()),
-    settings: createSettingsReads(suite.context()),
+    fakeSettings,
+    owner: createOwnerSettingsAdmin(fakeSettings.context()),
+    levers: createOwnerLeversAdmin(fakeSettings.context()),
+    settings: createSettingsReads(fakeSettings.context()),
   };
 };
 
 describe("the owner's terms", () => {
   test("a change is laid over the terms in force and sent whole, from the factory's owner", async () => {
-    const { suite, owner } = setup();
+    const { fakeSettings, owner } = setup();
     const { tx, stoppedPads } = await owner.setProtocolTerms({
       ctoNotice: 3_600,
       bankrFeeBps: 900,
@@ -63,18 +63,18 @@ describe("the owner's terms", () => {
       decodeFunctionData({ abi: bankrLaunchSettingsAbi, data: tx.data }),
     ).toEqual({
       functionName: "setProtocolTerms",
-      args: [{ ...suite.protocol, ctoNotice: 3_600, bankrFeeBps: 900 }],
+      args: [{ ...fakeSettings.protocol, ctoNotice: 3_600, bankrFeeBps: 900 }],
     });
     // the payee count did not move: nothing is read and nothing is stopped
     expect(stoppedPads).toEqual([]);
-    expect(suite.chain.callsTo("payeesOf")).toHaveLength(0);
+    expect(fakeSettings.chain.callsTo("payeesOf")).toHaveLength(0);
   });
 
   test("a lower payee count lists the pads it would stop, Bankr's own among them", async () => {
-    const { suite, owner } = setup();
-    const two = suite.addPad(payees(2, 1n));
-    suite.addPad(payees(1, 1n));
-    const three = suite.addPad(payees(3, 1n));
+    const { fakeSettings, owner } = setup();
+    const two = fakeSettings.addPad(payees(2, 1n));
+    fakeSettings.addPad(payees(1, 1n));
+    const three = fakeSettings.addPad(payees(3, 1n));
     const { tx, stoppedPads } = await owner.setProtocolTerms({
       maxPadPayees: 1,
     });
@@ -83,7 +83,7 @@ describe("the owner's terms", () => {
       { id: two, reason: "payeeCount", payees: 2, alreadyStopped: false },
       { id: three, reason: "payeeCount", payees: 3, alreadyStopped: false },
     ]);
-    suite.apply(tx);
+    fakeSettings.apply(tx);
     // a pad that was over the limit before the change is marked so
     const again = await owner.setProtocolTerms({ maxPadPayees: 2 });
     expect(again.stoppedPads).toEqual([
@@ -95,7 +95,7 @@ describe("the owner's terms", () => {
   });
 
   test("a cut that fits no fee, or not the template's or Bankr's pad's, is refused when it is set", async () => {
-    const { suite, owner } = setup();
+    const { fakeSettings, owner } = setup();
     await refuses(
       owner.setProtocolTerms({ bankrFeeBps: 10_001 }),
       RULE,
@@ -109,7 +109,7 @@ describe("the owner's terms", () => {
       RULE,
       "template",
     );
-    suite.template.ranges[knobId("steadyPips")!] = {
+    fakeSettings.template.ranges[knobId("steadyPips")!] = {
       min: 17_500n,
       max: 100_000n,
       dflt: 17_500n,
@@ -119,7 +119,7 @@ describe("the owner's terms", () => {
       RULE,
       "template",
     );
-    suite.template.ranges[knobId("steadyPips")!] = {
+    fakeSettings.template.ranges[knobId("steadyPips")!] = {
       min: 20_000n,
       max: 100_000n,
       dflt: 20_000n,
@@ -141,11 +141,11 @@ describe("the owner's terms", () => {
   });
 
   test("the guards are merged and held to their floors", async () => {
-    const { suite, owner } = setup();
+    const { fakeSettings, owner } = setup();
     const tx = await owner.setGuardTerms({ maxCompoundUsd: 25_000 });
-    suite.apply(tx);
-    expect(suite.guards.maxCompoundUsd).toBe(25_000);
-    expect(suite.guards.refTauSecs).toBe(1_800);
+    fakeSettings.apply(tx);
+    expect(fakeSettings.guards.maxCompoundUsd).toBe(25_000);
+    expect(fakeSettings.guards.refTauSecs).toBe(1_800);
     await refuses(
       owner.setGuardTerms({ fillTravelTicks: 101 }),
       RULE,
@@ -156,7 +156,7 @@ describe("the owner's terms", () => {
 
 describe("limits", () => {
   test("each named side moves inside the knob's hard range, read from the chain", async () => {
-    const { suite, owner, settings } = setup();
+    const { fakeSettings, owner, settings } = setup();
     const { tx, stoppedPads } = await owner.setLimits({
       decaySecs: { max: 3_600 },
       vestBps: { min: 0, max: 5_000 },
@@ -175,7 +175,7 @@ describe("limits", () => {
         ],
       ],
     });
-    suite.apply(tx);
+    fakeSettings.apply(tx);
     expect((await settings.limits()).decaySecs).toEqual({
       min: 0n,
       max: 3_600n,
@@ -201,13 +201,13 @@ describe("limits", () => {
   });
 
   test("a lower pad-share limit lists the pads whose payees take more, steady or decay", async () => {
-    const { suite, owner } = setup();
-    const heavy = suite.addPad(payees(2, WAD / 4n));
-    const decay = suite.addPad({
+    const { fakeSettings, owner } = setup();
+    const heavy = fakeSettings.addPad(payees(2, WAD / 4n));
+    const decay = fakeSettings.addPad({
       ...payees(1, 1n),
       decay: { on: true, autoLpBps: 0, sharesWad: [(WAD * 45n) / 100n] },
     });
-    suite.addPad(payees(1, WAD / 4n));
+    fakeSettings.addPad(payees(1, WAD / 4n));
     const { stoppedPads } = await owner.setLimits({
       padShareBps: { max: 4_000 },
     });
@@ -225,28 +225,30 @@ describe("limits", () => {
 
 describe("the template and the allowed switches", () => {
   test("a template change reaches pads registered from now on, restating its switches and cap controller", async () => {
-    const { suite, owner } = setup();
-    const before = suite.addPad();
-    suite.template.capController = at(0xcc);
+    const { fakeSettings, owner } = setup();
+    const before = fakeSettings.addPad();
+    fakeSettings.template.capController = at(0xcc);
     const tx = await owner.setTemplate({
       knobs: { vestBps: { max: 5_000, default: 1_500 } },
       switches: { unlistedQuotes: false },
     });
     expect(tx.from).toBe(OWNER);
-    suite.apply(tx);
-    expect(suite.template.flags).toBe(
-      switchWord({ unlistedQuotes: false }, suite.template.flags),
+    fakeSettings.apply(tx);
+    expect(fakeSettings.template.flags).toBe(
+      switchWord({ unlistedQuotes: false }, fakeSettings.template.flags),
     );
-    expect(suite.template.capController).toBe(at(0xcc));
-    expect(suite.template.ranges[knobId("vestBps")!]).toEqual({
+    expect(fakeSettings.template.capController).toBe(at(0xcc));
+    expect(fakeSettings.template.ranges[knobId("vestBps")!]).toEqual({
       min: 0n,
       max: 5_000n,
       dflt: 1_500n,
     });
-    expect(suite.pad(before).ranges[knobId("vestBps")!]!.max).toBe(9_999n);
-    expect(suite.pad(suite.addPad()).ranges[knobId("vestBps")!]!.max).toBe(
-      5_000n,
+    expect(fakeSettings.pad(before).ranges[knobId("vestBps")!]!.max).toBe(
+      9_999n,
     );
+    expect(
+      fakeSettings.pad(fakeSettings.addPad()).ranges[knobId("vestBps")!]!.max,
+    ).toBe(5_000n);
     await refuses(
       owner.setTemplate({ switches: { takeover: true } }),
       RULE,
@@ -265,24 +267,26 @@ describe("the template and the allowed switches", () => {
   });
 
   test("the template's paused switch is never cleared in silence either", async () => {
-    const { suite, owner } = setup();
-    const held = suite.template.flags;
-    suite.apply(await owner.setAllowedSwitches({ devBuy: false }));
+    const { fakeSettings, owner } = setup();
+    const held = fakeSettings.template.flags;
+    fakeSettings.apply(await owner.setAllowedSwitches({ devBuy: false }));
     const knob = { knobs: { vestBps: { default: 1_500 } } };
     await refuses(owner.setTemplate(knob), RULE, "stopped allowing devBuy");
-    expect(suite.template.flags).toBe(held);
-    suite.apply(
+    expect(fakeSettings.template.flags).toBe(held);
+    fakeSettings.apply(
       await owner.setTemplate({ ...knob, switches: { devBuy: false } }),
     );
-    expect(suite.template.flags).toBe(switchWord({ devBuy: false }, held));
+    expect(fakeSettings.template.flags).toBe(
+      switchWord({ devBuy: false }, held),
+    );
   });
 
   test("template preset limits and the allowed switches", async () => {
-    const { suite, owner } = setup();
-    suite.apply(
+    const { fakeSettings, owner } = setup();
+    fakeSettings.apply(
       await owner.setTemplatePresetLimits("sniperTax", { allowed: false }),
     );
-    expect(suite.template.presetLimits.get(1)).toMatchObject({
+    expect(fakeSettings.template.presetLimits.get(1)).toMatchObject({
       allowed: false,
       maxWindowSecs: 3_600,
     });
@@ -294,13 +298,13 @@ describe("the template and the allowed switches", () => {
       extCallsOut: false,
       unlistedQuotes: false,
     });
-    suite.apply(tx);
-    expect(suite.allowedFlags).toBe(
+    fakeSettings.apply(tx);
+    expect(fakeSettings.allowedFlags).toBe(
       switchWord({ extCallsOut: false, unlistedQuotes: false }, 2_047n),
     );
     // the owner may allow anything again: no switch is refused to the owner
-    suite.apply(await owner.setAllowedSwitches({ extCallsOut: true }));
-    expect(suite.allowedFlags).toBe(
+    fakeSettings.apply(await owner.setAllowedSwitches({ extCallsOut: true }));
+    expect(fakeSettings.allowedFlags).toBe(
       switchWord({ unlistedQuotes: false }, 2_047n),
     );
     await refuses(
@@ -312,10 +316,10 @@ describe("the template and the allowed switches", () => {
 
 describe("quotes, presets and the allowlist", () => {
   test("a new quote row takes the token's own decimals; a later change is laid over the row", async () => {
-    const { suite, owner, settings } = setup();
+    const { fakeSettings, owner, settings } = setup();
     const usdc = at(0xc0);
-    suite.chain.contract(usdc, erc20Abi, { decimals: 6 });
-    suite.apply(
+    fakeSettings.chain.contract(usdc, erc20Abi, { decimals: 6 });
+    fakeSettings.apply(
       await owner.setQuote(usdc, {
         pricing: "chainlink",
         maxPriceAge: 3_600,
@@ -331,7 +335,7 @@ describe("quotes, presets and the allowlist", () => {
       decimals: 6,
     });
     expect(await settings.quotes()).toHaveLength(1);
-    suite.apply(await owner.setQuote(usdc, { quotePaid: true }));
+    fakeSettings.apply(await owner.setQuote(usdc, { quotePaid: true }));
     expect(await settings.quote(usdc)).toMatchObject({
       quotePaid: true,
       compoundCap: 500_000_000n,
@@ -355,40 +359,40 @@ describe("quotes, presets and the allowlist", () => {
         "INVALID_PARAMS",
         "pricing is",
       );
-    suite.apply(await owner.removeQuote(usdc));
+    fakeSettings.apply(await owner.removeQuote(usdc));
     expect(await settings.quotes()).toEqual([]);
     await refuses(owner.removeQuote(usdc), RULE, "not listed");
   });
 
   test("a new row whose token does not answer decimals() is refused by name; with its decimals named it is built", async () => {
-    const { suite, owner } = setup();
+    const { fakeSettings, owner } = setup();
     const row = { pricing: "none", quoteActivation: 1n } as const;
     // no code at the address, and a contract with no decimals(), which reverts empty
     const empty = at(0xc1);
     const mute = at(0xc2);
-    suite.chain.contract(mute, [], {});
+    fakeSettings.chain.contract(mute, [], {});
     for (const quote of [empty, mute]) {
       await refuses(
         owner.setQuote(quote, row),
         "INVALID_PARAMS",
         "does not answer decimals()",
       );
-      suite.apply(await owner.setQuote(quote, { ...row, decimals: 18 }));
-      expect(suite.quotes.get(quote.toLowerCase())?.decimals).toBe(18);
+      fakeSettings.apply(await owner.setQuote(quote, { ...row, decimals: 18 }));
+      expect(fakeSettings.quotes.get(quote.toLowerCase())?.decimals).toBe(18);
     }
   });
 
   test("pricing, a preset record, an allowlist key and the BNKR-pair waiver", async () => {
-    const { suite, owner } = setup();
-    suite.apply(await owner.setPriceSigner(at(0x51)));
-    expect(suite.priceSigner).toBe(at(0x51));
-    suite.apply(await owner.setSequencerUptimeFeed(at(0x5e), 3_600));
-    expect([suite.sequencerFeed, suite.sequencerGrace]).toEqual([
+    const { fakeSettings, owner } = setup();
+    fakeSettings.apply(await owner.setPriceSigner(at(0x51)));
+    expect(fakeSettings.priceSigner).toBe(at(0x51));
+    fakeSettings.apply(await owner.setSequencerUptimeFeed(at(0x5e), 3_600));
+    expect([fakeSettings.sequencerFeed, fakeSettings.sequencerGrace]).toEqual([
       at(0x5e),
       3_600,
     ]);
-    suite.apply(await owner.setSequencerUptimeFeed(null, 0));
-    expect(suite.sequencerFeed).toBe(zeroAddress);
+    fakeSettings.apply(await owner.setSequencerUptimeFeed(null, 0));
+    expect(fakeSettings.sequencerFeed).toBe(zeroAddress);
 
     const hash = `0x${"11".repeat(32)}` as const;
     const record = {
@@ -398,10 +402,10 @@ describe("quotes, presets and the allowlist", () => {
       selfPayee: false,
       active: true,
     };
-    suite.apply(await owner.setPreset("decayTax", record));
-    expect(suite.presets.get(2)).toEqual(record);
-    suite.apply(await owner.setPreset("decayTax", null));
-    expect(suite.presets.get(2)!.deployer).toBe(zeroAddress);
+    fakeSettings.apply(await owner.setPreset("decayTax", record));
+    expect(fakeSettings.presets.get(2)).toEqual(record);
+    fakeSettings.apply(await owner.setPreset("decayTax", null));
+    expect(fakeSettings.presets.get(2)!.deployer).toBe(zeroAddress);
     await refuses(
       owner.setPreset("decayTax", { ...record, creationCodeHash: zeroHash }),
       RULE,
@@ -411,17 +415,17 @@ describe("quotes, presets and the allowlist", () => {
       "INVALID_PARAMS",
     );
 
-    suite.apply(await owner.setExtensionAllowed(hash, true));
-    expect(suite.extAllowed.has(hash)).toBe(true);
+    fakeSettings.apply(await owner.setExtensionAllowed(hash, true));
+    expect(fakeSettings.extAllowed.has(hash)).toBe(true);
     await refuses(
       owner.setExtensionAllowed("0x12", true),
       "INVALID_PARAMS",
       "32 bytes",
     );
 
-    const id = suite.addPad();
-    suite.apply(await owner.setBnkrPairWaiver(id, false));
-    expect(suite.pad(id).waived).toBe(false);
+    const id = fakeSettings.addPad();
+    fakeSettings.apply(await owner.setBnkrPairWaiver(id, false));
+    expect(fakeSettings.pad(id).waived).toBe(false);
     const template = await owner.setBnkrPairWaiver("template", false);
     expect(
       decodeFunctionData({ abi: bankrLaunchSettingsAbi, data: template.data })
@@ -431,7 +435,7 @@ describe("quotes, presets and the allowlist", () => {
   });
 
   test("Bankr's pad is configured by the owner: the fee and the payees in one call", async () => {
-    const { suite, owner } = setup();
+    const { fakeSettings, owner } = setup();
     const tx = await owner.configureBankrPad({
       knobs: { steadyPips: { min: 15_000, max: 15_000, default: 15_000 } },
       payees: [{ address: at(0x71), shareWad: 300_000_000_000_000_000n }],
@@ -443,16 +447,18 @@ describe("quotes, presets and the allowlist", () => {
     });
     expect(functionName).toBe("configure");
     expect((args as readonly unknown[])[0]).toBe(0n);
-    suite.apply(tx);
-    expect(suite.pad(0n).ranges[knobId("steadyPips")!]!.dflt).toBe(15_000n);
-    expect(suite.pad(0n).terms.payees).toEqual([at(0x71)]);
+    fakeSettings.apply(tx);
+    expect(fakeSettings.pad(0n).ranges[knobId("steadyPips")!]!.dflt).toBe(
+      15_000n,
+    );
+    expect(fakeSettings.pad(0n).terms.payees).toEqual([at(0x71)]);
   });
 
   test("takeover paused by the owner stays on Bankr's pad through a configure: the call is refused, not sent without it", async () => {
-    const { suite, owner, settings } = setup();
-    const held = suite.pad(0n).flags;
+    const { fakeSettings, owner, settings } = setup();
+    const held = fakeSettings.pad(0n).flags;
     expect((await settings.pad()).switches.takeover).toBe(true);
-    suite.apply(
+    fakeSettings.apply(
       await owner.setAllowedSwitches({ takeover: false, devBuy: false }),
     );
     // pad 0's fee knobs and payees move only through configure, which writes the switches whole
@@ -465,48 +471,57 @@ describe("quotes, presets and the allowlist", () => {
       "INVALID_LAUNCHPAD_CONFIG",
       "switches: { devBuy: false, takeover: false }",
     );
-    suite.apply(
+    fakeSettings.apply(
       await owner.setAllowedSwitches({ takeover: true, devBuy: true }),
     );
-    suite.apply(await owner.configureBankrPad(fee));
-    expect(suite.pad(0n).flags).toBe(held);
+    fakeSettings.apply(await owner.configureBankrPad(fee));
+    expect(fakeSettings.pad(0n).flags).toBe(held);
     expect((await settings.pad()).switches).toMatchObject({
       takeover: true,
       devBuy: true,
     });
     // the owner who means it says so, and the word sent is the one asked for
-    suite.apply(await owner.setAllowedSwitches({ takeover: false }));
-    suite.apply(
+    fakeSettings.apply(await owner.setAllowedSwitches({ takeover: false }));
+    fakeSettings.apply(
       await owner.configureBankrPad({ switches: { takeover: false } }),
     );
-    expect(suite.pad(0n).flags).toBe(switchWord({ takeover: false }, held));
+    expect(fakeSettings.pad(0n).flags).toBe(
+      switchWord({ takeover: false }, held),
+    );
   });
 });
 
 describe("the factory's and the registry's levers", () => {
   test("pause, gate and treasury come from the factory's owner", async () => {
-    const { suite, levers } = setup();
+    const { fakeSettings, levers } = setup();
     const unpause = await levers.setPaused(false);
     expect(unpause).toMatchObject({ from: OWNER, to: SUITE.factory });
-    suite.apply(unpause);
-    suite.apply(await levers.setLaunchGated(false));
-    expect([suite.paused, suite.launchGated]).toEqual([false, false]);
-    suite.apply(await levers.setTreasury(at(0xe2)));
-    expect(suite.treasury).toBe(at(0xe2));
+    fakeSettings.apply(unpause);
+    fakeSettings.apply(await levers.setLaunchGated(false));
+    expect([fakeSettings.paused, fakeSettings.launchGated]).toEqual([
+      false,
+      false,
+    ]);
+    fakeSettings.apply(await levers.setTreasury(at(0xe2)));
+    expect(fakeSettings.treasury).toBe(at(0xe2));
     await refuses(levers.setTreasury(SUITE.ledger), RULE, "launch contracts");
-    suite.named.set(at(0xe7).toLowerCase(), 1n);
+    fakeSettings.named.set(at(0xe7).toLowerCase(), 1n);
     await refuses(levers.setTreasury(at(0xe7)), RULE, "quote ever listed");
   });
 
   test("a hook and a leg must hold code, and a leg is named once", async () => {
-    const { suite, levers } = setup();
+    const { fakeSettings, levers } = setup();
     await refuses(levers.setHook(at(0xc2)), RULE, "no code");
-    suite.chain.setCode(at(0xc2), "0x60");
-    suite.apply(await levers.setHook(at(0xc2)));
-    expect(suite.hook).toBe(at(0xc2));
-    suite.chain.setCode(suite.holderLeg, "0x60");
-    await refuses(levers.setHolderLeg(suite.holderLeg), RULE, "named once");
-    suite.chain.setCode(at(0xd2), "0x60");
+    fakeSettings.chain.setCode(at(0xc2), "0x60");
+    fakeSettings.apply(await levers.setHook(at(0xc2)));
+    expect(fakeSettings.hook).toBe(at(0xc2));
+    fakeSettings.chain.setCode(fakeSettings.holderLeg, "0x60");
+    await refuses(
+      levers.setHolderLeg(fakeSettings.holderLeg),
+      RULE,
+      "named once",
+    );
+    fakeSettings.chain.setCode(at(0xd2), "0x60");
     const tx = await levers.setHolderLeg(at(0xd2));
     expect(
       decodeFunctionData({ abi: bankrLaunchFactoryAbi, data: tx.data }),
@@ -517,43 +532,43 @@ describe("the factory's and the registry's levers", () => {
   });
 
   test("both ownerships hand over in two steps, each accepted by its own pending owner", async () => {
-    const { suite, levers } = setup();
+    const { fakeSettings, levers } = setup();
     await refuses(levers.acceptOwnership(), RULE, "No ownership handover");
-    suite.apply(await levers.transferOwnership(at(0xa9)));
+    fakeSettings.apply(await levers.transferOwnership(at(0xa9)));
     const accept = await levers.acceptOwnership();
     expect(accept).toMatchObject({ from: at(0xa9), to: SUITE.factory });
-    suite.apply(accept);
-    expect(suite.owner).toBe(at(0xa9));
+    fakeSettings.apply(accept);
+    expect(fakeSettings.owner).toBe(at(0xa9));
     const transfer = await levers.transferRegistryOwnership(at(0xa8));
     expect(transfer).toMatchObject({
       from: REGISTRY_OWNER,
       to: SUITE.launchpadRegistry,
     });
-    suite.apply(transfer);
+    fakeSettings.apply(transfer);
     const acceptRegistry = await levers.acceptRegistryOwnership();
     expect(acceptRegistry.from).toBe(at(0xa8));
-    suite.apply(acceptRegistry);
-    expect(suite.registryOwner).toBe(at(0xa8));
+    fakeSettings.apply(acceptRegistry);
+    expect(fakeSettings.registryOwner).toBe(at(0xa8));
   });
 
   test("a pending handover is called off with null, as Ownable2Step takes the zero address", async () => {
-    const { suite, levers } = setup();
-    suite.apply(await levers.transferOwnership(at(0xa9)));
-    expect(suite.pendingOwner).toBe(at(0xa9));
+    const { fakeSettings, levers } = setup();
+    fakeSettings.apply(await levers.transferOwnership(at(0xa9)));
+    expect(fakeSettings.pendingOwner).toBe(at(0xa9));
     const cancel = await levers.transferOwnership(null);
     expect(cancel).toMatchObject({ from: OWNER, to: SUITE.factory });
     expect(
       decodeFunctionData({ abi: bankrLaunchFactoryAbi, data: cancel.data }),
     ).toEqual({ functionName: "transferOwnership", args: [zeroAddress] });
-    suite.apply(cancel);
-    expect(suite.pendingOwner).toBe(zeroAddress);
+    fakeSettings.apply(cancel);
+    expect(fakeSettings.pendingOwner).toBe(zeroAddress);
     await refuses(levers.acceptOwnership(), RULE, "No ownership handover");
 
-    suite.apply(await levers.transferRegistryOwnership(at(0xa8)));
+    fakeSettings.apply(await levers.transferRegistryOwnership(at(0xa8)));
     const cancelRegistry = await levers.transferRegistryOwnership(null);
     expect(cancelRegistry.from).toBe(REGISTRY_OWNER);
-    suite.apply(cancelRegistry);
-    expect(suite.registryPendingOwner).toBe(zeroAddress);
+    fakeSettings.apply(cancelRegistry);
+    expect(fakeSettings.registryPendingOwner).toBe(zeroAddress);
     await refuses(levers.acceptRegistryOwnership(), RULE);
     // the zero address itself is still no owner to name: null is the word for calling it off
     await refuses(levers.transferOwnership(zeroAddress), "INVALID_PARAMS");
@@ -564,32 +579,32 @@ describe("the factory's and the registry's levers", () => {
   });
 
   test("the registry's own levers come from the registry's owner", async () => {
-    const { suite, levers } = setup();
-    const id = suite.addPad();
+    const { fakeSettings, levers } = setup();
+    const id = fakeSettings.addPad();
     const bond = await levers.setRegistrationBond(0n);
     expect(bond).toMatchObject({
       from: REGISTRY_OWNER,
       to: SUITE.launchpadRegistry,
     });
-    suite.apply(bond);
-    suite.apply(await levers.setMaxPadUriBytes(4_096));
-    suite.apply(await levers.setBankrSigner(at(0x51)));
-    suite.apply(await levers.setVerified(id, true));
+    fakeSettings.apply(bond);
+    fakeSettings.apply(await levers.setMaxPadUriBytes(4_096));
+    fakeSettings.apply(await levers.setBankrSigner(at(0x51)));
+    fakeSettings.apply(await levers.setVerified(id, true));
     expect([
-      suite.bond,
-      suite.maxUri,
-      suite.pad(0n).signer,
-      suite.pad(id).verified,
+      fakeSettings.bond,
+      fakeSettings.maxUri,
+      fakeSettings.pad(0n).signer,
+      fakeSettings.pad(id).verified,
     ]).toEqual([0n, 4_096, at(0x51), true]);
     await refuses(levers.setVerified(id + 1n, true), "UNKNOWN_LAUNCHPAD");
     await refuses(levers.revokeVanity(id), RULE, "no vanity");
-    suite.pad(id).vanity = { suffix: 0xbeef, nibbles: 4 };
+    fakeSettings.pad(id).vanity = { suffix: 0xbeef, nibbles: 4 };
     await refuses(
       levers.assignVanity({ suffix: 0xbeef, nibbles: 4 }, id),
       RULE,
       "holds",
     );
-    suite.apply(await levers.revokeVanity(id));
+    fakeSettings.apply(await levers.revokeVanity(id));
     const assign = await levers.assignVanity(
       { suffix: 0xbeef, nibbles: 4 },
       id,
@@ -603,10 +618,10 @@ describe("the factory's and the registry's levers", () => {
   });
 
   test("Bankr's own three-digit suffix, revoked, is assigned back; a refusal carries the owner's code", async () => {
-    const { suite, levers } = setup();
+    const { fakeSettings, levers } = setup();
     const own = { suffix: 0xba3, nibbles: 3 };
-    suite.pad(0n).vanity = own;
-    suite.apply(await levers.revokeVanity(0n));
+    fakeSettings.pad(0n).vanity = own;
+    fakeSettings.apply(await levers.revokeVanity(0n));
     const assign = await levers.assignVanity(own, 0n);
     expect(assign.from).toBe(REGISTRY_OWNER);
     expect(

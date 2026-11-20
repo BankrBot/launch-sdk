@@ -2,20 +2,25 @@ import { describe, expect, test } from "bun:test";
 import { encodeAbiParameters, type Hex } from "viem";
 import { normalizeExtension } from "./extension.js";
 import {
-  EXTENSION_TREASURY_BPS,
   extensionFeeTable,
   feePipsAt,
   scanExtensionBytecode,
 } from "./extensionPreview.js";
 
-// Bankr's own pad at 1.75 %: 80 % falling to it over 14 seconds.
+// A pool whose fee ceiling is 10 %, as the template's is.
+const CEILING_PIPS = 100_000;
+// An opening fee of 80 % falling to 1.75 % over 14 seconds.
 const SNIPE = { startPips: 800_000, steadyPips: 17_500, decaySecs: 14 };
 const FLAT = { startPips: 10_000, steadyPips: 10_000, decaySecs: 0 };
 const both = <T>(s: T) => ({ buy: s, sell: s });
 
 describe("the fee an extension adds, second by second", () => {
   const rows = (input: unknown, s = SNIPE) => {
-    const table = extensionFeeTable(normalizeExtension(input), both(s));
+    const table = extensionFeeTable(
+      normalizeExtension(input),
+      both(s),
+      CEILING_PIPS,
+    );
     return new Map(table.map((r) => [r.secsSinceLaunch, r]));
   };
 
@@ -103,16 +108,30 @@ describe("the fee an extension adds, second by second", () => {
         { type: "uint24" },
         { type: "uint32" },
         { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint32" },
       ],
-      [10_000, 5_000, 3_600, 0n],
+      [10_000, 5_000, 3_600, 0n, 2n, 21_600],
     );
     const raffle = rows({ presetId: 4, params }, FLAT);
     expect(raffle.get(3_599)!.buy.extPips).toBe(10_000);
     expect(raffle.get(3_600)!.buy.extPips).toBe(0);
   });
 
-  test("Bankr takes 2/7 of an extension's fee", () => {
-    expect(EXTENSION_TREASURY_BPS).toBe(2_857);
+  test("the pool's own ceiling is the room: a coin whose ceiling is 5 % leaves an extension half of what 10 % does", () => {
+    const table = (ceilingPips: number) =>
+      extensionFeeTable(
+        normalizeExtension({
+          preset: "sniper_tax",
+          buyPips: 90_000,
+          sellPips: 0,
+          endSecs: 600,
+        }),
+        both(FLAT),
+        ceilingPips,
+      )[0]!.buy.extPips;
+    expect(table(100_000)).toBe(90_000);
+    expect(table(50_000)).toBe(40_000);
   });
 });
 

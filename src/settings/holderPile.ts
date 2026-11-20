@@ -67,7 +67,7 @@ export interface HolderPile extends CoinHolderLeg, HolderPileDue {
 
 /**
  * BnkrHolderLeg's wake at `now` (unix seconds), as a swap would run it: stage, then forward where the forward rule
- * opens, else convert while the shared window has a floor pile left. Core's `bankrV4Suite4HoldersWakeDue`;
+ * opens, else convert while the shared window has a floor pile left. Core's wake rule;
  * `__internal__/settingsParity.test.ts` holds the two equal.
  */
 export function holderPileDue(

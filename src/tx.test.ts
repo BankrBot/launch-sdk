@@ -8,13 +8,12 @@ import {
   zeroAddress,
   type Hex,
 } from "viem";
-import { bankrLaunchFactoryAbi as suite4FactoryAbi } from "./abis/generated.js";
-import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
+import { bankrLaunchFactoryAbi } from "./abis/generated.js";
 import { CHAINS, EIP_7825_MAX_TX_GAS } from "./chains/index.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import { buildLaunchParams } from "./normalize.js";
 import type { LaunchParams, LaunchPlan } from "./providers/types.js";
-import { testSuite } from "./__internal__/fakeSuite.js";
+import { testRecord } from "./__internal__/fakeRecord.js";
 import {
   BANKR_BUILDER_CODE,
   LAUNCH_ALLOCATION_GAS,
@@ -44,7 +43,7 @@ function expectCode(fn: () => unknown, code: LaunchSdkErrorCode): void {
   );
 }
 
-const SUITE = testSuite(8453);
+const SUITE = testRecord(8453);
 const WETH = getAddress("0x4200000000000000000000000000000000000006");
 const ECON = {
   buy: { startPips: 10_000, steadyPips: 10_000, decaySecs: 0 },
@@ -57,28 +56,35 @@ const ECON = {
   vestToHoldersCliff: 0n,
   vestToHoldersDuration: 0n,
 };
-const PARAMS: LaunchParams = buildLaunchParams({
-  name: "Launch SDK Test",
-  symbol: "LSDK",
-  metadataUri: "ipfs://bafy-test",
-  metadataAdmin: zeroAddress,
-  salt: `0x${"ab".repeat(32)}`,
-  quote: WETH,
-  capExclusions: [],
-  startTick: -200_000,
-  deadline: 1_800_000_000n,
-  economics: ECON,
-  launchpadId: 1n,
-  maxOperatorShareBps: 1_000,
-  operatorPayeesHash: `0x${"cd".repeat(32)}`,
-  feeRecipients: [{ recipient: LAUNCHER, shareBps: 10_000 }],
-  allowOpenCodeFeeRecipients: false,
-  vestingRecipient: LAUNCHER,
-  vestBps: 0,
-  allowCodeVestingRecipient: false,
-  devBuyAmountIn: 0n,
-  startTime: 0,
-});
+const PARAMS: LaunchParams = {
+  options: "0x",
+  ...buildLaunchParams({
+    name: "Launch SDK Test",
+    symbol: "LSDK",
+    metadataUri: "ipfs://bafy-test",
+    metadataAdmin: zeroAddress,
+    salt: `0x${"ab".repeat(32)}`,
+    quote: WETH,
+    capExclusions: [],
+    startTick: -200_000,
+    deadline: 1_800_000_000n,
+    economics: ECON,
+    launchpadId: 1n,
+    maxOperatorShareBps: 1_000,
+    operatorPayeesHash: `0x${"cd".repeat(32)}`,
+    feeRecipients: [{ recipient: LAUNCHER, shareBps: 10_000 }],
+    allowOpenCodeFeeRecipients: false,
+    vestingRecipient: LAUNCHER,
+    vestBps: 0,
+    allowCodeVestingRecipient: false,
+    devBuyAmountIn: 0n,
+    startTime: 0,
+  }),
+};
+
+/** What a plan carries of its launch check; `gasWeight` is all these tests read of it. */
+const resolvedWith = (gasWeight: LaunchGasWeight) =>
+  ({ gasWeight }) as LaunchPlan["resolved"];
 
 function plan(over: Partial<LaunchPlan<"base">> = {}): LaunchPlan<"base"> {
   return {
@@ -121,6 +127,7 @@ function plan(over: Partial<LaunchPlan<"base">> = {}): LaunchPlan<"base"> {
     devBuyOut: 1n,
     gasEstimate: 8_000_000n,
     dataSuffix: undefined,
+    resolved: resolvedWith({ padPayees: 2, linkBytes: 0 }),
     ...over,
   };
 }
@@ -460,7 +467,7 @@ describe("buildLaunchTx", () => {
   });
 });
 
-describe("the gas that stands in for a suite 4 launch with no estimate is sized from its own launchpad", () => {
+describe("the gas that stands in for a launch with no estimate is sized from its own launchpad", () => {
   const cap = EIP_7825_MAX_TX_GAS;
   /** The most builder allocations the fallback passes under Base's ceiling for a pad's weight. */
   const fits = (weight?: LaunchGasWeight): number => {
@@ -508,7 +515,7 @@ describe("the gas that stands in for a suite 4 launch with no estimate is sized 
         symbol: "COIN",
         metadataUri: "",
         metadataAdmin: zeroAddress,
-        quote: testSuite(8453).weth,
+        quote: testRecord(8453).weth,
         capExclusions: [],
         startTick: -239_600,
         deadline: 1n,
@@ -547,7 +554,7 @@ describe("the gas that stands in for a suite 4 launch with no estimate is sized 
       ({
         chain: "base",
         launcher: LAUNCHER,
-        factory: testSuite(8453).factory,
+        factory: testRecord(8453).factory,
         params,
         value: 0n,
         gasEstimate: null,
@@ -564,8 +571,11 @@ describe("the gas that stands in for a suite 4 launch with no estimate is sized 
       plan({ padPayees: 2, linkBytes: 2_048 }),
     );
     expect(tx.gas).toBe(cap);
-    // A suite 4 launch's calldata is suite 4's tuple: `options` rides at its end.
-    const sent = decodeFunctionData({ abi: suite4FactoryAbi, data: tx.data });
+    // The launch's calldata is the factory's tuple: `options` rides at its end.
+    const sent = decodeFunctionData({
+      abi: bankrLaunchFactoryAbi,
+      data: tx.data,
+    });
     if (sent.functionName !== "launch") throw new Error("not a launch");
     expect(sent.args[0].options).toBe("0x");
   });

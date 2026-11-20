@@ -7,12 +7,12 @@ import {
   type Hex,
 } from "viem";
 import { getCode, readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { LaunchChain } from "./chains/index.js";
 import { LaunchRefusedError } from "./errors.js";
 import { PAD_TREASURY_MARKER } from "./launchpad.js";
-import type { EarlierLivePointers } from "./predict.js";
+import type { LivePointers } from "./predict.js";
 import type { ReadClient } from "./providers/types.js";
 
 const SAFE_ABI = [
@@ -119,10 +119,10 @@ async function isSafe(client: ReadClient, address: Address): Promise<boolean> {
   }
 }
 
-/** Every suite contract and the pool manager: the factory's `_isSuite`, which none of a launch's payees may be, and
- *  the suite's CREATE3 factory, which `isSuite` does not hold and could never collect either (NS-18 FACTORY-3).
+/** Every launch contract and the pool manager: the factory's `_isSuite`, which none of a launch's payees may be, and
+ *  the contracts' CREATE3 factory, which `isSuite` does not hold and could never collect either (NS-18 FACTORY-3).
  *  `references` is the holder leg's, read live (readLegReferences). */
-export function suiteContracts(
+export function bankrContracts(
   a: Pick<
     ProviderAddresses,
     | "factory"
@@ -134,7 +134,7 @@ export function suiteContracts(
     | "create3Factory"
   >,
   live: Pick<
-    EarlierLivePointers,
+    LivePointers,
     | "hook"
     | "ledger"
     | "locker"
@@ -237,7 +237,7 @@ export async function refuseUnclaimableRecipient(
   }
   const code = await getCode(client, { address: recipient });
   if (!hasCode(code) || isDelegatedEoa(code)) return;
-  const [suite, safe] = await Promise.all([
+  const [ours, safe] = await Promise.all([
     readContract(client, {
       address: factory,
       abi: bankrLaunchFactoryAbi,
@@ -246,7 +246,7 @@ export async function refuseUnclaimableRecipient(
     }),
     isSafe(client, recipient),
   ]);
-  if (suite) refuse(BANKR_LAUNCH_CONTRACT);
+  if (ours) refuse(BANKR_LAUNCH_CONTRACT);
   if (safe && !launch) return;
   if (!safe && !allowContract) refuse();
   if (launch?.allowOpen) return;

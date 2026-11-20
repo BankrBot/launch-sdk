@@ -11,7 +11,7 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   holderRewardsDeployerAbi,
-} from "./abis/suite3.js";
+} from "./abis/generated.js";
 import type { BankrApi } from "./api.js";
 import {
   LaunchConfigError,
@@ -23,9 +23,9 @@ import {
   requireLaunch,
   type BeneficiaryRole,
   type LaunchInfo,
-  type SuiteReadContext,
+  type ReadContext,
 } from "./lens.js";
-import { EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+import { bnkrHolderLegAbi } from "./abis/settings.js";
 import { PUBLIC_FORWARDERS } from "./normalize.js";
 import { readOwed, type OwedState } from "./owed.js";
 import {
@@ -38,9 +38,9 @@ import {
   readLegReferences,
   refuseUnclaimableRecipient,
   requireAddress,
-  suiteContracts,
+  bankrContracts,
 } from "./recipient.js";
-import { readEarlierLivePointers, readLivePointers } from "./predict.js";
+import { readLivePointers } from "./predict.js";
 import { buildCallTx } from "./tx.js";
 
 /** One account's share of one of a launch's fee buckets. */
@@ -121,8 +121,9 @@ export interface LaunchFees {
   ): Promise<UnsignedTx[]>;
   /**
    * Everything `account` is owed on this chain's ledger: its pull balances and every launch's bucket share with
-   * something claimable, from Bankr's account index (`API_ERROR` when it cannot answer). A fork client is refused
-   * (`INDEX_UNAVAILABLE`): read and claim one launch with `get` and `buildClaim`.
+   * something claimable, from Bankr's account index (`INDEX_UNAVAILABLE` while its index of the chain is behind:
+   * try again; `API_ERROR` when it cannot answer). A fork client is refused (`INDEX_NOT_ON_FORK`): read and claim
+   * one launch with `get` and `buildClaim`.
    */
   getOwed(account: Address): Promise<OwedState>;
   /**
@@ -186,16 +187,18 @@ export interface LaunchFees {
   ): Promise<UnsignedTx>;
 }
 
-/** The fee namespace for one chain's suite; `index` is Bankr's API, which `getOwed` and `buildClaimAll` read. */
-export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
+/** The fee namespace for one chain's contracts; `index` is Bankr's API, which `getOwed` and `buildClaimAll` read. */
+export function createFees(ctx: ReadContext, index: BankrApi): LaunchFees {
   const { addresses: a, client } = ctx;
   const chain = ctx.chain.chain;
   const refuse = (code: CodeOfKind<"refused">): never => {
     throw new LaunchRefusedError(code, { chain });
   };
-  // A fork's state is not the live chain the index reads, so its answer would be another chain's.
+  // The index covers some chains only, and a fork's state is not the live chain it reads.
   const requireIndex = () => {
-    if (ctx.fork) throw new LaunchConfigError("INDEX_UNAVAILABLE", { chain });
+    if (!ctx.chain.indexed)
+      throw new LaunchConfigError("INDEX_NOT_COVERED", { chain });
+    if (ctx.fork) throw new LaunchConfigError("INDEX_NOT_ON_FORK", { chain });
   };
   const call = (from: Address, data: Hex) =>
     buildCallTx(ctx.chain.chainId, from, a.ledger, data);
@@ -274,13 +277,13 @@ export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
     ctx.chain.viemChain.contracts?.multicall3?.address ?? zeroAddress,
   ];
 
-  /** BankrFeeLedger._mayPush for `sender`: true, or why not. A puller (claims collector, protocol sink or suite
+  /** BankrFeeLedger._mayPush for `sender`: true, or why not. A puller (claims collector, protocol sink or launch
    *  contract) collects its own share and is never pushed, whatever its policy. */
   async function readPushable(
     account: Address,
     sender: Address,
   ): Promise<true | string> {
-    const [mayClaim, collector, sink, suite] = await Promise.all([
+    const [mayClaim, collector, sink, ours] = await Promise.all([
       readContract(client, {
         ...ledger,
         functionName: "mayClaimFor",
@@ -303,7 +306,7 @@ export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
         args: [account],
       }),
     ]);
-    if (collector || sink || suite)
+    if (collector || sink || ours)
       return "The account is a Bankr puller: it collects its own share and is never pushed.";
     if (!mayClaim)
       return "The account restricts who may claim for it, and the sender is not one of its claim operators.";
@@ -330,7 +333,7 @@ export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
     if (unknown.length === 0) return new Set();
     const bnkr = await readContract(client, {
       address: a.holderLeg,
-      abi: EARLIER_HOLDER_LEG_WAKE_ABI,
+      abi: bnkrHolderLegAbi,
       functionName: "bnkr",
     }).catch(() => zeroAddress);
     const others = unknown.filter((q) => q !== bnkr.toLowerCase());
@@ -555,11 +558,8 @@ export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
       const buckets = held(state);
       if (buckets.length === 0) refuse("NOT_A_BENEFICIARY");
       const info = await requireLaunch(ctx, token);
-      // A suite 4 factory holds no cap controller, so its pointers are read by its own list.
       const [live, references] = await Promise.all([
-        a.settings === undefined
-          ? readEarlierLivePointers(client, a.factory)
-          : readLivePointers(client, a.factory),
+        readLivePointers(client, a.factory),
         readLegReferences(client, a.holderLeg),
       ]);
       // The ledger refuses an existing beneficiary; the factory's payee rules apply to the new one.
@@ -577,7 +577,7 @@ export function createFees(ctx: SuiteReadContext, index: BankrApi): LaunchFees {
         chain,
         next,
         [
-          ...suiteContracts(a, live, references),
+          ...bankrContracts(a, live, references),
           info.token,
           info.distributor,
           info.quote,

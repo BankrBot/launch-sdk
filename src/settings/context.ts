@@ -10,7 +10,7 @@ import type { ReadClient, UnsignedTx } from "../providers/types.js";
 import { requireAddress } from "../recipient.js";
 import { buildCallTx } from "../tx.js";
 
-/** The contracts of one suite the settings reads and admin builders call: a subset of the suite's record. */
+/** The contracts the settings reads and admin builders call: a subset of the chain's record. */
 export interface SettingsAddresses {
   readonly factory: Address;
   readonly launchpadRegistry: Address;
@@ -19,11 +19,11 @@ export interface SettingsAddresses {
   readonly ledger: Address;
   /** BankrTermsLens. Only a coin's stored terms and its fingerprint check need it. */
   readonly termsLens?: Address;
-  /** The block the suite was deployed in: where a scan of its logs starts. */
+  /** The block the contracts were deployed in: where a scan of their logs starts. */
   readonly blockNumber?: number;
 }
 
-/** One chain's suite and a client to read it. Nothing built from it signs or sends. */
+/** One chain's contracts and a client to read them. Nothing built from it signs or sends. */
 export interface SettingsContext {
   chain: ChainCapabilities;
   client: ReadClient;
@@ -31,7 +31,7 @@ export interface SettingsContext {
 }
 
 /**
- * A suite's addresses from its factory alone: the settings contract, the launchpad registry and the ledger are the
+ * The contracts' addresses from the factory alone: the settings contract, the launchpad registry and the ledger are the
  * factory's own pointers, set once. The lens has no pointer on chain, so pass it where the coin reads are used.
  */
 export async function readSettingsAddresses(

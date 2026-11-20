@@ -3,16 +3,24 @@ import {
   arbitrum as viemArbitrum,
   arc as viemArc,
   base as viemBase,
+  bsc as viemBnb,
+  mainnet as viemEthereum,
   robinhood as viemRobinhood,
 } from "viem/chains";
 import { LaunchConfigError } from "../errors.js";
 
-/** Every chain Bankr's v4 hook suite targets (core's `BANKR_V4_CHAINS`). New chains arrive as additive minors. */
+/**
+ * Every chain the SDK launches on: the chains Bankr's own apps and launch index cover (core's `BANKR_V4_CHAINS`),
+ * then Ethereum and BNB Chain, where the contracts are live and the SDK is the only way in (`indexed: false`).
+ * New chains arrive as additive minors.
+ */
 export const LAUNCH_CHAINS = Object.freeze([
   "base",
   "robinhood",
   "arbitrum",
   "arc",
+  "ethereum",
+  "bnb",
 ] as const);
 
 export type LaunchChain = (typeof LAUNCH_CHAINS)[number];
@@ -22,6 +30,8 @@ export interface LaunchChainIds {
   robinhood: 4663;
   arbitrum: 42161;
   arc: 5042;
+  ethereum: 1;
+  bnb: 56;
 }
 
 /**
@@ -33,11 +43,13 @@ export interface QuoteFor {
   robinhood: "WETH" | "USDG";
   arbitrum: "WETH" | "USDC";
   arc: "USDC";
+  ethereum: "WETH" | "USDC";
+  bnb: "WBNB" | "USDT" | "USDC";
 }
 
 export type QuoteSymbol<C extends LaunchChain = LaunchChain> = QuoteFor[C];
 
-/** A named quote's address and decimals. */
+/** A named quote's address and decimals. Read the decimals: BNB Chain's USDT and USDC have 18, not 6. */
 export interface QuoteAddress {
   readonly address: Address;
   readonly decimals: number;
@@ -47,37 +59,42 @@ export interface QuoteAddress {
 export type QuoteMap<C extends LaunchChain = LaunchChain> =
   C extends LaunchChain ? { readonly [S in QuoteFor[C]]: QuoteAddress } : never;
 
-/** What a chain's v4 suite supports and how the SDK talks to it. */
+/** What Bankr's contracts support on a chain and how the SDK talks to it. */
 export interface ChainCapabilities<C extends LaunchChain = LaunchChain> {
   readonly chain: C;
   readonly chainId: LaunchChainIds[C];
   readonly viemChain: Chain;
   /** Every launch is one Uniswap v4 pool behind Bankr's hook. */
   readonly venue: "uniswap_v4";
-  /** Gas is paid in USDC on Arc (18-dp native balance). */
-  readonly gasToken: "ETH" | "USDC";
+  /** Gas is paid in USDC on Arc (18-dp native balance) and in BNB on BNB Chain. */
+  readonly gasToken: "ETH" | "USDC" | "BNB";
   /** The named majors, keyed by symbol. */
   readonly quotes: QuoteMap<C>;
   readonly defaultQuote: QuoteFor[C];
-  /** Whether a WETH-quoted dev buy may be paid in the native gas token (`msg.value`). False on Arc. */
+  /** Whether a dev buy quoted in the wrapped native token (WETH, WBNB) may be paid in the native gas token
+   *  (`msg.value`). False on Arc. */
   readonly nativeDevBuy: boolean;
   /**
    * The asset the coin holders' half of Bankr's slice pays in (FD-23): BNKR where BNKR trades (Base, Robinhood), the
    * quote elsewhere until it is listed there. A per-chain setting on the holder leg, so read it as a default.
    */
   readonly holderPayout: "bnkr" | "quote";
-  /** Per-transaction gas ceiling the chain's RPC enforces (EIP-7825's 2^24 on Base and Arc). */
+  /** Per-transaction gas ceiling the chain's RPC enforces (EIP-7825's 2^24 on Base, Arc, Ethereum and BNB Chain). */
   readonly maxTxGas: bigint;
-  /** The widest `eth_getLogs` block range to request (Bankr's indexer's window). */
+  /** The widest `eth_getLogs` block range to request: Bankr's indexer's window, or what a public RPC serves where
+   *  Bankr runs no indexer. */
   readonly maxLogRange: number;
-  /** Blocks before Bankr's indexer treats a launch as final. */
+  /** Blocks before a launch is treated as final: Bankr's indexer's depth where it indexes the chain. */
   readonly confirmations: number;
+  /**
+   * Whether Bankr's launch index and API cover the chain. Where they do not, on-chain reads, planning and launching
+   * work as everywhere, every index read throws `INDEX_NOT_COVERED`, and a launch is not registered.
+   */
+  readonly indexed: boolean;
   /** No usable public RPC: the client needs an `rpcUrl` or `publicClient`. */
   readonly rpcRequired: boolean;
   /** The public RPC works but is limited (shallow history, rate limits): pass an `rpcUrl`. */
   readonly rpcRecommended: boolean;
-  /** Launches are enabled in this SDK version: the suite's record ships and the chain's go-live gates have passed. */
-  readonly deployed: boolean;
 }
 
 export type ChainTable = { readonly [C in LaunchChain]: ChainCapabilities<C> };
@@ -89,12 +106,11 @@ const freezeChain = <C extends LaunchChain>(
   return Object.freeze(c);
 };
 
-/** EIP-7825's per-transaction gas cap (2^24), which Base and Arc enforce. */
+/** EIP-7825's per-transaction gas cap (2^24): Base, Arc, Ethereum and BNB Chain's ceiling. */
 export const EIP_7825_MAX_TX_GAS = 16_777_216n;
 
-// maxLogRange and confirmations mirror Bankr's bankr_v4 indexer (workers' chain params). `deployed` is the earlier
-// contracts' go-live, on Base alone (2026-11-07). The latest contracts' go-live on a chain is its record in
-// `BANKR_V4_LAUNCH_ADDRESSES`: Base, then Robinhood, Arbitrum and Arc (2026-11-19).
+// maxLogRange and confirmations mirror Bankr's bankr_v4 indexer (workers' chain params) on the chains it indexes. A
+// chain is live once its record is in `BANKR_V4_LAUNCH_ADDRESSES`: no flag here says so a second time.
 export const CHAINS: ChainTable = Object.freeze({
   base: freezeChain({
     chain: "base",
@@ -120,7 +136,7 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 20,
     rpcRequired: false,
     rpcRecommended: false,
-    deployed: true,
+    indexed: true,
   }),
   robinhood: freezeChain({
     chain: "robinhood",
@@ -146,7 +162,7 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 100,
     rpcRequired: false,
     rpcRecommended: true,
-    deployed: false,
+    indexed: true,
   }),
   arbitrum: freezeChain({
     chain: "arbitrum",
@@ -172,7 +188,7 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 20,
     rpcRequired: false,
     rpcRecommended: false,
-    deployed: false,
+    indexed: true,
   }),
   arc: freezeChain({
     chain: "arc",
@@ -194,7 +210,70 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 2,
     rpcRequired: true,
     rpcRecommended: false,
-    deployed: false,
+    indexed: true,
+  }),
+  // Bankr indexes neither chain, so no indexer row sets maxLogRange or confirmations: each is the SDK's own figure,
+  // inside what public RPCs served when probed on 2026-11-20. maxTxGas is the chain config's.
+  ethereum: freezeChain({
+    chain: "ethereum",
+    chainId: 1,
+    viemChain: viemEthereum,
+    venue: "uniswap_v4",
+    gasToken: "ETH",
+    quotes: {
+      WETH: {
+        address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        decimals: 18,
+      },
+      USDC: {
+        address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        decimals: 6,
+      },
+    },
+    defaultQuote: "WETH",
+    nativeDevBuy: true,
+    holderPayout: "quote",
+    maxTxGas: EIP_7825_MAX_TX_GAS,
+    // publicnode and viem's default RPC both served 10,000-block ranges; publicnode refuses week-old logs.
+    maxLogRange: 2_000,
+    // Three epochs: finalized by then. The `finalized` tag trailed the head by 68 to 70 blocks.
+    confirmations: 96,
+    rpcRequired: false,
+    rpcRecommended: true,
+    indexed: false,
+  }),
+  bnb: freezeChain({
+    chain: "bnb",
+    chainId: 56,
+    viemChain: viemBnb,
+    venue: "uniswap_v4",
+    gasToken: "BNB",
+    quotes: {
+      WBNB: {
+        address: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+        decimals: 18,
+      },
+      // Binance-Peg tokens: 18 decimals, unlike USDT and USDC elsewhere.
+      USDT: {
+        address: "0x55d398326f99059ff775485246999027b3197955",
+        decimals: 18,
+      },
+      USDC: {
+        address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        decimals: 18,
+      },
+    },
+    defaultQuote: "WBNB",
+    nativeDevBuy: true,
+    holderPayout: "quote",
+    maxTxGas: EIP_7825_MAX_TX_GAS,
+    // The cap of viem's default RPC (56.rpc.thirdweb.com), which also rate-limits; publicnode served 50,000.
+    maxLogRange: 1_000,
+    // About 9 seconds at 0.45 s blocks. The `finalized` tag trailed the head by 0 to 1 block.
+    confirmations: 20,
+    rpcRequired: false,
+    rpcRecommended: true,
+    indexed: false,
   }),
 });
 

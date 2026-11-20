@@ -13,27 +13,16 @@ import { LaunchRefusedError } from "./errors.js";
 // The SDK's own sentence for each curve refusal: which band and what to change. The rule sentences are core's
 // (`bankrV4CurveRevertMessage`, held equal in src/__internal__), so every Bankr surface words a band the same way.
 
-/** What a built-in curve may leave unplaced on suite 4, in parts per million (LaunchPool's BUILTIN_DUST_PPM). */
+/** What a built-in curve may leave unplaced, in parts per million (LaunchPool's BUILTIN_DUST_PPM). */
 export const BUILTIN_CURVE_DUST_PPM = 5;
 
-/** A suite 4 coin's own rules for a sentence; `builtIn` names a built-in curve's dust bound. */
+/** A coin's own rules for a sentence; `builtIn` names a built-in curve's dust bound. */
 export type CurveRuleFigures = CurveRules & { builtIn?: boolean };
 
 const grouped = (n: number) => n.toLocaleString("en-US");
 
-/** The figures a curve sentence names: suite 3's compiled ones, a suite 4 coin's own, or none when unknown. */
-function curveFigures(rules: CurveRuleFigures | null | undefined) {
-  if (rules === undefined)
-    return {
-      depth: "under a tenth of",
-      density: "more than twice",
-      densityNote: " (about 2% of the sale per 200 ticks)",
-      near: "within 6,800 ticks of the start",
-      step: "at most 13 times",
-      placement:
-        ": at least 90% of it must be sold within 120,000 ticks of the start",
-      dust: "over 2 parts per million",
-    };
+/** The figures a curve sentence names: the coin's own, or none when unknown. */
+function curveFigures(rules: CurveRuleFigures | null) {
   if (rules === null)
     return {
       depth: "less than this launchpad requires of",
@@ -58,13 +47,12 @@ function curveFigures(rules: CurveRuleFigures | null | undefined) {
 
 /**
  * A curve rule's sentence. `row` counts from 0 as the contract's error does and the sentence counts bands from 1;
- * without a row no band is numbered. `rules` are a suite 4 coin's own (null: unknown, so no figure is named);
- * omitted, the figures are the ones suite 3 compiled in.
+ * without a row no band is numbered. `rules` are the coin's own; null or omitted, no figure is named.
  */
 export function curveRevertDetail(
   name: CurveRevertName,
   row?: number | null,
-  rules?: CurveRuleFigures | null,
+  rules: CurveRuleFigures | null = null,
 ): string {
   const known = row !== undefined && row !== null;
   const band = known
@@ -100,7 +88,7 @@ const formDetail = (curve: bigint): string =>
     : curveRevertDetail("InvalidCurve");
 
 /** `INVALID_PARAMS` for own bands whose form fails from `startTick`. The form needs no rule of the coin's, so a
- *  suite 4 plan holds it before the chain's launch check, which raises it as a bare `InvalidCurve`. */
+ *  plan holds it before the chain's launch check, which raises it as a bare `InvalidCurve`. */
 export function refuseMalformedCurve(
   curve: bigint,
   startTick: number,
@@ -125,36 +113,13 @@ export interface PadCurveKeys {
 export const padAllowsCurve = (curve: bigint, k: PadCurveKeys): boolean =>
   k.listed || (builtInCurveId(curve) === null && k.anyBands);
 
-/** Why a pad refuses a curve, and who can change that: its operator, with `setCurveAllowed`. */
-export function closedCurveDetail(launchpadId: bigint, curve: bigint): string {
-  if (builtInCurveId(curve) !== null)
-    return "This launchpad's operator has switched this launch curve off. Choose another curve, or ask the operator to switch it back on (setCurveAllowed).";
-  return launchpadId === 0n
-    ? "Bankr's launchpad does not take launcher-defined liquidity bands yet. Launch on one of its built-in curves."
-    : "This launchpad is closed to these liquidity bands. Its operator must open it first: list these bands, or open the launchpad to launcher-defined bands, with setCurveAllowed. Until then, launch on a curve it allows.";
-}
-
-/** `CURVE_NOT_ALLOWED`, with {@link closedCurveDetail}, unless the pad allows the curve. */
-export function refuseClosedCurve(
-  chain: LaunchChain,
-  launchpadId: bigint,
-  curve: bigint,
-  keys: PadCurveKeys,
-): void {
-  if (padAllowsCurve(curve, keys)) return;
-  throw new LaunchRefusedError("CURVE_NOT_ALLOWED", {
-    chain,
-    detail: closedCurveDetail(launchpadId, curve),
-  });
-}
-
-// 1.0001^6,800 is 1.9738: a range that ends under it leaves the next band inside the step rule's near window
-// wherever the start market cap sits in its tick spacing.
-const MARKET_CAP_STEP_HINT =
-  "Market-cap ranges are placed from the launch's start tick, so the band after a range begins within those 6,800 ticks for certain only when the range ends under 1.97 times the start market cap. End that range lower, or convert the ranges once with curveFromMarketCaps and launch with its bands.";
+// A range that ends under 1.0001^nearTicks times the start (1.97 at 6,800 ticks) leaves the next band inside the
+// step rule's near window wherever the start market cap sits in its tick spacing.
+const marketCapStepHint = (nearTicks: number): string =>
+  `Market-cap ranges are placed from the launch's start tick, so the band after a range begins within those ${grouped(nearTicks)} ticks for certain only when the range ends under ${Math.floor(1.0001 ** nearTicks * 100) / 100} times the start market cap. End that range lower, or convert the ranges once with curveFromMarketCaps and launch with its bands.`;
 
 /**
- * Holds a launch's own bands to the suite's rules before anything is signed: `INVALID_PARAMS` whose `detail` names
+ * Holds a launch's own bands to the coin's rules before anything is signed: `INVALID_PARAMS` whose `detail` names
  * the band and what to change (`placedFromMarketCaps` adds where a range must end to the step rule's). With
  * `tokenIsCurrency0` the one order is checked; without it both: the token's side is known only once its salt is mined.
  */
@@ -177,7 +142,7 @@ export function refuseBrokenCurve(
     chain,
     detail:
       placedFromMarketCaps && name === "CurveStep"
-        ? `${detail} ${MARKET_CAP_STEP_HINT}`
+        ? `${detail} ${marketCapStepHint(i.rules.nearTicks)}`
         : detail,
   });
 }

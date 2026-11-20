@@ -1,22 +1,8 @@
 import { getAddress, type Address } from "viem";
 import type { LaunchInput } from "../providers/types.js";
 
-// What a suite 4 launch names beyond suite 3's fields, with only the checks of shape: every range is its pad's, and
+// What a launch names beyond its launchpad's defaults, with only the checks of shape: every range is its pad's, and
 // the chain's launch check (`resolve`) judges it. featureOptions.ts builds the option groups from these.
-
-/** The fields a suite 3 launch cannot carry: naming one there is refused, never ignored. */
-export const SUITE4_ONLY_FIELDS = [
-  "supply",
-  "walletCap",
-  "allocations",
-  "autoLp",
-  "buyback",
-  "holderStream",
-  "capExclusions",
-  "feeCeilingPips",
-  "pin",
-  "claimOperator",
-] as const satisfies readonly (keyof LaunchInput)[];
 
 export interface NormalizedAllocation {
   recipient: Address;
@@ -25,8 +11,8 @@ export interface NormalizedAllocation {
   duration: bigint;
 }
 
-/** A launch's suite 4 choices with their shapes checked; undefined where the pad's default applies. */
-export interface Suite4Choices {
+/** A launch's choices with their shapes checked; undefined where the pad's default applies. */
+export interface LaunchChoices {
   supply: bigint | undefined;
   walletCap: { bps: number; seconds: number } | false | undefined;
   vestClock: { cliffSeconds?: number; durationSeconds?: number } | undefined;
@@ -58,14 +44,14 @@ const isUint = (v: unknown, max: bigint): v is bigint =>
   typeof v === "bigint" && v >= 0n && v <= max;
 
 /**
- * The suite 4 fields of a launch input, held to their shapes alone (types, widths, one spelling per term). `bps`
+ * The option fields of a launch input, held to their shapes alone (types, widths, one spelling per term). `bps`
  * of auto-liquidity and of the buyback come back merged with the top-level `autoLpBps` and `buybackBps`.
  */
-export function normalizeSuite4Choices(
+export function normalizeChoices(
   input: LaunchInput,
   address: (v: unknown, what: string) => Address,
   invalid: (detail: string) => never,
-): Suite4Choices & {
+): LaunchChoices & {
   autoLpBps: number | undefined;
   buybackBps: number | undefined;
 } {

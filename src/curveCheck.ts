@@ -5,34 +5,17 @@ import {
   placeCurve,
   type PlacedCurveBand,
 } from "./curve.js";
-import {
-  DEFAULT_TOTAL_SUPPLY,
-  MAX_USABLE_TICK,
-  type LaunchParams,
-} from "./economics.js";
+import { MAX_USABLE_TICK } from "./economics.js";
 import { sqrtPriceX96AtTick } from "./tickMath.js";
 
 // The rules a launch's own bands are held to, in the order a launch meets them, vendored from core's bankr-v4
 // curveCheck.ts (the contracts' CurveTable and LaunchPool): exact integer math, so the verdict, the error and its
 // row are the chain's own. src/__internal__ holds it equal to core, which is held to forge.
 
-/** No band may hold under a tenth of the liquidity the whole sale has as one band from the start. */
-export const CURVE_MIN_DEPTH_DIV = 10n;
-/** Nor over twice what the whole sale has as one band from the band's own near edge (about 2 % a spacing). */
-export const CURVE_MAX_DENSITY = 2n;
 /** Half of v4's per-tick liquidity cap at a 200 spacing; the other half is left to the pool's compounds. */
 export const CURVE_MAX_TICK_LIQUIDITY = (2n ** 128n - 1n) / 8_874n / 2n;
-/** This share of the sale is sold by this many ticks past the start. */
-export const CURVE_PLACE_TICKS = 120_000;
-export const CURVE_PLACE_BPS = 9_000n;
-/** Where the pool buys its own token: a band that begins within this many ticks of the start holds at most
- *  `CURVE_NEAR_STEP` times the thinnest band before it; one further out, no more than the band before it. */
-export const CURVE_NEAR_TICKS = 6_800;
-export const CURVE_NEAR_STEP = 13n;
-/** What the bands may leave of the sale unplaced by rounding, in parts per million. */
-export const CURVE_MAX_DUST_PPM = 2n;
 
-/** The suite's errors for a launch's own bands, as its ABI names them. */
+/** The contracts' errors for a launch's own bands, as their ABI names them. */
 export type CurveRevertName =
   | "InvalidCurve"
   | "CurveTooThin"
@@ -62,15 +45,16 @@ export interface CheckCurveInput {
   startTick: number;
   /** Whether the token sorts below its quote; known only once the salt is mined, so check both orders before. */
   tokenIsCurrency0: boolean;
-  /** What the launch sells: {@link launchSale}. */
+  /** What the launch sells into its bands: the supply less everything vested and every builder allocation. */
   sale: bigint;
-  /** {@link curveOwnBuys}: switches the step rule on. */
+  /** Whether the pool will ever buy its own token (a buyback share, auto-liquidity, or an extension the hook calls
+   *  after a swap), which switches the step rule on. */
   ownBuys: boolean;
-  /** A suite 4 coin's own rules (`CoinTerms.curve`); omitted, the figures suite 3 compiled in. */
-  rules?: CurveRules;
+  /** The coin's own rules: `plan.resolved.terms.curve`, or a launchpad's from `settings.pad(id)`. */
+  rules: CurveRules;
 }
 
-/** The numbers a launch's own bands are held to: a suite 4 pad sets them, and `resolve` freezes them per coin. */
+/** The numbers a launch's own bands are held to: a launchpad sets them, and `resolve` freezes them per coin. */
 export interface CurveRules {
   minDepthDiv: number;
   maxDensity: number;
@@ -81,17 +65,6 @@ export interface CurveRules {
   dustPpm: number;
 }
 
-/** Suite 3's rules, as its CurveTable compiled them. */
-export const SUITE3_CURVE_RULES: CurveRules = Object.freeze({
-  minDepthDiv: Number(CURVE_MIN_DEPTH_DIV),
-  maxDensity: Number(CURVE_MAX_DENSITY),
-  placeTicks: CURVE_PLACE_TICKS,
-  placeBps: Number(CURVE_PLACE_BPS),
-  nearTicks: CURVE_NEAR_TICKS,
-  nearStep: Number(CURVE_NEAR_STEP),
-  dustPpm: Number(CURVE_MAX_DUST_PPM),
-});
-
 const Q96 = 1n << 96n;
 const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
@@ -100,42 +73,6 @@ const refused = (
   row: number | null = null,
   unplaced: bigint | null = null,
 ): CurveVerdict => ({ ok: false, revert: { name, row, unplaced } });
-
-/** What a launch sells into its bands: the supply less everything vested and every builder allocation. */
-export function launchSale(p: {
-  totalSupply: LaunchParams["totalSupply"];
-  vestBps: number;
-  econ: Pick<LaunchParams["econ"], "vestToHoldersBps">;
-  extraAllocations: readonly { amount: bigint }[];
-}): bigint {
-  const supply = p.totalSupply === 0n ? DEFAULT_TOTAL_SUPPLY : p.totalSupply;
-  const vested =
-    (supply * BigInt(p.vestBps + p.econ.vestToHoldersBps)) / 10_000n;
-  return p.extraAllocations.reduce(
-    (left, a) => left - a.amount,
-    supply - vested,
-  );
-}
-
-/**
- * Whether the pool will ever buy its own token, which holds a launch's own bands to the step rule: a buyback
- * share, auto-liquidity (the launch's, or the pad's decay split's), or an extension the hook calls after a swap
- * (any custom code that is not quote-only, and the Raffle Run preset).
- */
-export function curveOwnBuys(i: {
-  buybackBps: number;
-  autoLpBps: number;
-  /** The pad's `terms.decay`. */
-  padDecay: { on: boolean; autoLpBps: number };
-  extensionCallsOut: boolean;
-}): boolean {
-  return (
-    i.buybackBps !== 0 ||
-    i.autoLpBps !== 0 ||
-    (i.padDecay.on && i.padDecay.autoLpBps !== 0) ||
-    i.extensionCallsOut
-  );
-}
 
 /** The form alone, which the factory checks before it deploys anything: well-formed bands whose last finite edge
  *  sits inside the pool's range from `startTick`. */
@@ -194,7 +131,7 @@ export function checkCurve(i: CheckCurveInput): CurveVerdict {
     return { ok: true, bands, unplaced: unplacedOf(bands, t0, i.sale) };
   }
   if (!checkCurveFormat(i.curve, i.startTick)) return refused("InvalidCurve");
-  const rules = i.rules ?? SUITE3_CURVE_RULES;
+  const { rules } = i;
   const dir = t0 ? 1 : -1;
   const [start, far] = [dir * i.startTick, dir * MAX_USABLE_TICK];
   const reach = start + dir * rules.placeTicks;

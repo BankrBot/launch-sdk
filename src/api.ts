@@ -1,13 +1,16 @@
 import type { Address, Hex } from "viem";
-import { getChain, type LaunchChain } from "./chains/index.js";
-import type { CurveBand, CurveId, CurveName } from "./curve.js";
-import type { FeeSchedule } from "./economics.js";
+import {
+  CHAINS,
+  LAUNCH_CHAINS,
+  getChain,
+  isLaunchChain,
+  type LaunchChain,
+} from "./chains/index.js";
 import {
   LaunchApiError,
   LaunchConfigError,
   LaunchRefusedError,
 } from "./errors.js";
-import type { LaunchMetadata } from "./providers/types.js";
 import { isRecord } from "./isRecord.js";
 import { iterateLaunches, type LaunchIterationOptions } from "./indexPages.js";
 
@@ -22,118 +25,6 @@ export type FetchLike = (
   input: string,
   init?: RequestInit,
 ) => Promise<Response>;
-
-/**
- * `POST /bankr-v4/launches/prepare`: one launch in the API's units (bigints as decimal strings). Each omitted economic
- * field is the pad's default; `holderShareBps` is bps of the creator's own take, as everywhere.
- */
-export interface PrepareRequest {
-  chain: LaunchChain;
-  launcher: Address;
-  /** Decimal uint64; default "0" (Bankr's pad, which needs a prepare-scoped key). */
-  launchpadId?: string;
-  name: string;
-  symbol: string;
-  /** At most 2,048 UTF-8 bytes. */
-  metadataUri?: string;
-  /** Bankr pins it (a prepare-scoped key only); the response's `metadataUri` is the pin. */
-  metadata?: LaunchMetadata;
-  /** Who may replace the token's metadata URI after launch; omitted = nobody. */
-  metadataAdmin?: Address;
-  quote?: Address;
-  /** 1–10 distinct recipients of the creator's own take, `bps` summing to 10,000, the primary first; omitted = the
-   *  launcher alone. */
-  feeRecipients?: { address: Address; bps: number }[];
-  /** The launch's waiver for contract recipients that let anyone claim for them; default false. */
-  allowOpenCodeFeeRecipients?: boolean;
-  /** Unix seconds public trading opens at; omitted or 0 = at launch. */
-  startTime?: number;
-  /** A built-in curve by name, or the launch's own bands with the USD FDV the first one starts at; omitted =
-   *  `runner_v1`. */
-  curve?: CurveName | { bands: CurveBand[]; startFdvUsd: number };
-  vesting?: { bps: number; recipient?: Address };
-  economics?: {
-    buy?: FeeSchedule;
-    sell?: FeeSchedule;
-    holderShareBps?: number;
-    autoLpBps?: number;
-    buybackBps?: number;
-    referrerBps?: number;
-    vestToHolders?: {
-      bps: number;
-      cliffSeconds: number;
-      durationSeconds: number;
-    };
-  };
-  /** Quote base units (native on WETH); the dev-buy floor is the SDK's to set. */
-  devBuy?: { amount: string };
-}
-
-/** What the prepare endpoint returns. The client verifies it against its own input and suite, and re-encodes it. */
-export interface PrepareResponse {
-  chain: LaunchChain;
-  chainId: number;
-  launchpadId: string;
-  factory: Address;
-  launcher: Address;
-  /** `LaunchParams`, every field, bigints as decimal strings. */
-  params: Record<string, unknown>;
-  /** `msg.value` (a native dev buy), decimal. */
-  value: string;
-  /** An ERC-20 dev buy: approve the factory for this first. */
-  approval: { token: Address; amount: string } | null;
-  predictedToken: Address;
-  poolId: Hex;
-  tokenIsCurrency0: boolean;
-  distributor: Address;
-  escrow: Address | null;
-  expectedStartTick: number;
-  deadline: string;
-  /** Set when the pad needs its own authorizer's signature (the client's `authorizer`). */
-  padSigner: Address | null;
-  authorization: { nonce: Hex; deadline: string; signature: Hex } | null;
-  metadataUri: string;
-  /** Bankr's mirrors of `params` in the request's units (recipients resolved, `metadataAdmin` null for nobody). The
-   *  client reads and verifies `params` alone, so another preparer may leave them out. */
-  feeRecipients?: { address: Address; bps: number }[];
-  allowOpenCodeFeeRecipients?: boolean;
-  metadataAdmin?: Address | null;
-  startTime?: number;
-  /** The curve as built, mirrored too: a built-in's id, or the launch's own bands and the word `params` carries. */
-  curve?: {
-    curveId: CurveId | null;
-    curveTable: Hex | null;
-    curveBands: CurveBand[];
-  };
-  /** Set when Bankr recorded the prepare (a prepare-scoped key): the evidence for `prepared` attribution. */
-  prepareId: string | null;
-}
-
-/**
- * Prepares a launch through Bankr (API mode). In a browser use {@link remotePreparer} (your server holds the key);
- * on a server, `bankrPreparer` from `@bankr/launch-sdk/server`.
- */
-export type Preparer = (request: PrepareRequest) => Promise<PrepareResponse>;
-
-// Every PrepareRequest field: a prepare endpoint forwards these and drops anything else.
-const PREPARE_FIELDS = Object.keys({
-  chain: true,
-  launcher: true,
-  launchpadId: true,
-  name: true,
-  symbol: true,
-  metadataUri: true,
-  metadata: true,
-  metadataAdmin: true,
-  quote: true,
-  feeRecipients: true,
-  allowOpenCodeFeeRecipients: true,
-  startTime: true,
-  curve: true,
-  vesting: true,
-  economics: true,
-  devBuy: true,
-} satisfies Record<keyof PrepareRequest, true>);
 
 /** Who is credited for a launch, strongest first; `code` is a claim anyone can append. */
 export type LaunchAttribution = "api_key" | "prepared" | "wallet" | "code";
@@ -169,11 +60,20 @@ export interface IndexedLaunch {
   };
 }
 
+/** What a list left out: the bankr_v4 launches of `chains`, whose index is behind right now. */
+export interface IncompleteLaunches {
+  code: "INDEX_UNAVAILABLE";
+  provider: "bankr_v4";
+  chains: LaunchChain[];
+}
+
 /** A page of launches, newest first. */
 export interface LaunchPage {
   launches: IndexedLaunch[];
   /** Opaque: pass it back as `cursor` unchanged. Null on the last page. */
   nextCursor: string | null;
+  /** Only when rows were left out: the page is not the whole answer, and a later read can be. */
+  incomplete?: IncompleteLaunches;
 }
 
 export interface LaunchQuery {
@@ -183,7 +83,7 @@ export interface LaunchQuery {
   /** An ERC-8021 builder code. */
   code?: string;
   provider?: IndexedLaunch["provider"];
-  /** bankr_v4 launches on one pad (a decimal id), on the chain's latest suite whatever the client's `suite`. */
+  /** bankr_v4 launches on one pad (a decimal id), on the chain's current contracts. */
   launchpad?: bigint | string;
   /** bankr_v4 launches whose pool quotes this token. */
   quote?: Address;
@@ -232,7 +132,7 @@ export interface BuilderProfile {
   byChain: Partial<Record<LaunchChain, BuilderStats>>;
 }
 
-/** `GET /launchpads/:chain/:id/stats`: one pad's totals on the chain's latest suite. An unknown pad reads zeros. */
+/** `GET /launchpads/:chain/:id/stats`: one pad's totals on the chain's current contracts. An unknown pad reads zeros. */
 export interface LaunchpadStats {
   chain: LaunchChain;
   launchpadId: string;
@@ -293,8 +193,7 @@ export interface AccountFeeBucket {
 export interface AccountFeesResponse {
   chainId: number;
   account: Address;
-  /** The ledger answered for: the one asked, else the chain's latest suite's. Each suite has its own, never
-   *  summed. */
+  /** The ledger answered for: the one asked, else the chain's current one. Ledgers are never summed. */
   ledger: Address;
   /** Pull balances: referral slices and settled shares. */
   balances: { quote: Address; amount: string }[];
@@ -304,8 +203,8 @@ export interface AccountFeesResponse {
 }
 
 /**
- * A response that was not a success, from Bankr's API or a prepare endpoint: the `cause` of an `api` error. Its
- * text is the server's, so it never reaches the SDK error's `message`.
+ * A response that was not a success, from Bankr's API or a launchpad's signing route: the `cause` of an `api`
+ * error. Its text is the server's, so it never reaches the SDK error's `message`.
  */
 export class BankrApiResponseError extends Error {
   override readonly name = "BankrApiResponseError";
@@ -336,16 +235,27 @@ interface ApiReply {
   retryAfter: string | null;
 }
 
-/** The SDK error for a failed reply: 429 is RATE_LIMITED, an over-privileged key keeps its code, the rest API_ERROR. */
+/** `incomplete` as the API defines it, field for field: its code, its provider, and at least one chain the SDK
+ *  knows, each named once. Anything else is a malformed reply. */
+const isIncomplete = (v: unknown): boolean =>
+  isRecord(v) &&
+  v.code === "INDEX_UNAVAILABLE" &&
+  v.provider === "bankr_v4" &&
+  Array.isArray(v.chains) &&
+  v.chains.length > 0 &&
+  v.chains.length <= LAUNCH_CHAINS.length &&
+  v.chains.every((c) => isLaunchChain(c)) &&
+  new Set(v.chains).size === v.chains.length;
+
+/** The SDK error for a failed reply: 429 is RATE_LIMITED, a 503 for a chain's index INDEX_UNAVAILABLE, the rest
+ *  API_ERROR. */
 function apiError(reply: ApiReply, chain?: LaunchChain): LaunchApiError {
   const body = isRecord(reply.body) ? reply.body : {};
   const code = typeof body.code === "string" ? body.code : null;
-  // A prepare handler answers with the SDK's code and Bankr's own as `apiCode`.
-  const apiCode = typeof body.apiCode === "string" ? body.apiCode : code;
   const retry = Number(reply.retryAfter);
   const cause = new BankrApiResponseError({
     status: reply.status,
-    code: apiCode,
+    code,
     message:
       typeof body.error === "string"
         ? body.error.slice(0, MAX_ERROR_TEXT)
@@ -356,8 +266,8 @@ function apiError(reply: ApiReply, chain?: LaunchChain): LaunchApiError {
   const sdkCode =
     reply.status === 429 || code === "RATE_LIMITED"
       ? "RATE_LIMITED"
-      : code === "API_KEY_OVERPRIVILEGED"
-        ? "API_KEY_OVERPRIVILEGED"
+      : reply.status === 503 && code === "INDEX_UNAVAILABLE"
+        ? "INDEX_UNAVAILABLE"
         : "API_ERROR";
   return new LaunchApiError(sdkCode, { cause, chain });
 }
@@ -442,80 +352,6 @@ export function refuseInBrowser(chain?: LaunchChain): void {
   }
 }
 
-const KEY_HEADER = "x-api-key";
-// Bankr reads a key from Authorization bare or after an exact `Bearer ` prefix. This also matches other casing and
-// spacing, so a browser refuses any key-shaped header, even one Bankr would not accept.
-const AUTHORIZATION_KEY = /^(bearer\s+)?bk_/i;
-
-const isPrepareResponse = (b: unknown): boolean =>
-  isRecord(b) &&
-  typeof b.chain === "string" &&
-  typeof b.chainId === "number" &&
-  typeof b.launchpadId === "string" &&
-  typeof b.factory === "string" &&
-  typeof b.launcher === "string" &&
-  isRecord(b.params) &&
-  typeof b.value === "string" &&
-  (b.approval === null || isRecord(b.approval)) &&
-  typeof b.predictedToken === "string" &&
-  typeof b.poolId === "string" &&
-  typeof b.distributor === "string" &&
-  (b.padSigner === null || typeof b.padSigner === "string") &&
-  (b.authorization === null || isRecord(b.authorization)) &&
-  typeof b.metadataUri === "string" &&
-  (b.prepareId === null || typeof b.prepareId === "string");
-
-/** A preparer that POSTs each request as JSON to `url`, with `init` (headers, credentials) applied. */
-export function httpPreparer(
-  url: string,
-  init: RequestInit,
-  fetchFn?: FetchLike,
-): Preparer {
-  const doFetch = resolveFetch(fetchFn);
-  return async (request) => {
-    const headers = new Headers(init.headers);
-    headers.set("content-type", "application/json");
-    headers.set("accept", "application/json");
-    const reply = await send(
-      doFetch,
-      url,
-      { ...init, method: "POST", headers, body: JSON.stringify(request) },
-      request.chain,
-    );
-    return expectBody<PrepareResponse>(reply, isPrepareResponse, request.chain);
-  };
-}
-
-/**
- * A preparer for the browser: POSTs each prepare to your own endpoint (`createPrepareHandler` from
- * `@bankr/launch-sdk/server`), which adds your key server-side. `init` carries your session auth or CSRF header.
- * Throws `API_KEY_IN_BROWSER` if a Bankr API key rides in its headers in a browser.
- */
-export function remotePreparer(
-  url: string,
-  init: RequestInit = {},
-  options: { fetch?: FetchLike } = {},
-): Preparer {
-  const headers = new Headers(init.headers);
-  if (
-    headers.has(KEY_HEADER) ||
-    AUTHORIZATION_KEY.test(headers.get("authorization") ?? "")
-  ) {
-    refuseInBrowser();
-  }
-  return httpPreparer(url, init, options.fetch);
-}
-
-/** Only the PrepareRequest fields of a JSON body, or null when it is not an object. */
-export function pickPrepareRequest(body: unknown): PrepareRequest | null {
-  if (!isRecord(body)) return null;
-  const picked: Record<string, unknown> = {};
-  for (const field of PREPARE_FIELDS) {
-    if (body[field] !== undefined) picked[field] = body[field];
-  }
-  return picked as unknown as PrepareRequest;
-}
-
 export interface BankrApiOptions {
   /** Default `https://api.bankr.bot`. */
   url?: string;
@@ -527,6 +363,7 @@ export interface BankrApiOptions {
 export interface BankrApi {
   readonly url: string;
   /** `GET /launches`, newest first. Page with `nextCursor`. */
+  /** One page. `incomplete` is set when a chain's index is behind and its launches were left out. */
   launches(query?: LaunchQuery): Promise<LaunchPage>;
   /** Every launch matching `query`, newest first, fetched a page (default 100) at a time; `iterateLaunches` has the stop rules. */
   allLaunches(
@@ -541,7 +378,7 @@ export interface BankrApi {
   ): Promise<IndexedLaunch | null>;
   /** `GET /builders/:slug`; null for an unknown builder. */
   builder(slug: string, query?: BuilderQuery): Promise<BuilderProfile | null>;
-  /** `GET /launchpads/:chain/:id/stats`: the pad on the chain's latest suite; zeros for an unknown pad. */
+  /** `GET /launchpads/:chain/:id/stats`: the pad on the chain's current contracts; zeros for an unknown pad. */
   launchpadStats(
     chain: LaunchChain,
     id: bigint | string,
@@ -557,8 +394,8 @@ export interface BankrApi {
     options?: { signal?: AbortSignal },
   ): Promise<RegisterResult>;
   /**
-   * `GET /bankr-v4/accounts/:account/fees`: the account's owed fees on one suite's `ledger`, unnamed the chain's
-   * latest suite's; null for a 404 (no such ledger there, or not indexed).
+   * `GET /bankr-v4/accounts/:account/fees`: the account's owed fees on one `ledger`, unnamed the chain's
+   * current one; null for a 404 (no such ledger there, or not indexed).
    */
   accountFees(
     chain: LaunchChain,
@@ -584,7 +421,16 @@ function isoDate(
   return d.toISOString();
 }
 
-/** A client for Bankr's public launch API. `INVALID_PARAMS` for a `url` that is not http(s). */
+/** Bankr's index holds the chains Bankr indexes: a read that names another is refused before any request. */
+function requireIndexed(chain: LaunchChain | undefined): void {
+  if (chain !== undefined && isLaunchChain(chain) && !CHAINS[chain].indexed)
+    throw new LaunchConfigError("INDEX_NOT_COVERED", { chain });
+}
+
+/**
+ * A client for Bankr's public launch API. `INVALID_PARAMS` for a `url` that is not http(s); `INDEX_NOT_COVERED`
+ * for a call that names a chain the index does not cover (`CHAINS[chain].indexed`).
+ */
 export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
   const base = normalizeApiUrl(o.url);
   const doFetch = resolveFetch(o.fetch);
@@ -613,6 +459,7 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
   const api: BankrApi = {
     url: base,
     async launches(query = {}) {
+      requireIndexed(query.chain);
       const reply = await get("/launches", {
         ...query,
         deployedAfter: isoDate(query.deployedAfter, query.chain),
@@ -623,12 +470,14 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
         (b) =>
           isRecord(b) &&
           Array.isArray(b.launches) &&
-          (b.nextCursor === null || typeof b.nextCursor === "string"),
+          (b.nextCursor === null || typeof b.nextCursor === "string") &&
+          (!("incomplete" in b) || isIncomplete(b.incomplete)),
         query.chain,
       );
     },
     allLaunches: (query, options) => iterateLaunches(api, query, options),
     async launch(chain, token, query = {}) {
+      requireIndexed(chain);
       const reply = await get(
         `/launches/${segment(chain)}/${segment(token)}`,
         { ...query },
@@ -645,6 +494,7 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       return found(reply, (b) => isRecord(b) && typeof b.slug === "string");
     },
     async launchpadStats(chain, id, query = {}) {
+      requireIndexed(chain);
       const reply = await get(
         `/launchpads/${segment(chain)}/${segment(String(id))}/stats`,
         { ...query },
@@ -662,6 +512,7 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       );
     },
     async register(chain, txHash, options = {}) {
+      requireIndexed(chain);
       const reply = await send(
         doFetch,
         `${base}/launches/register`,
@@ -683,6 +534,7 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       );
     },
     async accountFees(chain, account, ledger) {
+      requireIndexed(chain);
       const reply = await get(
         `/bankr-v4/accounts/${segment(account)}/fees`,
         { chainId: getChain(chain).chainId, ledger },

@@ -2,13 +2,13 @@
 // Test-only: the fake suite's launch check. Excluded from the build; viem and relative imports only.
 import { isAddressEqual, keccak256, type Address } from "viem";
 import { PAD_TREASURY_MARKER as BANKR_V4_PAD_TREASURY_MARKER } from "../launchpad.js";
-import { decodeLaunchOptions as decodeBankrV4LaunchOptions } from "../suite4/options.js";
+import { decodeLaunchOptions as decodeBankrV4LaunchOptions } from "../launch/options.js";
 import {
   KNOB as K,
   PAD_FLAG as F,
   type PadConfig as BankrV4PadConfig,
-  type Suite4LaunchParams as BankrV4ResolveParams,
-} from "../suite4/settings.js";
+  type ContractLaunchParams as BankrV4ResolveParams,
+} from "../launch/settings.js";
 import * as B from "./fakeHardBounds.js";
 import { curve, extension, start } from "./fakeResolverStart.js";
 import {

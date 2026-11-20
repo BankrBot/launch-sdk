@@ -2,11 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { getAddress, recoverTypedDataAddress, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { launchParamsFromJson, launchParamsToJson } from "./abiJson.js";
-import {
-  BANKR_V4_EARLIER_ADDRESSES,
-  BANKR_V4_LAUNCH_ADDRESSES,
-} from "./addresses.js";
+import { BANKR_V4_LAUNCH_ADDRESSES } from "./addresses.js";
 import { remoteAuthorizer, type AuthorizationRequest } from "./authorizer.js";
+import { LAUNCH_CHAINS } from "./chains/index.js";
+import type { LaunchParams } from "./economics.js";
 import { isLaunchSdkError } from "./errors.js";
 import { buildLaunchParams } from "./normalize.js";
 import {
@@ -24,41 +23,44 @@ const LAUNCHER = getAddress("0x1111111111111111111111111111111111111111");
 const PARTNER = getAddress("0x3333333333333333333333333333333333333333");
 const ADMIN = getAddress("0x4444444444444444444444444444444444444444");
 
-const params = buildLaunchParams({
-  name: "Pad Launch",
-  symbol: "PAD",
-  metadataUri: "ipfs://pad",
-  metadataAdmin: ADMIN,
-  salt: `0x${"ab".repeat(32)}`,
-  quote: "0x4200000000000000000000000000000000000006",
-  capExclusions: [],
-  startTick: -200_000,
-  deadline: 1_900_000_000n,
-  economics: {
-    buy: { startPips: 500, steadyPips: 500, decaySecs: 0 },
-    sell: { startPips: 500, steadyPips: 500, decaySecs: 0 },
-    referrerBps: 0,
-    holdersBps: 1_000,
-    autoLpBps: 3_000,
-    buybackBps: 0,
-    vestToHoldersBps: 0,
-    vestToHoldersCliff: 0n,
-    vestToHoldersDuration: 0n,
-  },
-  launchpadId: 7n,
-  maxOperatorShareBps: 1_000,
-  operatorPayeesHash: `0x${"cd".repeat(32)}`,
-  feeRecipients: [
-    { recipient: LAUNCHER, shareBps: 7_000 },
-    { recipient: PARTNER, shareBps: 3_000 },
-  ],
-  allowOpenCodeFeeRecipients: true,
-  vestingRecipient: LAUNCHER,
-  vestBps: 0,
-  allowCodeVestingRecipient: false,
-  devBuyAmountIn: 0n,
-  startTime: 1_900_003_600,
-});
+const params: LaunchParams = {
+  options: "0x",
+  ...buildLaunchParams({
+    name: "Pad Launch",
+    symbol: "PAD",
+    metadataUri: "ipfs://pad",
+    metadataAdmin: ADMIN,
+    salt: `0x${"ab".repeat(32)}`,
+    quote: "0x4200000000000000000000000000000000000006",
+    capExclusions: [],
+    startTick: -200_000,
+    deadline: 1_900_000_000n,
+    economics: {
+      buy: { startPips: 500, steadyPips: 500, decaySecs: 0 },
+      sell: { startPips: 500, steadyPips: 500, decaySecs: 0 },
+      referrerBps: 0,
+      holdersBps: 1_000,
+      autoLpBps: 3_000,
+      buybackBps: 0,
+      vestToHoldersBps: 0,
+      vestToHoldersCliff: 0n,
+      vestToHoldersDuration: 0n,
+    },
+    launchpadId: 7n,
+    maxOperatorShareBps: 1_000,
+    operatorPayeesHash: `0x${"cd".repeat(32)}`,
+    feeRecipients: [
+      { recipient: LAUNCHER, shareBps: 7_000 },
+      { recipient: PARTNER, shareBps: 3_000 },
+    ],
+    allowOpenCodeFeeRecipients: true,
+    vestingRecipient: LAUNCHER,
+    vestBps: 0,
+    allowCodeVestingRecipient: false,
+    devBuyAmountIn: 0n,
+    startTime: 1_900_003_600,
+  }),
+};
 
 const request: AuthorizationRequest = {
   chain: "base",
@@ -257,7 +259,7 @@ describe("pad signer (server)", () => {
       } as never),
     ).toThrow(TypeError);
     // Every chain has a record, so none is left to ask for a `registry`.
-    for (const chain of ["base", "robinhood", "arbitrum", "arc"] as const) {
+    for (const chain of LAUNCH_CHAINS) {
       expect(
         () =>
           createAuthorizeHandler({
@@ -271,7 +273,7 @@ describe("pad signer (server)", () => {
     }
   });
 
-  test("the default registry is the latest contracts', the one a default client's requests name", async () => {
+  test("the default registry is the chain's shipped record's, the one a client's requests name", async () => {
     const handler = createAuthorizeHandler({
       account: signer,
       chain: "base",
@@ -292,10 +294,9 @@ describe("pad signer (server)", () => {
           }),
         }),
       );
-    const latest = BANKR_V4_LAUNCH_ADDRESSES.base!.launchpadRegistry;
-    const earlier = BANKR_V4_EARLIER_ADDRESSES.base!.launchpadRegistry;
-    expect(latest).not.toBe(earlier);
-    expect((await post(latest)).status).toBe(200);
-    expect((await post(earlier)).status).toBe(400);
+    const shipped = BANKR_V4_LAUNCH_ADDRESSES.base.launchpadRegistry;
+    expect(shipped).not.toBe(REGISTRY);
+    expect((await post(shipped)).status).toBe(200);
+    expect((await post(REGISTRY)).status).toBe(400);
   });
 });

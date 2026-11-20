@@ -9,6 +9,13 @@ import {
   pipsToPercent,
 } from "./units.js";
 
+/** Bankr's terms as a coin freezes them on a fresh deployment: 10 % of the fee, at least 250 pips, half to holders. */
+const BANKR_TERMS = {
+  bankrFeeBps: 1_000,
+  bankrMinPips: 250,
+  holdersShareBps: 5_000,
+};
+
 function refused(fn: () => unknown): LaunchRefusedError {
   let thrown: unknown;
   try {
@@ -119,6 +126,7 @@ describe("percent and pips", () => {
       steadyPips: percentToPips("1"),
       terms: { payees: [lower], steadySharesWad: [5n * 10n ** 17n] },
       economics: { referrerBps: 0, holdersBps: 0, autoLpBps: 0, buybackBps: 0 },
+      bankrTerms: BANKR_TERMS,
     });
     expect(split.payees[0]!.address).toBe(getAddress(lower));
     expect(split.payees[0]!.address).not.toBe(lower);
@@ -142,6 +150,7 @@ describe("percent and pips", () => {
         autoLpBps: 3_000,
         buybackBps: 0,
       },
+      bankrTerms: BANKR_TERMS,
     });
     expect({
       fee: pipsToPercent(split.feePips),

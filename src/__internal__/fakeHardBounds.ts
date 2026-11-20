@@ -13,7 +13,7 @@ import { PAD_TREASURY_MARKER as BANKR_V4_PAD_TREASURY_MARKER } from "../launchpa
 import {
   KNOB as BANKR_V4_KNOB,
   type KnobName as BankrV4KnobName,
-} from "../suite4/settings.js";
+} from "../launch/settings.js";
 
 /** LaunchConstants.MAX_QUOTE_SUPPLY: the most a quote's own supply may be (B6). */
 const BANKR_V4_MAX_QUOTE_SUPPLY = 10n ** 36n;

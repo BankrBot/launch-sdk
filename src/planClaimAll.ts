@@ -37,7 +37,7 @@ export const CLAIM_ALL_GAS: Readonly<ClaimAllGasModel> = Object.freeze({
 });
 
 /** A push's extra check per transaction: the ledger's `_mayPush` runs factory `isSuite`, which calls the account's
- *  `poolId()`, capped at its SUITE_CHECK_GAS; an account's own claim skips it. Outside the model core shares. */
+ *  `poolId()`, capped at a fixed gas; an account's own claim skips it. Outside the model core shares. */
 export const CLAIM_PUSH_CHECK_GAS = 100_000n;
 
 /** An amount of one currency: a launch's quote, or a launched token when a bucket pays that side. */

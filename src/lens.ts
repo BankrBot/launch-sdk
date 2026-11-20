@@ -13,14 +13,10 @@ import {
   bankrFeeLedgerAbi,
   bankrHookLensAbi,
   bankrLaunchFactoryAbi,
+  bankrLaunchSettingsAbi,
   bankrLaunchTokenAbi,
   bankrLaunchpadRegistryAbi,
   holderRewardsDeployerAbi,
-} from "./abis/suite3.js";
-import {
-  bankrFeeLedgerAbi as suite4LedgerAbi,
-  bankrHookLensAbi as suite4HookLensAbi,
-  bankrLaunchSettingsAbi,
 } from "./abis/generated.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { ChainCapabilities } from "./chains/index.js";
@@ -34,8 +30,8 @@ import { LaunchRefusedError } from "./errors.js";
 import type { ReadClient } from "./providers/types.js";
 import { requireAddress } from "./recipient.js";
 
-/** One chain's suite and a client to read it: what every post-launch read and builder runs against. */
-export interface SuiteReadContext {
+/** One chain's contracts and a client to read them: what every post-launch read and builder runs against. */
+export interface ReadContext {
   chain: ChainCapabilities;
   addresses: ProviderAddresses;
   client: ReadClient;
@@ -43,41 +39,26 @@ export interface SuiteReadContext {
   fork: boolean;
 }
 
-// Both suites answer most post-launch calls alike (`abis/abis.test.ts` holds the shared entries equal), so the
-// modules read through suite 3's set. What suite 4 moved is read here, by the suite the record is of.
-
-/** FeeMath's pool-term flags on suite 4's ledger that a launch's record names: Bankr's own part waived, and the
- *  decay surplus split out. Core's `BANKR_V4_POOL_TERMS_FLAG`; `__internal__/coreParity.test.ts` holds them equal. */
+/** FeeMath's pool-term flags on the ledger that a launch's record names: Bankr's own part waived, and the decay
+ *  surplus split out. Core's `BANKR_V4_POOL_TERMS_FLAG`; `__internal__/coreParity.test.ts` holds them equal. */
 export const POOL_TERMS_FLAG = Object.freeze({ waived: 2, decaySplit: 4 });
 
-/** A pool's fee terms as the ledger froze them at launch; `legId` is the coin's holder leg on suite 4, null on 3. */
+/** A pool's fee terms as the ledger froze them at launch; `legId` is the coin's holder leg. */
 async function readPoolTerms(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   poolId: Hex,
 ): Promise<{
   referrerBps: number;
   waived: boolean;
   decaySplit: boolean;
-  legId: number | null;
+  legId: number;
 }> {
-  const call = {
+  const t = await readContract(ctx.client, {
     address: ctx.addresses.ledger,
+    abi: bankrFeeLedgerAbi,
     functionName: "poolTerms",
     args: [poolId],
-  } as const;
-  if (ctx.addresses.settings === undefined) {
-    const t = await readContract(ctx.client, {
-      ...call,
-      abi: bankrFeeLedgerAbi,
-    });
-    return {
-      referrerBps: t.referrerBps,
-      waived: t.waived,
-      decaySplit: t.decaySplit,
-      legId: null,
-    };
-  }
-  const t = await readContract(ctx.client, { ...call, abi: suite4LedgerAbi });
+  });
   return {
     referrerBps: t.referrerBps,
     waived: (t.flags & POOL_TERMS_FLAG.waived) !== 0,
@@ -88,19 +69,16 @@ async function readPoolTerms(
 
 /** The hook's record of a pool: the schedules it charges and when its next buyback fill may run. */
 async function readPoolSchedules(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   lens: Address,
   poolId: Hex,
 ): Promise<{ fees: LaunchInfo["fees"]; buybackAt: number }> {
-  const call = {
+  const c = await readContract(ctx.client, {
     address: lens,
+    abi: bankrHookLensAbi,
     functionName: "poolConfig",
     args: [poolId],
-  } as const;
-  const c =
-    ctx.addresses.settings === undefined
-      ? await readContract(ctx.client, { ...call, abi: bankrHookLensAbi })
-      : await readContract(ctx.client, { ...call, abi: suite4HookLensAbi });
+  });
   const schedule = (s: FeeSchedule): FeeSchedule => ({
     startPips: s.startPips,
     steadyPips: s.steadyPips,
@@ -112,26 +90,17 @@ async function readPoolSchedules(
   };
 }
 
-/** Whether the chain lists `quote`: the factory's row on suite 3, the settings contract's on suite 4. */
+/** Whether Bankr lists `quote` on the chain: the settings contract's row for it. */
 export async function readQuoteListed(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   quote: Address,
 ): Promise<boolean> {
-  const a = ctx.addresses;
-  const row =
-    a.settings === undefined
-      ? await readContract(ctx.client, {
-          address: a.factory,
-          abi: bankrLaunchFactoryAbi,
-          functionName: "quoteEntry",
-          args: [quote],
-        })
-      : await readContract(ctx.client, {
-          address: a.settings,
-          abi: bankrLaunchSettingsAbi,
-          functionName: "quoteTerms",
-          args: [quote],
-        });
+  const row = await readContract(ctx.client, {
+    address: ctx.addresses.settings,
+    abi: bankrLaunchSettingsAbi,
+    functionName: "quoteTerms",
+    args: [quote],
+  });
   return row.allowed;
 }
 
@@ -154,7 +123,7 @@ export const bucketIds = Object.freeze({
   /** The remainder's steady part: pad payees, then the creator side (holders, auto-LP, buyback, creator). */
   creator: (poolId: Hex) => tagged(poolId, "creator", "bytes32"),
   /** The coin holders' half of Bankr's slice; its sole, locked beneficiary is the holder leg of the coin's own
-   *  launch (on the earlier contracts, the chain's one leg). */
+   *  launch. */
   holders: (poolId: Hex) => tagged(poolId, "holders", "bytes32"),
   /** The decay surplus above the steady rate, only when the launch's pad had a decay split (Bankr's has one). */
   decay: (poolId: Hex) => tagged(poolId, "decay", "bytes32"),
@@ -264,7 +233,7 @@ export function creatorRecipientsOf(
 /** A bucket's entries. The ledger labels a fee recipient's entry by its creator part, on every pad, and the label
  *  follows the entry through its own moves and a takeover; the launch's own legs are known by address. */
 async function sharesOf(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   ledger: Address,
   bucket: Hex,
   known: KnownLegs,
@@ -305,17 +274,17 @@ async function sharesOf(
 
 /** The factory's facts for `token`; null when this chain's factory never launched it. */
 export async function readLaunchInfo(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   token: Address,
 ): Promise<LaunchInfo | null> {
   return (await readLaunchRecord(ctx, token))?.info ?? null;
 }
 
-/** {@link readLaunchInfo}, with the id of the holder leg the coin froze at launch (suite 4; null on suite 3). */
+/** {@link readLaunchInfo}, with the id of the holder leg the coin froze at launch. */
 async function readLaunchRecord(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   token: Address,
-): Promise<{ info: LaunchInfo; legId: number | null } | null> {
+): Promise<{ info: LaunchInfo; legId: number } | null> {
   const a = ctx.addresses;
   const { client } = ctx;
   const f = { address: a.factory, abi: bankrLaunchFactoryAbi } as const;
@@ -426,7 +395,7 @@ async function readLaunchRecord(
 
 /** {@link readLaunchInfo} for a builder: `INVALID_PARAMS` for a malformed address, `NOT_A_LAUNCH` for a stranger. */
 export async function requireLaunch(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   token: unknown,
 ): Promise<LaunchInfo> {
   return (await requireLaunchRecord(ctx, token)).info;
@@ -434,9 +403,9 @@ export async function requireLaunch(
 
 /** {@link requireLaunch}, with the coin's holder leg id. */
 export async function requireLaunchRecord(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   token: unknown,
-): Promise<{ info: LaunchInfo; legId: number | null }> {
+): Promise<{ info: LaunchInfo; legId: number }> {
   const record = await readLaunchRecord(
     ctx,
     requireAddress(token, ctx.chain.chain),

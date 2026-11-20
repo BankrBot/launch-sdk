@@ -1,9 +1,9 @@
-// Test-only: what a fresh suite 4 holds for an open launchpad on WETH, as the fake suite's launch check reads it:
+// Test-only: what a fresh deployment holds for an open launchpad on WETH, as the fake suite's launch check reads it:
 // the template's rows, the owner's limits and terms, one feed-priced quote. Forge's own deploy, value for value
 // (the parity suite holds it to settingsForgeVectors.json). Excluded from the build; viem and relative imports only.
 import { getAddress, zeroHash, type Address } from "viem";
 import { SETTINGS_KNOBS } from "../abis/knobs.js";
-import { PAD_FLAG, type KnobName } from "../suite4/settings.js";
+import { PAD_FLAG, type KnobName } from "../launch/settings.js";
 import type { BankrV4ResolverState } from "./fakeResolverState.js";
 
 /** The fake suite's WETH: listed, 18 decimals, priced by a feed at $2,500. */
@@ -57,6 +57,18 @@ export const TEMPLATE_ROWS: Record<KnobName, Row> = {
   rewardRestartBps: [1_000n, 1_000n, 1_000n],
 };
 
+/** The rules a launch's own bands meet on the template when its pool buys its own token (13 times within the
+ *  compound band's half width, 34 spacings). */
+export const TEMPLATE_CURVE_RULES = {
+  minDepthDiv: Number(TEMPLATE_ROWS.curveMinDepthDiv[2]),
+  maxDensity: Number(TEMPLATE_ROWS.curveMaxDensity[2]),
+  placeTicks: Number(TEMPLATE_ROWS.curvePlaceTicks[2]),
+  placeBps: Number(TEMPLATE_ROWS.curvePlaceBps[2]),
+  nearTicks: Number(TEMPLATE_ROWS.bandHalfWidth[2]) * 200,
+  nearStep: 13,
+  dustPpm: Number(TEMPLATE_ROWS.curveDustPpm[2]),
+} as const;
+
 /** The owner's limits where they start inside a knob's hard range; every other knob's limit is that range. */
 export const OWNER_LIMITS: Partial<
   Record<KnobName, { min: bigint; max: bigint }>
@@ -85,7 +97,7 @@ export const TEMPLATE_FLAGS =
 const at = (a: string): Address => getAddress(a);
 
 /** The state a launch on the open pad meets on a fresh suite, at `now`. Each call returns its own copy. */
-export function freshSuite4State(
+export function freshContractsState(
   o: { chainId?: number; now?: bigint } = {},
 ): BankrV4ResolverState {
   return {

@@ -88,7 +88,7 @@ export interface ProtocolLevers {
   bankrSigner: Address | null;
 }
 
-/** Suite 4's `LaunchParams`, as the settings contract's `resolve` takes it. */
+/** The contracts' `LaunchParams`, as the settings contract's `resolve` takes it. */
 export type ResolveParams = ContractFunctionArgs<
   typeof bankrLaunchSettingsAbi,
   "view",

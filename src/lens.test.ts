@@ -11,7 +11,7 @@ import {
   installLaunch,
   postLaunchFixture,
 } from "./__internal__/fakeLaunch.js";
-import { FLYWHEEL, PAD_PAYEE } from "./__internal__/fakeSuite.js";
+import { FLYWHEEL, PAD_PAYEE } from "./__internal__/fakeRecord.js";
 
 describe("launchInfo", () => {
   test("reads the factory's record, the pad, the hook's schedules and the creator bucket's shares by role", async () => {
@@ -74,7 +74,7 @@ describe("launchInfo", () => {
 
   // Live-fork finding 11-07: roles were read from the pad's live payees, so a setPayees after launch relabelled them.
   test("roles come from the ledger's creator parts, not the pad's live payees", async () => {
-    const { f, client } = postLaunchFixture();
+    const { f, s4, client } = postLaunchFixture();
     const creator = getAddress("0x00000000000000000000000000000000000c0de1");
     const l = installLaunch(f, {
       launcher: LAUNCHER,
@@ -88,7 +88,7 @@ describe("launchInfo", () => {
       creators: [creator],
     });
     // The operator replaces its payees after the launch, naming the coin's fee recipient as its new one.
-    f.pads.get(1n)!.terms = {
+    s4.state.pad!.terms = {
       payees: [creator],
       steadySharesWad: [2n * 10n ** 17n],
       decay: { on: false, autoLpBps: 0, sharesWad: [] },
@@ -125,10 +125,10 @@ describe("launchInfo", () => {
   });
 
   test("a fee recipient merged into a pad payee: its entry is the creator's, and its creator part is told apart", async () => {
-    const { f, client } = postLaunchFixture();
+    const { f, s4, client } = postLaunchFixture();
     const b = getAddress("0x00000000000000000000000000000000000000b2");
     // The operator launches on its own pad as its own fee recipient: the ledger merges it into its payee entry.
-    f.pads.get(1n)!.terms = {
+    s4.state.pad!.terms = {
       payees: [LAUNCHER, b],
       steadySharesWad: [10n ** 17n, 2n * 10n ** 17n],
       decay: { on: false, autoLpBps: 0, sharesWad: [] },

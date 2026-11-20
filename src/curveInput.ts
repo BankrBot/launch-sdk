@@ -16,7 +16,7 @@ import { TICK_SPACING } from "./economics.js";
 import { isLaunchSdkError } from "./errors.js";
 
 // A launch's `curve` option resolved to the word the launch carries, with a detail naming the band for bands that
-// are not a table. The suite's rules on a well-formed table need the start tick and the sale: curveCheck.ts.
+// are not a table. The coin's rules on a well-formed table need the start tick and the sale: curveCheck.ts.
 
 /**
  * A launch's curve: a built-in by name or id, or the launcher's own bands, as raw bands or as market-cap ranges.
@@ -29,7 +29,7 @@ export type LaunchCurveInput =
       /** Outward from the start price; the last band has `widthTicks: 0`. */
       bands: readonly CurveBand[];
       /** Where the first band starts: the whole supply's value in USD, on a quote the factory prices. Required
-       *  unless the launch sets `startFdv` (pure mode), which places the start instead. */
+       *  unless the launch sets `startFdv`, which places the start instead. */
       startFdvUsd?: number;
     }
   | {

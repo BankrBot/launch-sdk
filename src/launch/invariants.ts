@@ -29,11 +29,11 @@ import { requireAddress } from "../recipient.js";
 import { findFrozenLog } from "../settings/frozenLog.js";
 import { decodeCoinTerms, type CoinTerms } from "./settings.js";
 
-// A suite 4 token is held to its own record, not to a compiled figure: the terms its launch froze
+// A token is held to its own record, not to a compiled figure: the terms its launch froze
 // (`CoinTermsFrozen`), whose hash the factory keeps for good (`termsHashOf`). The supply, the wallet cap's size and
 // end and the cap controller are that coin's own.
 
-export interface Suite4InvariantContext {
+export interface InvariantContext {
   chain: Pick<ChainCapabilities, "chain" | "maxLogRange">;
   addresses: Pick<ProviderAddresses, "factory" | "ledger" | "blockNumber"> & {
     settings: Address;
@@ -44,7 +44,7 @@ export interface Suite4InvariantContext {
 /** The token's `CoinTermsFrozen` terms bytes: from the receipt, else from the factory's log of its launch, found
  *  from the token's trading start. Null where the node serves none, or the token answers no start. */
 async function frozenTerms(
-  ctx: Suite4InvariantContext,
+  ctx: InvariantContext,
   token: Address,
   receipt?: TransactionReceipt,
 ): Promise<Hex | null> {
@@ -73,12 +73,12 @@ async function frozenTerms(
 }
 
 /**
- * Holds a suite 4 token to what its launch froze, by reads alone: the logged record hashes to the factory's
+ * Holds a token to what its launch froze, by reads alone: the logged record hashes to the factory's
  * `termsHashOf`, and the supply, wallet cap and cap controller are that record's. With the receipt: the reward hook,
  * the logged URI where no admin was named, and the CREATE2 address of the launch's calldata under its own terms.
  */
-export async function verifySuite4TokenInvariants(
-  ctx: Suite4InvariantContext,
+export async function verifyCoinInvariants(
+  ctx: InvariantContext,
   tokenInput: Address,
   receipt?: TransactionReceipt,
 ): Promise<InvariantReport> {
@@ -218,11 +218,11 @@ export async function verifySuite4TokenInvariants(
 }
 
 /**
- * The address the launch's own calldata gives under its frozen terms, with the suite as it stood at the launch block.
+ * The address the launch's own calldata gives under its frozen terms, with the factory's pointers as they stood at the launch block.
  * Skipped when the launch was not a direct factory call (a Safe or a multicall) or the node lacks that state.
  */
 async function predictionCheck(
-  ctx: Suite4InvariantContext,
+  ctx: InvariantContext,
   token: Address,
   launcher: Address,
   receipt: TransactionReceipt,
@@ -245,13 +245,13 @@ async function predictionCheck(
     return "skipped";
   }
   try {
-    const suite = await readLivePointers(
+    const live = await readLivePointers(
       ctx.client,
       ctx.addresses.factory,
       receipt.blockNumber - 1n,
     );
     return isAddressEqual(
-      predictToken(suite, { ...params, terms }, launcher, params.salt),
+      predictToken(live, { ...params, terms }, launcher, params.salt),
       token,
     );
   } catch (err) {

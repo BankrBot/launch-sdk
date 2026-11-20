@@ -1,4 +1,4 @@
-// Server-only HTTP helpers shared by the prepare and authorize handlers (Fetch API Request/Response only).
+// Server-only HTTP helpers for the authorize handler (Fetch API Request/Response only).
 
 /** The most a handler reads of a request body. */
 export const MAX_BODY_BYTES = 16 * 1024;

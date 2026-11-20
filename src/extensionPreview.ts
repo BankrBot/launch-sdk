@@ -6,28 +6,12 @@ import {
   type Hex,
 } from "viem";
 import { getCode, readContract } from "viem/actions";
-import {
-  bankrLaunchFactoryAbi,
-  bankrLaunchpadRegistryAbi,
-} from "./abis/suite3.js";
+import { bankrLaunchFactoryAbi } from "./abis/generated.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { LaunchChain } from "./chains/index.js";
-import { MAX_STEADY_FEE_PIPS, type FeeSchedule } from "./economics.js";
+import type { FeeSchedule } from "./economics.js";
 import { LaunchRefusedError } from "./errors.js";
-import {
-  extensionAllowlistKey,
-  extensionKind,
-  normalizeExtension,
-  padAllowsExtension,
-  type LaunchExtensionInput,
-  type NormalizedExtension,
-} from "./extension.js";
-import {
-  BANKR_LAUNCHPAD_ID,
-  padSchedule,
-  readPad,
-  type LaunchpadPolicy,
-} from "./launchpad.js";
+import type { NormalizedExtension } from "./extension.js";
 import {
   EXTENSION_PRESETS,
   describePreset,
@@ -39,12 +23,9 @@ import type { ReadClient } from "./providers/types.js";
 import { isSentinel } from "./recipient.js";
 import { extSwapGasHeadroom, type ExtensionGas } from "./swapGas.js";
 
-// What a launch's extension does, for a confirm screen, and whether the chain takes it: vendored from core's bankr-v4
-// extensionPreview.ts (its wording, fee table and code scan; src/__internal__ holds them equal), plus the reads the
-// registry makes at launch. Custom code is shown at its declared maxima: its own quote is not simulated here.
-
-/** Bankr's share of every extension fee, to the treasury: 2/7 (LaunchConstants.EXT_BANKR_NUM / EXT_BANKR_DEN). */
-export const EXTENSION_TREASURY_BPS = Math.round((2 * 10_000) / 7);
+// What a launch's extension does, for a confirm screen: vendored from core's bankr-v4 extensionPreview.ts (its
+// wording, fee table and code scan; src/__internal__ holds them equal). Custom code is shown at its declared maxima:
+// its own quote is not simulated here.
 
 /** FeeMath.feePipsAt: `startPips` falling linearly to `steadyPips` over `decaySecs`, the drop rounded down. */
 export function feePipsAt(s: FeeSchedule, secsSinceLaunch: number): number {
@@ -56,7 +37,7 @@ export function feePipsAt(s: FeeSchedule, secsSinceLaunch: number): number {
 }
 
 /** One second of a launch's life: its own fee each way, what the extension adds after the hook's clamps (its quote,
- *  its declared maximum, and the room the launch's fee leaves under 10 %), and the two together. */
+ *  its declared maximum, and the room the launch's fee leaves under the pool's ceiling), and the two together. */
 export interface ExtensionFeeRow {
   secsSinceLaunch: number;
   buyFeePips: number;
@@ -105,13 +86,14 @@ function quoteAt(
 /**
  * The extension's fee across time after launch, on the launch's own schedules: every second something changes (the
  * sunset, each direction's room opening and decay end, a preset's own window) and a fixed grid out to a week.
- * BankrLaunchHook._extQuote: nothing from the sunset on, else min(quote, its maximum, 10 % less the launch's fee).
+ * BankrLaunchHook._extQuote: nothing from the sunset on, else min(quote, its maximum, the ceiling less the launch's
+ * fee).
  */
 export function extensionFeeTable(
   e: Pick<NormalizedExtension, "preset" | "terms">,
   fees: LaunchFees,
-  /** The pool's fee ceiling: suite 3's fixed 10 %, a suite 4 coin's own (`CoinTerms.pool.feeCeilingPips`). */
-  ceilingPips: number = MAX_STEADY_FEE_PIPS,
+  /** The pool's fee ceiling, the coin's own (`CoinTerms.pool.feeCeilingPips`). */
+  ceilingPips: number,
 ): ExtensionFeeRow[] {
   const { terms, preset: p } = e;
   const edges = [terms.sunsetSecs];
@@ -240,13 +222,13 @@ export interface LaunchExtensionPreview {
   swapGasHeadroom: bigint;
   /** Who is paid the extension's fee; null: the launch's first fee recipient (Raffle Run always pays itself). */
   payee: Address | null;
-  /** The fee's split, in bps: the payee's 5/7 and Bankr's 2/7. */
+  /** The fee's split, in bps: the payee's share and Bankr's cut. */
   payeeShareBps: number;
   treasuryShareBps: number;
-  /** The key the registry's allowlist is asked for, and its answer. */
+  /** The key Bankr's allowlist is asked for, and its answer. */
   allowlistKey: Hex;
   allowlisted: boolean;
-  /** The launchpad's policy admits this kind of extension (and custom code's declared maximum). */
+  /** The launchpad's switches admit this kind of extension (and custom code's declared maximum). */
   launchpadAllows: boolean;
   /** Why `plan()` refuses this extension now (`EXTENSION_NOT_ALLOWED`'s detail); null when it does not. */
   refusal: string | null;
@@ -318,84 +300,7 @@ function warningsOf(e: NormalizedExtension, scan: ExtensionCodeScan): string[] {
   ];
 }
 
-/** Why the registry or the factory would revert a launch naming `e` now, in the order they check; null when neither would. */
-function refusalOf(
-  e: NormalizedExtension,
-  i: { launchpadAllows: boolean; allowlisted: boolean; presetsOn: boolean },
-  policy: Pick<LaunchpadPolicy, "allowedExtensions" | "maxExtensionPips">,
-  key: Hex,
-): string | null {
-  if (!i.launchpadAllows) {
-    const kind = extensionKind(e.params);
-    const what = [
-      "Bankr's presets",
-      "custom extension code that only quotes a fee",
-      "custom extension code the hook calls after each swap",
-    ][kind - 1];
-    const off = ((policy.allowedExtensions >> (kind - 1)) & 1) === 0;
-    return off
-      ? `This launchpad's policy does not allow ${what} (bit ${kind - 1} of policy.allowedExtensions is off): its operator turns it on with setPolicy.`
-      : `This launchpad allows custom extension code to add at most ${pct(policy.maxExtensionPips)} (policy.maxExtensionPips), and this one declares more.`;
-  }
-  if (!i.allowlisted)
-    return `The extension allowlist does not hold this extension's key (${key}). Only Bankr, the registry's owner, adds a key: a launchpad's operator cannot.`;
-  if (!i.presetsOn)
-    return "Bankr's presets are switched off on this chain right now.";
-  return null;
-}
-
-/**
- * Reads what the registry reads at launch (the allowlist's answer for the extension's key, against the pad's policy),
- * a preset's deployer or custom code's own bytes, and builds the preview. Never refuses an extension the chain would
- * turn away: that is `refusal`. Custom code that fails the hook's admission is `INVALID_PARAMS`.
- */
-export async function readExtensionPreview(
-  ctx: ExtensionReadContext,
-  e: NormalizedExtension,
-  i: {
-    policy: Pick<LaunchpadPolicy, "allowedExtensions" | "maxExtensionPips">;
-    fees: LaunchFees;
-    payee: Address | null;
-  },
-): Promise<LaunchExtensionPreview> {
-  const key = extensionAllowlistKey(e.params)!;
-  const custom = e.preset === null;
-  const [allowlisted, presetDeployer, scan] = await Promise.all([
-    readContract(ctx.client, {
-      address: ctx.addresses.launchpadRegistry,
-      abi: bankrLaunchpadRegistryAbi,
-      functionName: "extensionAllowed",
-      args: [key],
-    }),
-    // Rotated (or zeroed) behind the factory's queue, so read live.
-    custom
-      ? null
-      : readContract(ctx.client, {
-          address: ctx.addresses.factory,
-          abi: bankrLaunchFactoryAbi,
-          functionName: "presetDeployer",
-        }),
-    custom ? inspectExtensionCode(ctx, e.params.ext, e.params.codehash) : null,
-  ]);
-  const launchpadAllows = padAllowsExtension(i.policy, e.params);
-  const presetsOn = presetDeployer === null || BigInt(presetDeployer) !== 0n;
-  return buildExtensionPreview(e, {
-    key,
-    allowlisted,
-    launchpadAllows,
-    refusal: refusalOf(
-      e,
-      { launchpadAllows, allowlisted, presetsOn },
-      i.policy,
-      key,
-    ),
-    scan,
-    payee: i.payee,
-    fees: i.fees,
-  });
-}
-
-/** What the chain answered about an extension, read by the suite's own reader. */
+/** What the chain answered about an extension. */
 export interface ExtensionFacts {
   key: Hex;
   allowlisted: boolean;
@@ -405,10 +310,10 @@ export interface ExtensionFacts {
   scan: ExtensionCodeScan | null;
   payee: Address | null;
   fees: LaunchFees;
-  /** Bankr's share of the extension's fee in bps: suite 3's 2/7, a suite 4 coin's own. */
-  treasuryShareBps?: number;
-  /** The pool's fee ceiling: suite 3's 10 %, a suite 4 coin's own. */
-  feeCeilingPips?: number;
+  /** Bankr's share of the extension's fee in bps. */
+  treasuryShareBps: number;
+  /** The pool's fee ceiling. */
+  feeCeilingPips: number;
 }
 
 /** The preview from an extension and the chain's answers about it: wording, shares, fee table and warnings. */
@@ -419,7 +324,7 @@ export function buildExtensionPreview(
   const custom = e.preset === null;
   const p = e.preset;
   const { maxBuyPips, maxSellPips, sunsetSecs } = e.terms;
-  const treasuryShareBps = f.treasuryShareBps ?? EXTENSION_TREASURY_BPS;
+  const { treasuryShareBps } = f;
   return {
     kind: custom ? "custom" : "preset",
     preset: p ? { key: p.preset, ...EXTENSION_PRESETS[p.preset] } : null,
@@ -450,12 +355,12 @@ export function buildExtensionPreview(
 }
 
 /** The factory's `InvalidExtensionPayee` for a payee the launch names, before any address is mined: never a reserved
- *  marker or a suite contract (the CREATE3 factory included, which could never collect either). */
+ *  marker or a Bankr launch contract (the CREATE3 factory included, which could never collect either). */
 export async function refuseExtensionPayee(
   ctx: ExtensionReadContext,
   payee: Address,
 ): Promise<void> {
-  const suite =
+  const ours =
     isSentinel(payee) ||
     isAddressEqual(payee, ctx.addresses.create3Factory) ||
     (await readContract(ctx.client, {
@@ -464,7 +369,7 @@ export async function refuseExtensionPayee(
       functionName: "isSuite",
       args: [payee],
     }));
-  if (suite)
+  if (ours)
     throw new LaunchRefusedError("INVALID_PARAMS", {
       chain: ctx.chain.chain,
       detail:
@@ -472,61 +377,11 @@ export async function refuseExtensionPayee(
     });
 }
 
-type Policy = Pick<LaunchpadPolicy, "allowedExtensions" | "maxExtensionPips">;
-
-/**
- * A launch's extension held to the chain before anything is mined or signed: `EXTENSION_NOT_ALLOWED`, with the
- * reason, when the registry or the launchpad would turn it away. `payee` is the launch's first fee recipient, paid
- * when the extension names nobody.
- */
-export async function requireExtension(
-  ctx: ExtensionReadContext,
-  e: NormalizedExtension,
-  i: { policy: Policy; fees: LaunchFees; payee: Address },
-): Promise<LaunchExtensionPreview> {
-  const named = BigInt(e.params.payee) !== 0n;
-  const [preview] = await Promise.all([
-    readExtensionPreview(ctx, e, {
-      ...i,
-      payee: named ? e.params.payee : i.payee,
-    }),
-    named ? refuseExtensionPayee(ctx, e.params.payee) : null,
-  ]);
-  if (preview.refusal !== null)
-    throw new LaunchRefusedError("EXTENSION_NOT_ALLOWED", {
-      chain: ctx.chain.chain,
-      detail: preview.refusal,
-    });
-  return preview;
-}
-
 /** {@link LaunchClient.previewExtension}'s options. */
 export interface PreviewExtensionOptions {
-  /** The launchpad whose policy is read. Default `0n`, Bankr's own. */
+  /** The launchpad whose settings are read. Default `0n`, Bankr's own. */
   launchpadId?: bigint;
   /** The launch's fee schedules, for the fee table: each way, or one for both. Default: the launchpad's. */
   fees?: LaunchFees;
   schedule?: FeeSchedule;
-}
-
-/** `client.previewExtension`: the extension's static refusals, then the launchpad's policy and the chain's answers. */
-export async function previewExtension(
-  ctx: ExtensionReadContext,
-  input: LaunchExtensionInput,
-  o: PreviewExtensionOptions = {},
-): Promise<LaunchExtensionPreview> {
-  const chain = ctx.chain.chain;
-  const e = normalizeExtension(input, chain);
-  const id = o.launchpadId ?? BANKR_LAUNCHPAD_ID;
-  const named = BigInt(e.params.payee) !== 0n ? e.params.payee : null;
-  const [{ pad }] = await Promise.all([
-    readPad(ctx.client, ctx.addresses.launchpadRegistry, id, chain),
-    named ? refuseExtensionPayee(ctx, named) : null,
-  ]);
-  const own = o.schedule ?? padSchedule(id, pad.feeBounds);
-  return readExtensionPreview(ctx, e, {
-    policy: pad.policy,
-    fees: o.fees ?? { buy: own, sell: own },
-    payee: named,
-  });
 }

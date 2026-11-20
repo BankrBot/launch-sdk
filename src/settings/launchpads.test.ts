@@ -43,13 +43,13 @@ const refuses = async (
 const PAD = "INVALID_LAUNCHPAD_CONFIG";
 
 const setup = () => {
-  const suite = new FakeSettings();
-  const id = suite.addPad();
+  const fakeSettings = new FakeSettings();
+  const id = fakeSettings.addPad();
   return {
-    suite,
+    fakeSettings,
     id,
-    pads: createLaunchpadAdmin(suite.context()),
-    settings: createSettingsReads(suite.context()),
+    pads: createLaunchpadAdmin(fakeSettings.context()),
+    settings: createSettingsReads(fakeSettings.context()),
   };
 };
 const settingsCall = (tx: UnsignedTx) =>
@@ -57,7 +57,7 @@ const settingsCall = (tx: UnsignedTx) =>
 
 describe("register", () => {
   test("from the operator, paying the live bond, with the payees as WAD shares", async () => {
-    const { suite, pads } = setup();
+    const { fakeSettings, pads } = setup();
     const tx = await pads.register({
       operator: at(0xb2),
       payees: [{ address: at(0x71), shareBps: 2_500 }],
@@ -75,8 +75,8 @@ describe("register", () => {
       functionName: "register",
       args: [zeroAddress, [at(0x71)], [WAD / 4n], "ipfs://pad"],
     });
-    suite.apply(tx);
-    const pad = await createSettingsReads(suite.context()).pad(2n);
+    fakeSettings.apply(tx);
+    const pad = await createSettingsReads(fakeSettings.context()).pad(2n);
     expect(pad.operator).toBe(at(0xb2));
     expect(pad.switches.takeover).toBe(false);
     expect(pad.payees).toEqual([
@@ -85,23 +85,23 @@ describe("register", () => {
   });
 
   test("held to the owner's payee count and share limit, the link's byte limit, and a pad with no decay split", async () => {
-    const { suite, pads } = setup();
+    const { fakeSettings, pads } = setup();
     const one = [{ address: at(0x71), shareBps: 6_000 }];
-    suite.protocol = { ...suite.protocol, maxPadPayees: 0 };
+    fakeSettings.protocol = { ...fakeSettings.protocol, maxPadPayees: 0 };
     await refuses(
       pads.register({ operator: at(0xb2), payees: one }),
       PAD,
       "at most 0",
     );
-    suite.protocol = { ...suite.protocol, maxPadPayees: 4 };
-    suite.limits[knobId("padShareBps")!] = { min: 0n, max: 5_999n };
+    fakeSettings.protocol = { ...fakeSettings.protocol, maxPadPayees: 4 };
+    fakeSettings.limits[knobId("padShareBps")!] = { min: 0n, max: 5_999n };
     await refuses(
       pads.register({ operator: at(0xb2), payees: one }),
       PAD,
       "5999 bps",
     );
-    suite.limits[knobId("padShareBps")!] = { min: 0n, max: 6_000n };
-    suite.maxUri = 3;
+    fakeSettings.limits[knobId("padShareBps")!] = { min: 0n, max: 6_000n };
+    fakeSettings.maxUri = 3;
     await refuses(
       pads.register({ operator: at(0xb2), payees: one, metadataUri: "abcd" }),
       PAD,
@@ -162,9 +162,9 @@ describe("register", () => {
 
 describe("configure", () => {
   test("built from the pad's live row: only the named knobs move, and the rest is restated as it stands", async () => {
-    const { suite, id, pads, settings } = setup();
-    suite.pad(id).capController = at(0xcc);
-    suite.pad(id).terms = {
+    const { fakeSettings, id, pads, settings } = setup();
+    fakeSettings.pad(id).capController = at(0xcc);
+    fakeSettings.pad(id).terms = {
       payees: [at(0x71)],
       steadySharesWad: [WAD / 10n],
       decay: { on: false, autoLpBps: 0, sharesWad: [] },
@@ -184,11 +184,11 @@ describe("configure", () => {
     const config = call.args[1];
     expect(config.knobs).toEqual([knobId("steadyPips")!, knobId("vestBps")!]);
     expect(config.flags).toBe(
-      switchWord({ devBuy: false }, suite.pad(id).flags),
+      switchWord({ devBuy: false }, fakeSettings.pad(id).flags),
     );
     expect(config.capController).toBe(at(0xcc));
     expect(config.terms.payees).toEqual([at(0x71)]);
-    suite.apply(tx);
+    fakeSettings.apply(tx);
     const after = await settings.pad(id);
     expect(after.knobs.steadyPips).toEqual({
       min: 500n,
@@ -211,18 +211,18 @@ describe("configure", () => {
   });
 
   test("an empty configure restates the pad and changes nothing", async () => {
-    const { suite, id, pads, settings } = setup();
+    const { fakeSettings, id, pads, settings } = setup();
     const before = await settings.pad(id);
-    suite.apply(await pads.configure(id, {}));
+    fakeSettings.apply(await pads.configure(id, {}));
     expect(await settings.pad(id)).toEqual(before);
   });
 
   test("a switch the owner stopped allowing is never cleared in silence: the call is refused until it is named off", async () => {
-    const { suite, id, pads } = setup();
-    suite.apply(await pads.setTakeover(id, true));
-    const held = suite.pad(id).flags;
-    const everything = suite.allowedFlags;
-    suite.allowedFlags = switchWord(
+    const { fakeSettings, id, pads } = setup();
+    fakeSettings.apply(await pads.setTakeover(id, true));
+    const held = fakeSettings.pad(id).flags;
+    const everything = fakeSettings.allowedFlags;
+    fakeSettings.allowedFlags = switchWord(
       { takeover: false, devBuy: false },
       everything,
     );
@@ -257,8 +257,8 @@ describe("configure", () => {
     // setTakeover names takeover alone: the other paused switch still stops it
     await refuses(pads.setTakeover(id, false), PAD, "stopped allowing devBuy");
     // a knob change that writes no switch goes through, and nothing was written meanwhile
-    suite.apply(await pads.setKnobs(id, { capSecs: { default: 60 } }));
-    expect(suite.pad(id).flags).toBe(held);
+    fakeSettings.apply(await pads.setKnobs(id, { capSecs: { default: 60 } }));
+    expect(fakeSettings.pad(id).flags).toBe(held);
 
     // named off, the call is built and carries exactly what was asked
     const tx = await pads.configure(id, {
@@ -271,20 +271,20 @@ describe("configure", () => {
       switchWord({ devBuy: false, takeover: false }, held),
     );
     // the owner allows them again before anything was sent: the pad still holds both, and every call builds
-    suite.allowedFlags = everything;
-    suite.apply(await pads.configure(id, knob));
-    expect(suite.pad(id).flags).toBe(held);
+    fakeSettings.allowedFlags = everything;
+    fakeSettings.apply(await pads.configure(id, knob));
+    expect(fakeSettings.pad(id).flags).toBe(held);
     // a paused switch the pad does not hold stops nothing
-    suite.apply(await pads.setSwitches(id, { devBuy: false }));
-    suite.allowedFlags = switchWord({ devBuy: false }, everything);
-    suite.apply(await pads.setSwitches(id, { extPresets: false }));
-    expect(suite.pad(id).flags).toBe(
+    fakeSettings.apply(await pads.setSwitches(id, { devBuy: false }));
+    fakeSettings.allowedFlags = switchWord({ devBuy: false }, everything);
+    fakeSettings.apply(await pads.setSwitches(id, { extPresets: false }));
+    expect(fakeSettings.pad(id).flags).toBe(
       switchWord({ devBuy: false, extPresets: false }, held),
     );
   });
 
   test("each rule of the row is refused before anyone signs", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     await refuses(
       pads.configure(id, { knobs: { steadyPips: { min: 499 } } }),
       PAD,
@@ -320,7 +320,7 @@ describe("configure", () => {
       PAD,
       "Bankr's cut",
     );
-    suite.limits[knobId("feeRecipients")!] = { min: 1n, max: 255n };
+    fakeSettings.limits[knobId("feeRecipients")!] = { min: 1n, max: 255n };
     await refuses(
       pads.configure(id, {
         knobs: { feeRecipients: { max: 65 } },
@@ -329,7 +329,7 @@ describe("configure", () => {
       PAD,
       "64",
     );
-    suite.allowedFlags = switchWord({ devBuy: true });
+    fakeSettings.allowedFlags = switchWord({ devBuy: true });
     await refuses(
       pads.configure(id, { switches: { takeover: true } }),
       PAD,
@@ -338,13 +338,13 @@ describe("configure", () => {
   });
 
   test("a pad over the owner's payee limits must set its payees in the same call", async () => {
-    const { suite, id, pads } = setup();
-    suite.pad(id).terms = {
+    const { fakeSettings, id, pads } = setup();
+    fakeSettings.pad(id).terms = {
       payees: [at(0x71), at(0x72)],
       steadySharesWad: [1n, 1n],
       decay: { on: false, autoLpBps: 0, sharesWad: [] },
     };
-    suite.protocol = { ...suite.protocol, maxPadPayees: 1 };
+    fakeSettings.protocol = { ...fakeSettings.protocol, maxPadPayees: 1 };
     await refuses(
       pads.configure(id, { switches: { devBuy: false } }),
       PAD,
@@ -354,8 +354,8 @@ describe("configure", () => {
       payees: [{ address: at(0x71), shareBps: 100, decayShareBps: 200 }],
       decayAutoLpBps: 5_000,
     });
-    suite.apply(tx);
-    expect(suite.pad(id).terms).toEqual({
+    fakeSettings.apply(tx);
+    expect(fakeSettings.pad(id).terms).toEqual({
       payees: [at(0x71)],
       steadySharesWad: [WAD / 100n],
       decay: { on: true, autoLpBps: 5_000, sharesWad: [WAD / 50n] },
@@ -363,9 +363,9 @@ describe("configure", () => {
   });
 
   test("a contract payee that lets anyone claim for it is refused when it is newly named, not when its share moves", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     const open = at(0x7c);
-    suite.chain.setCode(open, "0x6001");
+    fakeSettings.chain.setCode(open, "0x6001");
     await refuses(
       pads.setPayees(id, [{ address: open, shareBps: 100 }]),
       PAD,
@@ -377,16 +377,20 @@ describe("configure", () => {
       "restrict it first",
     );
     // the pad already pays it: a new share for it names nobody new
-    suite.pad(id).terms = {
+    fakeSettings.pad(id).terms = {
       payees: [open],
       steadySharesWad: [1n],
       decay: { on: false, autoLpBps: 0, sharesWad: [] },
     };
-    suite.apply(await pads.setPayees(id, [{ address: open, shareBps: 200 }]));
-    suite.apply(
+    fakeSettings.apply(
+      await pads.setPayees(id, [{ address: open, shareBps: 200 }]),
+    );
+    fakeSettings.apply(
       await pads.configure(id, { payees: [{ address: open, shareBps: 300 }] }),
     );
-    expect(suite.pad(id).terms.steadySharesWad).toEqual([(WAD * 3n) / 100n]);
+    expect(fakeSettings.pad(id).terms.steadySharesWad).toEqual([
+      (WAD * 3n) / 100n,
+    ]);
     await refuses(
       pads.configure(id, {
         payees: [
@@ -400,13 +404,13 @@ describe("configure", () => {
   });
 
   test("Bankr's pad is the owner's: its fee knobs and payees move in one configure", async () => {
-    const { suite, pads, settings } = setup();
+    const { fakeSettings, pads, settings } = setup();
     const tx = await pads.configure(0n, {
       knobs: { steadyPips: { min: 20_000, max: 20_000, default: 20_000 } },
       payees: [{ address: at(0x71), shareWad: 123n }],
     });
     expect(tx.from).toBe(OWNER);
-    suite.apply(tx);
+    fakeSettings.apply(tx);
     const pad = await settings.pad(0n);
     expect(pad.knobs.steadyPips.default).toBe(20_000n);
     expect(pad.payees).toEqual([
@@ -418,20 +422,20 @@ describe("configure", () => {
 
 describe("one setting at a time", () => {
   test("setKnobs merges over the pad's own; Bankr's fee knobs are refused there", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     const tx = await pads.setKnobs(id, {
       capBps: { min: 0, max: 0, default: 0 },
       capSecs: { default: 60 },
     });
     expect(tx.from).toBe(OPERATOR);
     expect(settingsCall(tx).functionName).toBe("setKnobs");
-    suite.apply(tx);
-    expect(suite.pad(id).ranges[knobId("capBps")!]).toEqual({
+    fakeSettings.apply(tx);
+    expect(fakeSettings.pad(id).ranges[knobId("capBps")!]).toEqual({
       min: 0n,
       max: 0n,
       dflt: 0n,
     });
-    expect(suite.pad(id).ranges[knobId("capSecs")!]!.dflt).toBe(60n);
+    expect(fakeSettings.pad(id).ranges[knobId("capSecs")!]!.dflt).toBe(60n);
     await refuses(
       pads.setKnobs(0n, { steadyPips: { default: 17_500 } }),
       PAD,
@@ -448,32 +452,35 @@ describe("one setting at a time", () => {
   });
 
   test("switches and the takeover switch: only the pad turns takeover on, inside what the owner allows", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     const on = await pads.setTakeover(id, true);
     expect(on.from).toBe(OPERATOR);
     expect(settingsCall(on)).toEqual({
       functionName: "setFlags",
-      args: [id, switchWord({ takeover: true }, suite.pad(id).flags)],
+      args: [id, switchWord({ takeover: true }, fakeSettings.pad(id).flags)],
     });
-    suite.apply(on);
-    suite.apply(
+    fakeSettings.apply(on);
+    fakeSettings.apply(
       await pads.setSwitches(id, { devBuy: false, extPresets: false }),
     );
-    expect(suite.pad(id).flags).toBe(
+    expect(fakeSettings.pad(id).flags).toBe(
       switchWord(
         { takeover: true, devBuy: false, extPresets: false },
-        suite.template.flags,
+        fakeSettings.template.flags,
       ),
     );
-    suite.apply(await pads.setTakeover(id, false));
-    suite.limits[knobId("feeRecipients")!] = { min: 1n, max: 255n };
-    suite.pad(id).ranges[knobId("feeRecipients")!] = {
+    fakeSettings.apply(await pads.setTakeover(id, false));
+    fakeSettings.limits[knobId("feeRecipients")!] = { min: 1n, max: 255n };
+    fakeSettings.pad(id).ranges[knobId("feeRecipients")!] = {
       min: 1n,
       max: 65n,
       dflt: 1n,
     };
     await refuses(pads.setTakeover(id, true), PAD, "64");
-    suite.allowedFlags = switchWord({ takeover: false }, suite.allowedFlags);
+    fakeSettings.allowedFlags = switchWord(
+      { takeover: false },
+      fakeSettings.allowedFlags,
+    );
     await refuses(
       pads.setSwitches(id, { takeover: true }),
       PAD,
@@ -482,7 +489,7 @@ describe("one setting at a time", () => {
   });
 
   test("payees and the decay split move together; not on Bankr's pad", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     const tx = await pads.setPayees(
       id,
       [
@@ -492,8 +499,8 @@ describe("one setting at a time", () => {
       { decayAutoLpBps: 3_000 },
     );
     expect(settingsCall(tx).functionName).toBe("setPayees");
-    suite.apply(tx);
-    expect(suite.pad(id).terms.decay).toEqual({
+    fakeSettings.apply(tx);
+    expect(fakeSettings.pad(id).terms.decay).toEqual({
       on: true,
       autoLpBps: 3_000,
       sharesWad: [WAD / 5n, 0n],
@@ -515,8 +522,8 @@ describe("one setting at a time", () => {
   });
 
   test("payees no launch on the pad would take are refused where they are named: register, setPayees, configure", async () => {
-    const { suite, id, pads } = setup();
-    suite.limits[knobId("padShareBps")!] = { min: 0n, max: 10_000n };
+    const { fakeSettings, id, pads } = setup();
+    fakeSettings.limits[knobId("padShareBps")!] = { min: 0n, max: 10_000n };
     const marker = PAD_TREASURY_MARKER;
     const whole = [{ address: marker, shareBps: 10_000 }];
     // each share exact in bps, summing to the whole: the rescale over what the marker leaves rounds past it
@@ -544,38 +551,38 @@ describe("one setting at a time", () => {
     );
     // one bp off the marker and the same lists are built
     const fits = [{ ...thirds[0]!, shareBps: 3_332 }, thirds[1]!, thirds[2]!];
-    suite.apply(await pads.setPayees(id, fits));
-    expect(suite.pad(id).terms.payees).toHaveLength(3);
+    fakeSettings.apply(await pads.setPayees(id, fits));
+    expect(fakeSettings.pad(id).terms.payees).toHaveLength(3);
 
     // a list the pad already holds (sent raw, as the chain takes it) does not stop a configure that names no payees
-    suite.pad(id).terms = {
+    fakeSettings.pad(id).terms = {
       payees: [getAddress(marker)],
       steadySharesWad: [WAD],
       decay: { on: false, autoLpBps: 0, sharesWad: [] },
     };
-    suite.apply(
+    fakeSettings.apply(
       await pads.configure(id, { knobs: { capSecs: { default: 60 } } }),
     );
-    expect(suite.pad(id).terms.steadySharesWad).toEqual([WAD]);
+    expect(fakeSettings.pad(id).terms.steadySharesWad).toEqual([WAD]);
   });
 
   test("cap controller, a quote's terms, curves and preset limits", async () => {
-    const { suite, id, pads } = setup();
-    suite.apply(await pads.setCapController(id, at(0xcc)));
-    expect(suite.pad(id).capController).toBe(at(0xcc));
-    suite.apply(await pads.setCapController(id, null));
-    expect(suite.pad(id).capController).toBe(zeroAddress);
+    const { fakeSettings, id, pads } = setup();
+    fakeSettings.apply(await pads.setCapController(id, at(0xcc)));
+    expect(fakeSettings.pad(id).capController).toBe(at(0xcc));
+    fakeSettings.apply(await pads.setCapController(id, null));
+    expect(fakeSettings.pad(id).capController).toBe(zeroAddress);
 
     const quote = at(0xe7);
-    suite.apply(await pads.setQuoteTerms(id, quote, { allowed: true }));
-    suite.apply(
+    fakeSettings.apply(await pads.setQuoteTerms(id, quote, { allowed: true }));
+    fakeSettings.apply(
       await pads.setQuoteTerms(id, quote, {
         ownAmounts: true,
         compoundFloor: 5n,
         compoundCap: 9n,
       }),
     );
-    expect(suite.pad(id).quotes.get(quote.toLowerCase())).toEqual({
+    expect(fakeSettings.pad(id).quotes.get(quote.toLowerCase())).toEqual({
       allowed: true,
       ownAmounts: true,
       compoundFloor: 5n,
@@ -589,16 +596,16 @@ describe("one setting at a time", () => {
     await refuses(pads.setQuoteTerms(id, quote, { compoundFloor: 10n }), PAD);
 
     expect(await pads.isCurveAllowed(id, "degen")).toBe(true);
-    suite.apply(await pads.setCurveAllowed(id, "degen", false));
+    fakeSettings.apply(await pads.setCurveAllowed(id, "degen", false));
     expect(await pads.isCurveAllowed(id, "degen")).toBe(false);
     expect(await pads.isCurveAllowed(id, "any")).toBe(false);
-    suite.apply(await pads.setCurveAllowed(id, "any", true));
+    fakeSettings.apply(await pads.setCurveAllowed(id, "any", true));
     expect(await pads.isCurveAllowed(id, "any")).toBe(true);
 
-    suite.apply(
+    fakeSettings.apply(
       await pads.setPresetLimits(id, "pumpBrake", { minBrakeTicks: 6_932 }),
     );
-    expect(suite.pad(id).presetLimits.get(3)).toEqual({
+    expect(fakeSettings.pad(id).presetLimits.get(3)).toEqual({
       allowed: true,
       maxWindowSecs: 3_600,
       minBrakeTicks: 6_932,
@@ -618,38 +625,38 @@ describe("one setting at a time", () => {
 
 describe("the pad's identity in the registry", () => {
   test("signer, link, pause: from the operator, and for Bankr's pad from the registry's owner", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     const signer = await pads.setSigner(id, at(0x51));
     expect(signer).toMatchObject({
       from: OPERATOR,
       to: SUITE.launchpadRegistry,
     });
-    suite.apply(signer);
-    expect(suite.pad(id).signer).toBe(at(0x51));
-    suite.apply(await pads.setSigner(id, null));
-    expect(suite.pad(id).signer).toBe(zeroAddress);
+    fakeSettings.apply(signer);
+    expect(fakeSettings.pad(id).signer).toBe(at(0x51));
+    fakeSettings.apply(await pads.setSigner(id, null));
+    expect(fakeSettings.pad(id).signer).toBe(zeroAddress);
     expect((await pads.setSigner(0n, at(0x51))).from).toBe(REGISTRY_OWNER);
 
-    suite.apply(await pads.setMetadataUri(id, "ipfs://x"));
-    expect(suite.pad(id).uri).toBe("ipfs://x");
-    suite.maxUri = 2;
+    fakeSettings.apply(await pads.setMetadataUri(id, "ipfs://x"));
+    expect(fakeSettings.pad(id).uri).toBe("ipfs://x");
+    fakeSettings.maxUri = 2;
     await refuses(pads.setMetadataUri(id, "abc"), PAD, "2 bytes");
 
-    suite.apply(await pads.setPaused(id, true));
-    expect(suite.pad(id).paused).toBe(true);
+    fakeSettings.apply(await pads.setPaused(id, true));
+    expect(fakeSettings.pad(id).paused).toBe(true);
     await refuses(pads.setPaused(id, "yes" as never), "INVALID_PARAMS");
   });
 
   test("a vanity suffix is refused when another pad owns it or one of its tails", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     const tx = await pads.setVanity(id, { suffix: 0xbeef, nibbles: 4 });
-    suite.apply(tx);
-    expect(suite.pad(id).vanity).toEqual({ suffix: 0xbeef, nibbles: 4 });
+    fakeSettings.apply(tx);
+    expect(fakeSettings.pad(id).vanity).toEqual({ suffix: 0xbeef, nibbles: 4 });
     // its own suffix is no one else's: setting it again passes, and another pad is refused it
     expect(
       (await pads.setVanity(id, { suffix: 0xbeef, nibbles: 4 })).from,
     ).toBe(OPERATOR);
-    const other = suite.addPad();
+    const other = fakeSettings.addPad();
     await refuses(
       pads.setVanity(other, { suffix: 0xbeef, nibbles: 4 }),
       PAD,
@@ -665,13 +672,13 @@ describe("the pad's identity in the registry", () => {
   });
 
   test("the handover is two steps, and Bankr's pad moves only with the registry", async () => {
-    const { suite, id, pads } = setup();
+    const { fakeSettings, id, pads } = setup();
     await refuses(pads.acceptOperator(id), PAD, "No operator handover");
-    suite.apply(await pads.transferOperator(id, at(0xb9)));
+    fakeSettings.apply(await pads.transferOperator(id, at(0xb9)));
     const accept = await pads.acceptOperator(id);
     expect(accept.from).toBe(at(0xb9));
-    suite.apply(accept);
-    expect(suite.pad(id).operator).toBe(at(0xb9));
+    fakeSettings.apply(accept);
+    expect(fakeSettings.pad(id).operator).toBe(at(0xb9));
     expect((await pads.setPaused(id, true)).from).toBe(at(0xb9));
     await refuses(
       pads.transferOperator(0n, at(0xb9)),

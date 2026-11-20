@@ -13,7 +13,6 @@ import {
   cloneInitCode,
   predictToken,
   tokenInitCode,
-  type EarlierLivePointers,
   type LivePointers,
   type TokenIdentity,
 } from "./predict.js";
@@ -116,7 +115,7 @@ export interface MinedSalt {
  * Always bounded: null when `maxTries` (a positive whole number; `plan()` uses {@link vanityMaxTries}) run out.
  */
 export async function mineVanitySalt(i: {
-  suite: EarlierLivePointers | LivePointers;
+  live: LivePointers;
   identity: TokenIdentity;
   launcher: Address;
   rule: VanityRule;
@@ -133,16 +132,16 @@ export async function mineVanitySalt(i: {
   // 0xff ‖ tokenDeployer ‖ deployerSalt ‖ initHash, and the escrow's own CREATE2 from the factory.
   const addrPre = new Uint8Array(85);
   addrPre[0] = 0xff;
-  addrPre.set(toBytes(i.suite.tokenDeployer), 1);
+  addrPre.set(toBytes(i.live.tokenDeployer), 1);
   const escrowPre = new Uint8Array(85);
   escrowPre[0] = 0xff;
-  escrowPre.set(toBytes(i.suite.factory), 1);
+  escrowPre.set(toBytes(i.live.factory), 1);
   escrowPre.set(
-    keccak256(cloneInitCode(i.suite.vestingEscrowImpl), "bytes"),
+    keccak256(cloneInitCode(i.live.vestingEscrowImpl), "bytes"),
     53,
   );
   const init = hexToBytes(
-    tokenInitCode(i.suite, i.identity, `0x${"00".repeat(20)}`),
+    tokenInitCode(i.live, i.identity, `0x${"00".repeat(20)}`),
   );
   // The escrow is element 5 of the trailing address[], with the buyback, 0xdEaD and the launch's own after it.
   const escrowAt =
@@ -164,7 +163,7 @@ export async function mineVanitySalt(i: {
       const mined = bytesToHex(salt);
       return {
         salt: mined,
-        token: predictToken(i.suite, i.identity, i.launcher, mined),
+        token: predictToken(i.live, i.identity, i.launcher, mined),
         tries: t + 1,
       };
     }

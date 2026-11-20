@@ -5,9 +5,9 @@ import {
   type Address,
 } from "viem";
 import { readContract } from "viem/actions";
-import { creatorVestingEscrowAbi } from "./abis/suite3.js";
+import { creatorVestingEscrowAbi } from "./abis/generated.js";
 import { LaunchRefusedError } from "./errors.js";
-import { requireLaunch, type SuiteReadContext } from "./lens.js";
+import { requireLaunch, type ReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";
 import { requireAddress } from "./recipient.js";
 import { buildCallTx } from "./tx.js";
@@ -51,8 +51,8 @@ export interface LaunchVesting {
 
 type Schedule = Omit<VestingSchedule, "releasable">;
 
-/** The vesting namespace for one chain's suite. */
-export function createVesting(ctx: SuiteReadContext): LaunchVesting {
+/** The vesting namespace for one chain's contracts. */
+export function createVesting(ctx: ReadContext): LaunchVesting {
   const chain = ctx.chain.chain;
   const { client } = ctx;
   const noVesting = (): never => {

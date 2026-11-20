@@ -4,21 +4,18 @@ import {
   checkCurve,
   checkCurveBothOrders,
   checkCurveFormat,
-  curveOwnBuys,
-  launchSale,
+  type CurveRules,
   type CurveVerdict,
 } from "./curveCheck.js";
 import {
-  closedCurveDetail,
   curveRevertDetail,
   padAllowsCurve,
   refuseBrokenCurve,
-  refuseClosedCurve,
 } from "./curveDetail.js";
-import { DEFAULT_TOTAL_SUPPLY, NO_VEST_TO_HOLDERS } from "./economics.js";
 import { isLaunchSdkError } from "./errors.js";
+import { TEMPLATE_CURVE_RULES as RULES } from "./__internal__/fakeContractsState.js";
 
-// Each rule at its limit and one step past it, with what forge answered on the suite's contracts: "ok" and the
+// Each rule at its limit and one step past it under the template's rules, with what forge answered: "ok" and the
 // unplaced base units, or the revert. label | curve (`width:bps` bands or a word) | where | forge. where: start=<tick>,
 // sale=1e<n>, t1 (token as currency1), own (the pool's own buys run); else a $10K WETH launch, 15 % vested, currency0.
 const START = -239_200;
@@ -82,6 +79,7 @@ interface Named {
   tokenIsCurrency0: boolean;
   ownBuys: boolean;
   sale: bigint;
+  rules: CurveRules;
 }
 
 const pack = (text: string): bigint =>
@@ -115,6 +113,7 @@ const NAMED: Named[] = FORGE.trim()
       tokenIsCurrency0: !at.includes("t1"),
       ownBuys: at.includes("own"),
       sale: sale ? 10n ** BigInt(sale.slice(7)) : SALE,
+      rules: RULES,
     };
   });
 
@@ -201,57 +200,6 @@ describe("before the salt is mined: both token orders", () => {
   });
 });
 
-describe("what switches the step rule on: the pool's own buys", () => {
-  const none = {
-    buybackBps: 0,
-    autoLpBps: 0,
-    padDecay: { on: false, autoLpBps: 0 },
-    extensionCallsOut: false,
-  };
-
-  test("a buyback share, auto-liquidity, the pad's decay auto-liquidity, or an extension the hook calls after a swap", () => {
-    expect(curveOwnBuys(none)).toBe(false);
-    expect(curveOwnBuys({ ...none, buybackBps: 1 })).toBe(true);
-    expect(curveOwnBuys({ ...none, autoLpBps: 3_000 })).toBe(true);
-    expect(
-      curveOwnBuys({ ...none, padDecay: { on: true, autoLpBps: 10_000 } }),
-    ).toBe(true);
-    expect(curveOwnBuys({ ...none, extensionCallsOut: true })).toBe(true);
-  });
-
-  test("a decay split that is off, or pays no auto-liquidity, is no own buy", () => {
-    expect(
-      curveOwnBuys({ ...none, padDecay: { on: false, autoLpBps: 10_000 } }),
-    ).toBe(false);
-    expect(
-      curveOwnBuys({ ...none, padDecay: { on: true, autoLpBps: 0 } }),
-    ).toBe(false);
-  });
-});
-
-describe("what a launch sells into its bands", () => {
-  const base = {
-    totalSupply: 0n,
-    vestBps: 0,
-    econ: { ...NO_VEST_TO_HOLDERS },
-    extraAllocations: [],
-  };
-
-  test("the supply less everything vested and every builder allocation; 0 names the default supply", () => {
-    expect(launchSale(base)).toBe(DEFAULT_TOTAL_SUPPLY);
-    expect(launchSale({ ...base, vestBps: 1_500 })).toBe(SALE);
-    expect(
-      launchSale({
-        ...base,
-        totalSupply: 10n ** 21n + 7n,
-        vestBps: 1_000,
-        econ: { ...NO_VEST_TO_HOLDERS, vestToHoldersBps: 501 },
-        extraAllocations: [{ amount: 5n }, { amount: 11n }],
-      }),
-    ).toBe(10n ** 21n + 7n - ((10n ** 21n + 7n) * 1_501n) / 10_000n - 16n);
-  });
-});
-
 describe("refusals: the band and what to change", () => {
   const detailOf = (run: () => void): string => {
     try {
@@ -263,14 +211,17 @@ describe("refusals: the band and what to change", () => {
     throw new Error("not refused");
   };
 
-  test("each per-band rule names its band, counted from 1, and a way out", () => {
-    expect(curveRevertDetail("CurveTooThin", 0)).toBe(
-      "Liquidity band 1 is too thin: it holds under a tenth of the liquidity the whole sale would have as a single band from the start price. Give band 1 a larger share, or make it narrower.",
+  test("each per-band rule names its band, counted from 1, the coin's own figures and a way out", () => {
+    expect(curveRevertDetail("CurveTooThin", 0, RULES)).toBe(
+      "Liquidity band 1 is too thin: it holds under 1/10 of the liquidity the whole sale would have as a single band from the start price. Give band 1 a larger share, or make it narrower.",
     );
-    expect(curveRevertDetail("CurveTooDense", 3)).toStartWith(
-      "Liquidity band 4 is too dense",
+    expect(curveRevertDetail("CurveTooDense", 3, RULES)).toStartWith(
+      "Liquidity band 4 is too dense: it holds more than 2 times",
     );
-    expect(curveRevertDetail("CurveStep", 2)).toContain(
+    expect(curveRevertDetail("CurveStep", 2, RULES)).toContain(
+      "a band that begins within 6,800 ticks of the start can hold at most 13 times the thinnest band before it",
+    );
+    expect(curveRevertDetail("CurveStep", 2, RULES)).toContain(
       "Give band 3 a smaller share or make it wider, or give the earlier bands more.",
     );
     expect(curveRevertDetail("CurveLiquidity", 0)).toBe(
@@ -282,23 +233,32 @@ describe("refusals: the band and what to change", () => {
     expect(curveRevertDetail("CurveStep")).toStartWith(
       "One of the launch's liquidity bands",
     );
-    expect(curveRevertDetail("CurvePlacement")).toContain(
+    expect(curveRevertDetail("CurvePlacement", null, RULES)).toContain(
       "at least 90% of it must be sold within 120,000 ticks",
     );
-    expect(curveRevertDetail("CurveDust")).toContain(
+    expect(curveRevertDetail("CurveDust", null, RULES)).toContain(
       "over 2 parts per million",
     );
     expect(curveRevertDetail("InvalidCurve")).toContain("1 to 8 bands");
   });
 
+  test("with no rules to hand a sentence names no figure", () => {
+    expect(curveRevertDetail("CurveTooThin", 0)).toContain(
+      "it holds less than this launchpad requires of the liquidity",
+    );
+    expect(curveRevertDetail("CurveDust")).toContain(
+      "(more than this launchpad allows)",
+    );
+  });
+
   test("refuseBrokenCurve is INVALID_PARAMS with that sentence, in the order given or in both", () => {
     const step = named("G: runner_v1's rows as a table, own buys");
     expect(detailOf(() => refuseBrokenCurve(step, "base"))).toBe(
-      curveRevertDetail("CurveStep", 2),
+      curveRevertDetail("CurveStep", 2, RULES),
     );
     const { tokenIsCurrency0: _order, ...either } = step;
     expect(detailOf(() => refuseBrokenCurve(either))).toBe(
-      curveRevertDetail("CurveStep", 2),
+      curveRevertDetail("CurveStep", 2, RULES),
     );
     expect(() => refuseBrokenCurve({ ...step, ownBuys: false })).not.toThrow();
     const dust = named("H: the same from -559,800");
@@ -309,7 +269,21 @@ describe("refusals: the band and what to change", () => {
       detailOf(() =>
         refuseBrokenCurve({ ...dust, tokenIsCurrency0: undefined }),
       ),
-    ).toBe(curveRevertDetail("CurveDust"));
+    ).toBe(curveRevertDetail("CurveDust", null, RULES));
+  });
+
+  test("bands placed from market caps add where a range must end, from the coin's own near window", () => {
+    const step = named("G: runner_v1's rows as a table, own buys");
+    expect(detailOf(() => refuseBrokenCurve(step, "base", true))).toEndWith(
+      "the band after a range begins within those 6,800 ticks for certain only when the range ends under 1.97 times the start market cap. End that range lower, or convert the ranges once with curveFromMarketCaps and launch with its bands.",
+    );
+    // 1.0001^2,000 is 1.2214.
+    const near = { ...RULES, nearTicks: 2_000, nearStep: 1 };
+    expect(
+      detailOf(() => refuseBrokenCurve({ ...step, rules: near }, "base", true)),
+    ).toContain(
+      "within those 2,000 ticks for certain only when the range ends under 1.22 times",
+    );
   });
 
   test("well-formed bands that end past the pool's range from this start say so", () => {
@@ -325,16 +299,6 @@ describe("refusals: the band and what to change", () => {
 
 describe("the launchpad's key", () => {
   const table = bands([6_800, 304], [0, 9_696]);
-  const refusal = (run: () => void): string => {
-    try {
-      run();
-    } catch (err) {
-      expect(isLaunchSdkError(err, "CURVE_NOT_ALLOWED")).toBe(true);
-      return (err as { detail: string }).detail;
-    }
-    throw new Error("not refused");
-  };
-
   test("a built-in needs its own key; a launcher's bands their own key or the pad's any key", () => {
     expect(padAllowsCurve(0n, { listed: true, anyBands: false })).toBe(true);
     // "any" never re-opens a built-in the pad switched off.
@@ -344,21 +308,5 @@ describe("the launchpad's key", () => {
     expect(padAllowsCurve(table, { listed: false, anyBands: false })).toBe(
       false,
     );
-  });
-
-  test("a closed pad is CURVE_NOT_ALLOWED: its operator must open it", () => {
-    const closed = { listed: false, anyBands: false };
-    expect(refusal(() => refuseClosedCurve("base", 7n, table, closed))).toBe(
-      "This launchpad is closed to these liquidity bands. Its operator must open it first: list these bands, or open the launchpad to launcher-defined bands, with setCurveAllowed. Until then, launch on a curve it allows.",
-    );
-    expect(closedCurveDetail(0n, table)).toBe(
-      "Bankr's launchpad does not take launcher-defined liquidity bands yet. Launch on one of its built-in curves.",
-    );
-    expect(refusal(() => refuseClosedCurve("base", 7n, 2n, closed))).toContain(
-      "switched this launch curve off",
-    );
-    expect(() =>
-      refuseClosedCurve("base", 7n, table, { listed: false, anyBands: true }),
-    ).not.toThrow();
   });
 });

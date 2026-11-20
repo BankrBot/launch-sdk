@@ -1,53 +1,81 @@
 import { describe, expect, test } from "bun:test";
-import { getAddress, type Hex } from "viem";
+import { getAddress, type Abi, type Address, type Hex } from "viem";
 import { arbitrum, base, robinhood } from "viem/chains";
-import {
-  BANKR_V4_EARLIER_ADDRESSES,
-  BANKR_V4_LAUNCH_ADDRESSES,
-  DEFAULT_SUITE,
-  chooseSuite,
-  type LaunchAddresses,
-  type SuiteRecords,
-} from "./addresses.js";
+import { BANKR_V4_LAUNCH_ADDRESSES, mergeAddresses } from "./addresses.js";
+import { bankrLaunchFactoryAbi } from "./abis/generated.js";
+import type { FetchLike, RegisterResult } from "./api.js";
 import { CHAINS } from "./chains/index.js";
-import { createLaunchClient, type LaunchClient } from "./client.js";
-import { ANY_CURVE, curveWordHex, encodeCurve } from "./curve.js";
+import {
+  createLaunchClient,
+  type LaunchApiOptions,
+  type LaunchClient,
+} from "./client.js";
+import { curveWordHex, encodeCurve } from "./curve.js";
 import { curveMarketCaps } from "./curveMarketCaps.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import * as sdk from "./index.js";
-import type { LaunchParams } from "./providers/types.js";
+import type { LaunchInput, LaunchParams } from "./providers/types.js";
+import { KNOB } from "./launch/settings.js";
 import { encodeBuilderCodeSuffix } from "./tx.js";
 import { FakeChain, Revert } from "./__internal__/fakeRpc.js";
+import { fakeDistributor, testRecord } from "./__internal__/fakeRecord.js";
 import {
   FAKE_TOKENS_PER_UNIT,
-  START_TICK_BOUNDS,
-  fakeDistributor,
-  installSuite,
-  launchLogs,
-  sentLaunch,
-  setFakeCurveAllowed,
-  testSuite,
-  type SuiteFixture,
-} from "./__internal__/fakeSuite.js";
+  installContracts,
+  type ContractsFixture,
+} from "./__internal__/fakeContracts.js";
+import { launchLogs, sentLaunch } from "./__internal__/fakeLaunchReceipt.js";
+import {
+  FRESH_PAD_ID,
+  freshContractsState,
+} from "./__internal__/fakeContractsState.js";
 
-const SUITE = testSuite(8453);
-const WETH = getAddress(CHAINS.base.quotes.WETH.address);
 const USDC = getAddress(CHAINS.base.quotes.USDC.address);
 const LAUNCHER = getAddress("0x1111111111111111111111111111111111111111");
 const OTHER = getAddress("0x2222222222222222222222222222222222222222");
-const INPUT = {
+
+/** Fake contracts on Base with one open launchpad, pairing with the fixture's WETH (a native dev buy). */
+const fixture = (): ContractsFixture => installContracts(new FakeChain(base));
+
+/** The same with USDC as the quote, an ERC-20 the factory pulls a dev buy of; the pad takes a dev buy of 2 %. */
+function usdcFixture(): ContractsFixture {
+  const state = freshContractsState();
+  // A dollar a unit, six decimals, and compound amounts of $50 and $100 in its own units.
+  state.quote = {
+    ...state.quote,
+    terms: {
+      ...state.quote.terms,
+      decimals: 6,
+      compoundFloor: 50_000_000n,
+      compoundCap: 100_000_000n,
+      quoteActivation: 1_000_000n,
+    },
+    feedPriceUsdE18: 10n ** 18n,
+    totalSupply: 10n ** 15n,
+  };
+  const ranges = [...state.pad!.ranges];
+  ranges[KNOB.devBuyMaxBps] = { min: 0n, max: 200n, dflt: 200n };
+  state.pad = { ...state.pad!, ranges };
+  return installContracts(new FakeChain(base), {
+    state,
+    padId: FRESH_PAD_ID,
+    quote: USDC,
+    weth: getAddress(CHAINS.base.quotes.WETH.address),
+  });
+}
+
+const input = (
+  f: ContractsFixture,
+  o: Partial<LaunchInput<"base">> = {},
+): LaunchInput<"base"> => ({
   name: "Launch SDK Test",
   symbol: "LSDK",
   metadataUri: "ipfs://bafy-test",
   launcher: LAUNCHER,
-  launchpadId: 1n,
-} as const;
-
-const fixture = (): SuiteFixture =>
-  installSuite(new FakeChain(base), SUITE, {
-    [WETH]: { decimals: 18 },
-    [USDC]: { decimals: 6 },
-  });
+  launchpadId: f.padId,
+  quote: f.quote,
+  ...o,
+});
 
 function expectSync(fn: () => unknown, code: LaunchSdkErrorCode): unknown {
   let thrown: unknown;
@@ -80,40 +108,15 @@ async function expectCode(
 
 describe("which contracts a client is on", () => {
   const at = (n: number) => getAddress(`0x${n.toString(16).padStart(40, "0")}`);
-  // A made-up suite 4 row: what a chain's go-live adds to the SDK's table.
-  const row = (chainId: number): LaunchAddresses => ({
-    ...testSuite(chainId),
-    factory: at(0x4f),
-    settings: at(0x45),
-    termsLens: at(0x46),
-    raffleRunCode: at(0x47),
-    launchResolverLibrary: at(0x48),
-    launchPricingLibrary: at(0x49),
-    settingsColdLibrary: at(0x4a),
-    ledgerColdLibrary: at(0x4b),
-  });
-  // Base has both suites, Arbitrum suite 4 alone, Robinhood none: a table from before a chain's go-live.
-  const SHIPPED: SuiteRecords = {
-    suite3: BANKR_V4_EARLIER_ADDRESSES,
-    suite4: {
-      ...BANKR_V4_LAUNCH_ADDRESSES,
-      base: row(8453),
-      arbitrum: row(42161),
-      robinhood: null,
-    },
-  };
   const detailOf = (fn: () => unknown) =>
     (expectSync(fn, "PROVIDER_NOT_DEPLOYED") as { detail?: string }).detail;
 
-  test("a client that names nothing is on the chain's latest contracts, on every chain", () => {
-    expect(DEFAULT_SUITE).toBe(4);
+  test("a client is on the chain's one record, on every chain", () => {
     for (const chain of sdk.LAUNCH_CHAINS) {
       const record = BANKR_V4_LAUNCH_ADDRESSES[chain];
-      if (record === null) throw new Error(`${chain} has no record`);
       // Arc has no usable public RPC, so every client names one.
       const c = createLaunchClient({ chain, rpcUrl: "http://127.0.0.1:1" });
       expect(c.provider.addresses, chain).toEqual(record);
-      expect(c.provider.addresses.settings).toBe(record.settings);
       expect(Object.keys(c.contracts()).sort()).toEqual([
         "coinTerms",
         "holderLegs",
@@ -124,65 +127,56 @@ describe("which contracts a client is on", () => {
     }
   });
 
-  test("the default follows the latest contracts' table alone: suite 3's record moves no client that names none", () => {
-    expect(chooseSuite("base", {}, SHIPPED)).toEqual({
-      suite: 4,
-      addresses: row(8453),
-    });
-    expect(chooseSuite("arbitrum", {}, SHIPPED)).toEqual({
-      suite: 4,
-      addresses: row(42161),
-    });
-    expect(chooseSuite("robinhood", {}, SHIPPED)).toEqual({
-      suite: 4,
-      addresses: {},
-    });
+  test("the SDK knows one contract set per chain: no option, export or record names another", () => {
+    const client = createLaunchClient({ chain: "base" });
+    for (const gone of ["launchpad", "launchpads", "quotes"])
+      expect(gone in client, gone).toBe(false);
+    for (const gone of [
+      "BANKR_V4_EARLIER_ADDRESSES",
+      "DEFAULT_SUITE",
+      "hasSettingsContract",
+      "readEarlierLivePointers",
+      "EARLIER_HOLDER_LEG_WAKE_ABI",
+    ])
+      expect(gone in sdk, gone).toBe(false);
+    // A record names its settings contract, always: there is no record without one.
+    for (const chain of sdk.LAUNCH_CHAINS)
+      expect(BANKR_V4_LAUNCH_ADDRESSES[chain].settings, chain).toMatch(
+        /^0x[0-9a-fA-F]{40}$/,
+      );
   });
 
-  test("an override is merged over the latest record, and stands alone where the chain has none or it names another factory", () => {
+  test("an override is merged over the chain's record, and stands alone where it names another factory", () => {
+    const shipped = BANKR_V4_LAUNCH_ADDRESSES.base;
+    expect(mergeAddresses("base", undefined)).toEqual(shipped);
     const hook = at(0x77);
-    expect(chooseSuite("base", { addresses: { hook } }, SHIPPED)).toEqual({
-      suite: 4,
-      addresses: { ...row(8453), hook },
-    });
+    expect(mergeAddresses("base", { hook })).toEqual({ ...shipped, hook });
     // Another factory's contracts are its own, all of them: nothing of the shipped record is left beside it.
     const other = { factory: at(0x5f), settings: at(0x99), hook };
-    expect(chooseSuite("base", { addresses: other }, SHIPPED)).toEqual({
-      suite: 4,
-      addresses: other,
-    });
-    expect(
-      chooseSuite("base", { suite: 3, addresses: { factory: at(0x5f) } }),
-    ).toEqual({ suite: 3, addresses: { factory: at(0x5f) } });
-    const own = { ...row(8453), settings: at(0x99) };
-    expect(chooseSuite("base", { addresses: own }, SHIPPED)).toEqual({
-      suite: 4,
-      addresses: own,
-    });
-    expect(
-      chooseSuite("robinhood", { addresses: { settings: at(0x99) } }, SHIPPED),
-    ).toEqual({ suite: 4, addresses: { settings: at(0x99) } });
+    expect(mergeAddresses("base", other)).toEqual(other);
+    const own = { ...shipped, settings: at(0x99) };
+    expect(mergeAddresses("base", own)).toEqual(own);
   });
 
   test("an override that brings its own factory is a whole record by itself: nothing shipped is left beside it", () => {
-    const shipped = BANKR_V4_LAUNCH_ADDRESSES.base!;
-    // A whole record of the earlier contracts, passed without saying so, is refused and told how to say so.
-    for (const addresses of [SUITE, { factory: SUITE.factory }]) {
-      const detail = detailOf(() =>
-        createLaunchClient({ chain: "base", addresses }),
-      );
-      expect(detail).toContain("addresses.settings");
-      expect(detail).toContain("`suite: 3`");
-    }
+    const shipped = BANKR_V4_LAUNCH_ADDRESSES.base;
+    const fork = testRecord(8453);
     // Its factory and settings alone are not a record: the ledger, hook and registry would be the shipped ones.
     const partial = detailOf(() =>
       createLaunchClient({
         chain: "base",
-        addresses: { factory: SUITE.factory, settings: at(0x45) },
+        addresses: { factory: fork.factory, settings: at(0x45) },
       }),
     );
     expect(partial).toContain("addresses.ledger");
     expect(partial).toContain("addresses.hook");
+    // A record that names no settings contract is no record: every one has it.
+    const { settings: _, ...withoutSettings } = fork;
+    expect(
+      detailOf(() =>
+        createLaunchClient({ chain: "base", addresses: withoutSettings }),
+      ),
+    ).toContain("addresses.settings");
     // The record's own factory, or a pointer beside it, moves nothing.
     const hook = at(0x77);
     const c = createLaunchClient({
@@ -190,79 +184,24 @@ describe("which contracts a client is on", () => {
       addresses: { factory: shipped.factory, hook },
     });
     expect(c.provider.addresses).toEqual({ ...shipped, hook });
-    // A fork's record that names its settings contract is taken as it is, the shipped terms lens not added.
-    const fork = { ...SUITE, settings: at(0x45) };
+    // A fork's whole record is taken as it is.
     expect(
       createLaunchClient({ chain: "base", addresses: fork }).provider.addresses,
     ).toEqual(fork);
-    expect(
-      detailOf(() =>
-        createLaunchClient({
-          chain: "robinhood",
-          addresses: { factory: SUITE.factory },
-        }),
-      ),
-    ).toContain("addresses.settings");
-  });
-
-  test("suite 3, the test deployment before, is reached only by name, on Base alone", () => {
-    expect(chooseSuite("base", { suite: 3 }, SHIPPED)).toEqual({
-      suite: 3,
-      addresses: { ...BANKR_V4_EARLIER_ADDRESSES.base },
-    });
-    // A whole suite 3 fork record takes no settings contract from the shipped row.
-    const fork = chooseSuite("base", { suite: 3, addresses: SUITE }, SHIPPED);
-    expect(fork).toEqual({ suite: 3, addresses: { ...SUITE } });
-    expect(fork.addresses.settings).toBeUndefined();
-    const c = createLaunchClient({ chain: "base", suite: 3 });
-    expect(c.provider.addresses).toEqual(BANKR_V4_EARLIER_ADDRESSES.base!);
-    expectSync(() => c.contracts(), "PROVIDER_NOT_DEPLOYED");
-    for (const chain of sdk.LAUNCH_CHAINS) {
-      if (BANKR_V4_EARLIER_ADDRESSES[chain] !== null) continue;
-      expect(detailOf(() => createLaunchClient({ chain, suite: 3 }))).toContain(
-        "drop `suite: 3`",
-      );
-    }
-  });
-
-  test("suite 3 with a settings contract is refused, not read as suite 4", () => {
-    const detail = (
-      expectSync(
-        () =>
-          createLaunchClient({
-            chain: "base",
-            suite: 3,
-            addresses: { ...SUITE, settings: at(0x45) },
-          }),
-        "PROVIDER_NOT_DEPLOYED",
-      ) as { detail?: string }
-    ).detail;
-    expect(detail).toContain("addresses.settings");
   });
 });
 
 describe("createLaunchClient", () => {
   test("UNSUPPORTED_CHAIN for a chain outside CHAINS; RPC_REQUIRED on Arc without an RPC", () => {
     expectSync(
-      () => createLaunchClient({ chain: "ethereum" as never }),
+      () => createLaunchClient({ chain: "solana" as never }),
       "UNSUPPORTED_CHAIN",
     );
-    expectSync(
-      () =>
-        createLaunchClient({
-          chain: "arc",
-          suite: 3,
-          addresses: testSuite(5042),
-        }),
-      "RPC_REQUIRED",
-    );
+    expectSync(() => createLaunchClient({ chain: "arc" }), "RPC_REQUIRED");
   });
 
   test("PROVIDER_NOT_DEPLOYED with an incomplete override, a foreign chain id or another provider", () => {
-    for (const chain of sdk.LAUNCH_CHAINS)
-      expect(BANKR_V4_EARLIER_ADDRESSES[chain] === null, chain).toBe(
-        chain !== "base",
-      );
+    const fork = testRecord(8453);
     // Each refusal says what to pass. Every chain has a record, so a client with no addresses is refused nowhere.
     const detail = (fn: () => unknown) =>
       (expectSync(fn, "PROVIDER_NOT_DEPLOYED") as { detail?: string }).detail;
@@ -270,89 +209,60 @@ describe("createLaunchClient", () => {
       detail(() =>
         createLaunchClient({
           chain: "robinhood",
-          addresses: { factory: SUITE.factory, settings: SUITE.factory },
+          addresses: { factory: fork.factory, settings: fork.factory },
         }),
       ),
     ).toContain("addresses.weth,");
     expect(
       detail(() =>
-        createLaunchClient({
-          chain: "base",
-          suite: 3,
-          addresses: testSuite(42161),
-        }),
+        createLaunchClient({ chain: "base", addresses: testRecord(42161) }),
       ),
     ).toContain("42161");
     expectSync(
       () =>
         createLaunchClient({
           chain: "base",
-          suite: 3,
-          addresses: SUITE,
+          addresses: fork,
           provider: "bankr_v3" as never,
         }),
       "PROVIDER_NOT_DEPLOYED",
     );
-    const c = createLaunchClient({
-      chain: "base",
-      suite: 3,
-      addresses: SUITE,
-    });
+    const c = createLaunchClient({ chain: "base", addresses: fork });
     expect(c.provider).toMatchObject({
       id: "bankr_v4",
       chain: "base",
-      contractsCommit: SUITE.gitCommit,
+      contractsCommit: fork.gitCommit,
     });
   });
 
   test("Base needs no addresses: the client is built on the shipped record", () => {
-    const record = BANKR_V4_LAUNCH_ADDRESSES.base!;
+    const record = BANKR_V4_LAUNCH_ADDRESSES.base;
     const c = createLaunchClient({ chain: "base" });
     expect(c.provider.addresses).toEqual(record);
     expect(c.provider.contractsCommit).toBe(record.gitCommit);
   });
 
-  test("a publicClient on another chain and an apiKey option are refused", () => {
+  test("a publicClient on another chain is refused", () => {
     const f = fixture();
     const arb = new FakeChain(arbitrum).publicClient();
     expectSync(
       () =>
         createLaunchClient({
           chain: "base",
-          suite: 3,
-          addresses: SUITE,
+          addresses: f.deployment,
           publicClient: arb,
         }),
       "UNSUPPORTED_CHAIN",
     );
-    expect(() =>
-      createLaunchClient({
-        chain: "base",
-        suite: 3,
-        addresses: SUITE,
-        publicClient: f.fake.publicClient(),
-        api: { apiKey: "bk_x" } as never,
-      }),
-    ).toThrow(TypeError);
   });
 });
 
-describe("the deployed gate", () => {
-  // Robinhood has no record and is not deployed; Base is both (go-live 2026-11-07).
-  const RH_SUITE = testSuite(4663);
-  const rhFixture = (): SuiteFixture =>
-    installSuite(new FakeChain(robinhood), RH_SUITE, {
-      [getAddress(CHAINS.robinhood.quotes.WETH.address)]: { decimals: 18 },
-      [getAddress(CHAINS.robinhood.quotes.USDG.address)]: { decimals: 6 },
-    });
-  const RH_INPUT = { ...INPUT, quote: "WETH" } as const;
-
-  test("an override never lifts it: launch methods refuse without fork, reads still work", async () => {
-    const f = rhFixture();
+describe("the deployed gate: a chain is live by its record alone", () => {
+  test("a fork's own record never lifts it: launch methods refuse without fork, reads still work", async () => {
+    const f = installContracts(new FakeChain(robinhood));
     const c = createLaunchClient({
       chain: "robinhood",
-      suite: 3,
-      addresses: RH_SUITE,
+      addresses: f.deployment,
       publicClient: f.fake.publicClient(),
     });
     expect(await c.status()).toEqual({
@@ -361,19 +271,21 @@ describe("the deployed gate", () => {
       paused: false,
       gated: false,
     });
-    const refused = await expectCode(c.plan(RH_INPUT), "PROVIDER_NOT_DEPLOYED");
+    const refused = await expectCode(
+      c.plan({ ...input(f), quote: f.quote }),
+      "PROVIDER_NOT_DEPLOYED",
+    );
     expect((refused as { detail?: string }).detail).toContain("fork: true");
-    const pad = await c.launchpad(1n);
-    expect(pad.id).toBe(1n);
   });
 
   test("fork: true runs the launch methods and status reports it apart from deployed", async () => {
-    const f = rhFixture();
-    f.set("factory", "launchGated", true);
+    const f = fixture();
+    f.fake.contract(f.deployment.factory, bankrLaunchFactoryAbi as Abi, {
+      launchGated: true,
+    });
     const c = createLaunchClient({
-      chain: "robinhood",
-      suite: 3,
-      addresses: RH_SUITE,
+      chain: "base",
+      addresses: f.deployment,
       publicClient: f.fake.publicClient(),
       fork: true,
     });
@@ -383,17 +295,19 @@ describe("the deployed gate", () => {
       paused: false,
       gated: true,
     });
+    await expectCode(c.plan(input(f)), "LAUNCHPAD_GATED");
   });
 
-  test("Base is deployed: status says so and the launch methods run without fork", async () => {
-    const f = fixture();
-    f.set("factory", "paused", true);
-    f.set("factory", "launchGated", true);
+  test("the shipped record is live: status says so and the launch methods run without fork", async () => {
+    const record = BANKR_V4_LAUNCH_ADDRESSES.base;
+    const fake = new FakeChain(base);
+    fake.contract(record.factory, bankrLaunchFactoryAbi as Abi, {
+      paused: true,
+      launchGated: true,
+    });
     const c = createLaunchClient({
       chain: "base",
-      suite: 3,
-      addresses: SUITE,
-      publicClient: f.fake.publicClient(),
+      publicClient: fake.publicClient(),
     });
     expect(await c.status()).toEqual({
       deployed: true,
@@ -401,74 +315,27 @@ describe("the deployed gate", () => {
       paused: true,
       gated: true,
     });
-    // Past the deployed gate, the factory's own switches decide.
-    await expectCode(c.plan(INPUT), "PAUSED");
-    f.set("factory", "paused", false);
-    f.set("factory", "launchGated", false);
-    const plan = await c.plan(INPUT);
-    expect(plan.chain).toBe("base");
-  });
-});
-
-describe("launchpad()", () => {
-  test("Bankr's pad: signed, …ba3, pinned 80 % → 1.75 % over 14 s, creator holder share 0, auto-LP at its floor", async () => {
-    const f = fixture();
-    const c = createLaunchClient({
-      chain: "base",
-      suite: 3,
-      addresses: SUITE,
-      publicClient: f.fake.publicClient(),
-    });
-    const pad = await c.launchpad();
-    expect(pad.id).toBe(0n);
-    expect(pad.signer).not.toBeNull();
-    expect(pad.vanity).toEqual({ suffix: 0xba3, nibbles: 3 });
-    expect(pad.defaults.economics.buy).toEqual({
-      startPips: 800_000,
-      steadyPips: 17_500,
-      decaySecs: 14,
-    });
-    expect(pad.defaults.economics.holdersBps).toBe(0);
-    expect(pad.defaults.economics.autoLpBps).toBe(3_000);
-    expect(pad.defaults.holderShareBps).toBe(0);
-    expect(pad.defaults.vestBps).toBe(1_500);
-    // FD-24 at the 1.75 % preset: holders 0.0875 %, the creator's own take 0.665 % of volume.
-    expect(pad.volumeSplit.holdersBnkrPips).toBe(875);
-    expect(pad.volumeSplit.creatorPips).toBeCloseTo(6_650, 0);
-    await expectCode(c.launchpad(9n), "UNKNOWN_LAUNCHPAD");
-  });
-
-  test("an open pad: no signer, no vanity, the operator's payee and its share", async () => {
-    const c = createLaunchClient({
-      chain: "base",
-      suite: 3,
-      addresses: SUITE,
-      publicClient: fixture().fake.publicClient(),
-    });
-    const pad = await c.launchpad(1n);
-    expect(pad.signer).toBeNull();
-    expect(pad.vanity).toBeNull();
-    expect(pad.maxOperatorShareBps).toBe(1_000);
-    expect(pad.volumeSplit.payees).toHaveLength(1);
+    // Past the gate a plan is judged on its own: Bankr's pad, which a launch names by default, is Bankr's to sign.
+    await expectCode(
+      c.plan({ name: "Coin", symbol: "COIN", launcher: LAUNCHER }),
+      "AUTHORIZATION_REQUIRED",
+    );
   });
 });
 
 describe("plans from elsewhere", () => {
   test("a plan aimed at another factory, approving another spender, or carrying stray value is refused", async () => {
-    const f = fixture();
+    const f = usdcFixture();
     const c = createLaunchClient({
       chain: "base",
-      suite: 3,
-      addresses: SUITE,
+      addresses: f.deployment,
       publicClient: f.fake.publicClient(),
       fork: true,
     });
-    const plan = await c.plan({
-      ...INPUT,
-      quote: "USDC",
-      devBuy: { amount: 1_000_000n },
-    });
-    expect(c.buildLaunchTx(plan).to).toBe(SUITE.factory);
+    const plan = await c.plan(input(f, { devBuy: { amount: 1_000_000n } }));
+    expect(plan.quote.devBuy).toBe("erc20");
+    expect(plan.approvals).toHaveLength(1);
+    expect(c.buildLaunchTx(plan).to).toBe(f.deployment.factory);
     expectSync(
       () => c.buildLaunchTx({ ...plan, factory: OTHER }),
       "INVALID_PARAMS",
@@ -477,7 +344,7 @@ describe("plans from elsewhere", () => {
       () =>
         c.buildLaunchTx({
           ...plan,
-          approvals: [{ ...plan.approvals[0]!, to: WETH }],
+          approvals: [{ ...plan.approvals[0]!, to: f.deployment.weth }],
         }),
       "INVALID_PARAMS",
     );
@@ -488,38 +355,40 @@ describe("plans from elsewhere", () => {
 
 describe("launch", () => {
   function launchClient(
-    f: SuiteFixture,
-    codes?: string[],
+    f: ContractsFixture,
+    o: { codes?: string[]; api?: LaunchApiOptions } = {},
   ): LaunchClient<"base"> {
     f.fake.onSend = (tx) => launchLogs(f, tx);
     return createLaunchClient({
       chain: "base",
-      suite: 3,
-      addresses: SUITE,
+      addresses: f.deployment,
       fork: true,
       publicClient: f.fake.publicClient(),
       walletClient: f.fake.walletClient(LAUNCHER),
-      builderCodes: codes,
+      builderCodes: o.codes,
+      api: o.api,
     });
   }
 
   /** Runs `before` ahead of the fake factory's `launch`, with its 1-based eth_call index (estimates uncounted). */
   function onLaunch(
-    f: SuiteFixture,
+    f: ContractsFixture,
     before: (p: LaunchParams, call: number) => void,
   ): void {
-    const handler = f.fake.contracts.get(SUITE.factory.toLowerCase())!.fns
+    const calls = () =>
+      f.fake.callsTo("launch").filter((x) => x.method === "eth_call");
+    const launch = f.fake.contracts.get(f.deployment.factory.toLowerCase())!.fns
       .launch as (a: readonly unknown[], c: unknown) => unknown;
-    f.set("factory", "launch", (a: readonly unknown[], c: unknown) => {
-      const calls = f.fake
-        .callsTo("launch")
-        .filter((x) => x.method === "eth_call");
-      before(a[0] as LaunchParams, calls.length);
-      return handler(a, c);
-    });
+    f.fake.contracts.get(f.deployment.factory.toLowerCase())!.fns.launch = (
+      a: readonly unknown[],
+      c: unknown,
+    ) => {
+      before(a[0] as LaunchParams, calls().length);
+      return launch(a, c);
+    };
   }
 
-  const sentSalts = (f: SuiteFixture): Hex[] =>
+  const sentSalts = (f: ContractsFixture): Hex[] =>
     f.fake.sent.flatMap((tx) => sentLaunch(f, tx)?.salt ?? []);
 
   test("WALLET_REQUIRED without a walletClient; LAUNCHER_MISMATCH for another account", async () => {
@@ -527,32 +396,29 @@ describe("launch", () => {
     await expectCode(
       createLaunchClient({
         chain: "base",
-        suite: 3,
-        addresses: SUITE,
+        addresses: f.deployment,
         fork: true,
         publicClient: f.fake.publicClient(),
-      }).launch(INPUT),
+      }).launch(input(f)),
       "WALLET_REQUIRED",
     );
     await expectCode(
-      launchClient(f).launch({ ...INPUT, launcher: OTHER }),
+      launchClient(f).launch(input(f, { launcher: OTHER })),
       "LAUNCHER_MISMATCH",
     );
     expect(f.fake.sent).toEqual([]);
   });
 
   test("ERC-20 dev buy: approve the factory, simulate without assumptions, send with the suffix, parse", async () => {
-    const f = fixture();
+    const f = usdcFixture();
     f.fake.setErc20Balance(USDC, LAUNCHER, 5_000_000n);
-    const result = await launchClient(f, ["mypad"]).launch({
-      ...INPUT,
-      quote: "USDC",
-      devBuy: { amount: 5_000_000n },
-    });
+    const result = await launchClient(f, { codes: ["mypad"] }).launch(
+      input(f, { devBuy: { amount: 5_000_000n } }),
+    );
     expect(f.fake.sent).toHaveLength(2);
     const [approve, launch] = f.fake.sent;
     expect(approve!.to.toLowerCase()).toBe(USDC.toLowerCase());
-    expect(launch!.to.toLowerCase()).toBe(SUITE.factory.toLowerCase());
+    expect(launch!.to.toLowerCase()).toBe(f.deployment.factory.toLowerCase());
     expect(launch!.value).toBe(0n);
     expect(launch!.gas).toBe((f.fake.gas * 12n) / 10n + 960_000n);
     expect(
@@ -564,46 +430,47 @@ describe("launch", () => {
     expect(sims.at(-1)!.call.stateOverride).toBeUndefined();
     expect(result.chain).toBe("base");
     expect(result.launcher).toBe(LAUNCHER);
-    expect(result.launchpadId).toBe(1n);
+    expect(result.launchpadId).toBe(f.padId);
     expect(result.quote).toBe(USDC);
     expect(result.devBuyOut).toBe(5_000_000n * FAKE_TOKENS_PER_UNIT);
     expect(result.distributor).toBe(fakeDistributor(result.token));
-    expect(result.escrow).toBeNull();
+    expect(result.metadataUri).toBe("ipfs://bafy-test");
+    // No `api` on the client: nothing is registered, and the result says nothing of it.
+    expect("registration" in result).toBe(false);
   });
 
   test("a launch with its own bands: the receipt reads back the bands it sent, and they chart as the ranges asked for", async () => {
     const f = fixture();
-    setFakeCurveAllowed(f.pads.get(1n)!, ANY_CURVE, true);
+    f.state.anyTableAllowed = true;
     const wad = (bps: number) => BigInt(bps) * 10n ** 14n;
+    // The first range ends under 1.97 times the start, so the next band begins inside the step rule's near window.
     const asked = [
-      { marketCap: { start: 10_000, end: 20_000 }, shares: wad(304) },
-      { marketCap: { start: 20_000, end: 1.2e9 }, shares: wad(9_658) },
+      { marketCap: { start: 10_000, end: 19_000 }, shares: wad(304) },
+      { marketCap: { start: 19_000, end: 1.2e9 }, shares: wad(9_658) },
       { marketCap: { start: 1.2e9, end: "max" as const }, shares: wad(38) },
     ];
-    const result = await launchClient(f).launch({
-      ...INPUT,
-      curve: { marketCaps: asked },
-    });
-    // $10K sits 60.4 ticks above the launch's start tick, so $1.2B's grid line is 117,000 ticks up, not 116,800.
-    const bands = [
-      { widthTicks: 6_800, shareBps: 304 },
-      { widthTicks: 110_200, shareBps: 9_658 },
-      { widthTicks: 0, shareBps: 38 },
-    ];
-    expect(sentLaunch(f, f.fake.sent[0]!)!.curveId).toBe(encodeCurve(bands)!);
+    const result = await launchClient(f).launch(
+      input(f, { curve: { marketCaps: asked } }),
+    );
+    const sent = sentLaunch(f, f.fake.sent[0]!)!;
+    const bands = result.curve.bands.map(({ widthTicks, shareBps }) => ({
+      widthTicks,
+      shareBps,
+    }));
+    expect(bands.map((b) => b.shareBps)).toEqual([304, 9_658, 38]);
+    expect(bands[0]!.widthTicks).toBeLessThanOrEqual(6_800);
+    expect(bands[2]!.widthTicks).toBe(0);
+    expect(sent.curveId).toBe(encodeCurve(bands)!);
     expect(result.curve.curveId).toBeNull();
     expect(result.curve.curveTable).toBe(curveWordHex(encodeCurve(bands)!));
     expect(result.curve.startTick).toBe(result.startTick);
-    expect(
-      result.curve.bands.map(({ widthTicks, shareBps }) => ({
-        widthTicks,
-        shareBps,
-      })),
-    ).toEqual(bands);
-    // Charted from the pool's own start: the fake factory prices $125M at its highest start tick.
+    // Charted from the pool's own start: the whole supply at the start tick, at the fake feed's $2,500 a quote.
     const startMarketCap =
-      125_000_000 * 1.0001 ** (result.startTick - START_TICK_BOUNDS[1]);
-    expect(Math.round(startMarketCap)).toBe(9_940);
+      Number(result.totalSupply / 10n ** 18n) *
+      1.0001 ** result.startTick *
+      2_500;
+    expect(startMarketCap).toBeGreaterThan(9_800);
+    expect(startMarketCap).toBeLessThanOrEqual(10_000);
     const ranges = curveMarketCaps({
       bands: result.curve.bands,
       startMarketCap,
@@ -619,7 +486,7 @@ describe("launch", () => {
   });
 
   test("a reverted approval stops the launch: TRANSACTION_REVERTED with its hash", async () => {
-    const f = fixture();
+    const f = usdcFixture();
     const c = launchClient(f);
     f.fake.setErc20Balance(USDC, LAUNCHER, 5_000_000n);
     f.fake.onSend = (tx) =>
@@ -627,7 +494,7 @@ describe("launch", () => {
         ? { logs: [], status: "0x0" }
         : launchLogs(f, tx);
     const err = await expectCode(
-      c.launch({ ...INPUT, quote: "USDC", devBuy: { amount: 5_000_000n } }),
+      c.launch(input(f, { devBuy: { amount: 5_000_000n } })),
       "TRANSACTION_REVERTED",
     );
     expect(isLaunchSdkError(err) && err.transactionHash).toMatch(
@@ -636,7 +503,7 @@ describe("launch", () => {
     expect(f.fake.sent).toHaveLength(1);
   });
 
-  test("re-plans once when the start tick leaves the factory's bounds between plan and send", async () => {
+  test("re-plans once when the start tick leaves the launchpad's window between plan and send", async () => {
     const f = fixture();
     const c = launchClient(f);
     let moved = false;
@@ -646,7 +513,7 @@ describe("launch", () => {
         throw new Revert("StartTickOutOfBounds", [-1, 1]);
       }
     });
-    await c.launch(INPUT);
+    await c.launch(input(f));
     expect(moved).toBe(true);
     expect(f.fake.sent).toHaveLength(1);
   });
@@ -659,7 +526,7 @@ describe("launch", () => {
       firstSalt ??= p.salt;
       if (call === 2) throw new Revert("TokenSaltTaken");
     });
-    const result = await c.launch(INPUT);
+    const result = await c.launch(input(f));
     expect(f.fake.sent).toHaveLength(1);
     expect(sentSalts(f)).toHaveLength(1);
     expect(sentSalts(f)[0]).not.toBe(firstSalt!);
@@ -669,12 +536,12 @@ describe("launch", () => {
   test("a caller's salt is never re-drawn: a token taken before sending is POOL_ALREADY_INITIALIZED", async () => {
     const f = fixture();
     const c = launchClient(f);
-    const planned = await c.plan(INPUT);
+    const planned = await c.plan(input(f));
     onLaunch(f, (_p, call) => {
       if (call >= 3) throw new Revert("TokenSaltTaken");
     });
     await expectCode(
-      c.launch({ ...INPUT, salt: planned.params.salt }),
+      c.launch(input(f, { salt: planned.params.salt })),
       "POOL_ALREADY_INITIALIZED",
     );
     expect(f.fake.sent).toEqual([]);
@@ -696,7 +563,7 @@ describe("launch", () => {
       }
       return launchLogs(f, tx);
     };
-    await c.launch(INPUT);
+    await c.launch(input(f));
     const salts = sentSalts(f);
     expect(salts).toHaveLength(2);
     expect(salts[0]).not.toBe(salts[1]!);
@@ -706,7 +573,7 @@ describe("launch", () => {
     expect(replay?.args[0]).toMatchObject({ salt: salts[0] });
   });
 
-  test("a mined revert with no SDK code is TRANSACTION_REVERTED, naming the revert on its cause", async () => {
+  test("a mined revert with no code of its own keeps the revert's sentence and the transaction's hash", async () => {
     const f = fixture();
     const c = launchClient(f);
     let mined = false;
@@ -717,36 +584,137 @@ describe("launch", () => {
       mined = true;
       return { logs: [], status: "0x0" };
     };
-    const err = await expectCode(c.launch(INPUT), "TRANSACTION_REVERTED");
+    const err = await expectCode(c.launch(input(f)), "TRANSACTION_REVERTED");
     expect(sdk.launchRevertName((err as Error).cause)).toBe("Expired");
+    expect(isLaunchSdkError(err) && err.transactionHash).toMatch(
+      /^0x[0-9a-f]{64}$/,
+    );
     expect(f.fake.sent).toHaveLength(1);
   });
 
-  test("a pad's terms changed between plan and send: LAUNCHPAD_TERMS_CHANGED, never re-planned", async () => {
+  test("a pad's payees changed between plan and send: LAUNCHPAD_TERMS_CHANGED, never re-planned", async () => {
     const f = fixture();
     const c = launchClient(f);
     onLaunch(f, (_p, call) => {
       if (call >= 2) throw new Revert("OperatorPayeesMismatch");
     });
-    await expectCode(c.launch(INPUT), "LAUNCHPAD_TERMS_CHANGED");
+    await expectCode(c.launch(input(f)), "LAUNCHPAD_TERMS_CHANGED");
     expect(f.fake.sent).toEqual([]);
+  });
+
+  describe("with `api`: the launch is registered with Bankr's index", () => {
+    const REGISTERED: RegisterResult = {
+      chain: "base",
+      txHash: `0x${"00".repeat(32)}`,
+      confirmations: 5,
+      launches: [],
+    };
+
+    /** Bankr's API: records each call and answers the index's routes. */
+    function fakeApi(register?: () => Response) {
+      const calls: { url: URL; body: unknown }[] = [];
+      const fetch: FetchLike = async (url, init) => {
+        const u = new URL(url);
+        calls.push({
+          url: u,
+          body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        });
+        if (u.pathname === "/launches/register")
+          return register?.() ?? Response.json(REGISTERED);
+        if (u.pathname === "/launches")
+          return Response.json({ launches: [], nextCursor: null });
+        return Response.json({ error: "Not found." }, { status: 404 });
+      };
+      return { fetch, calls };
+    }
+
+    const API_URL = "https://api.example";
+
+    test("sends, waits for 5 confirmations and registers the launch", async () => {
+      const f = fixture();
+      const api = fakeApi();
+      const c = launchClient(f, { api: { fetch: api.fetch, url: API_URL } });
+      f.fake.onSend = (tx) => {
+        f.fake.blockNumber += 10n;
+        return launchLogs(f, tx);
+      };
+      const result = await c.launch(input(f));
+      expect(f.fake.sent).toHaveLength(1);
+      expect(api.calls.map((x) => x.url.pathname)).toEqual([
+        "/launches/register",
+      ]);
+      expect(api.calls[0]!.body).toEqual({
+        chain: "base",
+        txHash: result.txHash,
+      });
+      expect(result.registration).toEqual(REGISTERED);
+    });
+
+    test("a failed registration never fails the launch: registration is null", async () => {
+      const f = fixture();
+      const api = fakeApi(() =>
+        Response.json({ error: "No.", code: "NOT_A_LAUNCH" }, { status: 422 }),
+      );
+      const c = launchClient(f, { api: { fetch: api.fetch } });
+      f.fake.onSend = (tx) => {
+        f.fake.blockNumber += 10n;
+        return launchLogs(f, tx);
+      };
+      const result = await c.launch(input(f));
+      expect(result.registration).toBeNull();
+    });
+
+    test("the index reads and registers on the client's chain", async () => {
+      const f = fixture();
+      const api = fakeApi();
+      const c = launchClient(f, {
+        api: { fetch: api.fetch, url: `${API_URL}/` },
+      });
+      expect(
+        await c.index.launches({ builder: "mypad", launchpad: 3n }),
+      ).toEqual({ launches: [], nextCursor: null });
+      const token = "0x000000000000000000000000000000000000beef" as Address;
+      expect(await c.index.launch(token)).toBeNull();
+      expect(Object.fromEntries(api.calls[0]!.url.searchParams)).toEqual({
+        builder: "mypad",
+        launchpad: "3",
+        chain: "base",
+      });
+      expect(api.calls[1]!.url.pathname).toBe(
+        `/launches/base/${getAddress(token)}`,
+      );
+      await expectCode(c.index.launch("0xnope" as Address), "INVALID_PARAMS");
+      // The fake API serves no stats: the call is what this pins.
+      await expectCode(
+        c.index.launchpadStats(3n, { visibility: "listed" }),
+        "API_ERROR",
+      );
+      expect(api.calls.at(-1)!.url.pathname).toBe("/launchpads/base/3/stats");
+      const seen = [];
+      for await (const l of c.index.all({ launchpad: 3n })) seen.push(l);
+      expect(seen).toEqual([]);
+      expect(Object.fromEntries(api.calls.at(-1)!.url.searchParams)).toEqual({
+        launchpad: "3",
+        chain: "base",
+        limit: "100",
+      });
+    });
   });
 });
 
 describe("parseLaunchReceipt", () => {
-  test("reads TokenLaunched and LaunchResolved from this chain's factory only", async () => {
+  test("reads the launch from this chain's factory only", async () => {
     const f = fixture();
     const c = createLaunchClient({
       chain: "base",
-      suite: 3,
-      addresses: SUITE,
+      addresses: f.deployment,
       publicClient: f.fake.publicClient(),
       fork: true,
     });
-    const plan = await c.plan({ ...INPUT, vesting: { bps: 1_000 } });
+    const plan = await c.plan(input(f, { vesting: { bps: 1_000 } }));
     const tx = {
       from: LAUNCHER,
-      to: SUITE.factory,
+      to: f.deployment.factory,
       data: c.buildLaunchTx(plan).data,
       value: 0n,
       gas: undefined,
@@ -762,10 +730,11 @@ describe("parseLaunchReceipt", () => {
       token: plan.predictedToken,
       poolId: plan.poolId,
       launcher: LAUNCHER,
-      launchpadId: 1n,
+      launchpadId: f.padId,
       vestBps: 1_000,
       escrow: plan.escrow,
       distributor: plan.distributor,
+      totalSupply: plan.resolved.terms.totalSupply,
     });
     const foreign = {
       ...receipt,
@@ -784,7 +753,7 @@ describe("parseLaunchReceipt", () => {
 });
 
 describe("public surface", () => {
-  // Which contract set a client is on is the SDK's business: a caller types no name that says so.
+  // Which contracts a client is on is the SDK's business: a caller types no name that says so.
   test("no export, client method or plan field a caller types carries the word suite", () => {
     expect(Object.keys(sdk).filter((k) => /suite/i.test(k))).toEqual([]);
     const client = createLaunchClient({ chain: "base" });
@@ -799,7 +768,7 @@ describe("public surface", () => {
     );
   });
 
-  test("the launchpad registry's exported ABI is the latest contracts'", () => {
+  test("the launchpad registry's exported ABI is the chain's", () => {
     const names: string[] = sdk.bankrLaunchpadRegistryAbi.flatMap((e) =>
       e.type === "function" ? [e.name] : [],
     );
@@ -821,11 +790,11 @@ describe("public surface", () => {
     }
     for (const kept of [
       "createLaunchClient",
-      "BANKR_V4_EARLIER_ADDRESSES",
+      "BANKR_V4_LAUNCH_ADDRESSES",
       "holderShareToHoldersBps",
       "remoteAuthorizer",
       "mineVanitySalt",
-      "readEarlierLivePointers",
+      "readLivePointers",
       "bankrLaunchpadRegistryAbi",
       "percentToPips",
       "pipsToPercent",
@@ -836,7 +805,9 @@ describe("public surface", () => {
       "checkCurve",
       "curveFromMarketCaps",
       "curveMarketCaps",
-      "buildSetCurveAllowed",
+      "padTermsHash",
+      "maxOperatorShareBps",
+      "extensionAllowlistKey",
     ]) {
       expect(names, kept).toContain(kept);
     }

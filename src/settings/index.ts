@@ -3,19 +3,22 @@ import type { SettingsContext } from "./context.js";
 import { createHolderLegs, type HolderLegs } from "./holderLegs.js";
 import { createLaunchpadAdmin, type LaunchpadAdmin } from "./launchpads.js";
 import { createOwnerSettingsAdmin, type OwnerSettingsAdmin } from "./owner.js";
-import { createOwnerLeversAdmin, type OwnerLeversAdmin } from "./ownerSuite.js";
+import {
+  createOwnerLeversAdmin,
+  type OwnerLeversAdmin,
+} from "./ownerLevers.js";
 import { createSettingsReads, type SettingsReads } from "./reads.js";
 
 /** Every owner change: the settings contract's setters, and the factory's and the launchpad registry's levers. */
 export type OwnerAdmin = OwnerSettingsAdmin & OwnerLeversAdmin;
 
-/** The owner's builders for one chain's suite. Unsigned: nothing here sends. */
+/** The owner's builders for one chain's contracts. Unsigned: nothing here sends. */
 export const createOwnerAdmin = (ctx: SettingsContext): OwnerAdmin => ({
   ...createOwnerSettingsAdmin(ctx),
   ...createOwnerLeversAdmin(ctx),
 });
 
-/** One suite's settings: the reads, and the pad's and the owner's changes as unsigned transactions. */
+/** One chain's settings: the reads, and the pad's and the owner's changes as unsigned transactions. */
 export interface LaunchContracts {
   /** What the owner and each pad hold a launch to, read live. */
   settings: SettingsReads;
@@ -29,7 +32,7 @@ export interface LaunchContracts {
   holderLegs: HolderLegs;
 }
 
-/** The settings reads and admin builders of one chain's suite. No wallet needed: every builder returns a
+/** The settings reads and admin builders of one chain's contracts. No wallet needed: every builder returns a
  *  transaction for the account the contract requires, and sends nothing. */
 export function createLaunchContracts(ctx: SettingsContext): LaunchContracts {
   return {
@@ -98,7 +101,10 @@ export {
   type QuoteChange,
   type TemplateChanges,
 } from "./owner.js";
-export { createOwnerLeversAdmin, type OwnerLeversAdmin } from "./ownerSuite.js";
+export {
+  createOwnerLeversAdmin,
+  type OwnerLeversAdmin,
+} from "./ownerLevers.js";
 export type {
   KnobChange,
   KnobChanges,

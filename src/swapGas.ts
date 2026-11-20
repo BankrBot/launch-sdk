@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import { readContract } from "viem/actions";
-import { bankrHookLensAbi } from "./abis/suite3.js";
+import { bankrHookLensAbi } from "./abis/generated.js";
 import {
   EXT_AFTER_GAS,
   EXT_AFTER_GAS_MAX,
@@ -21,7 +21,7 @@ import type { ReadClient } from "./providers/types.js";
 // holdersWake.ts (src/__internal__ holds each equal). A pool's extension is asked from its first swap, so every swap
 // of an extension pool carries the lens figure.
 
-/** The terms of `BankrHookLens.extSwapGasHeadroom` beside a binding's two budgets (the suite's LaunchConstants): the
+/** The terms of `BankrHookLens.extSwapGasHeadroom` beside a binding's two budgets (the contracts' LaunchConstants): the
  *  side-effect tail, the route, settle and room reserves, and the guard frame with each pinned route currency. */
 export const SIDE_EFFECT_GAS_TAIL = 20_000n;
 export const EXT_ROUTE_RESERVE = 80_000n;

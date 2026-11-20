@@ -20,20 +20,20 @@ import { hasCode } from "../recipient.js";
 import { callPlannedLaunch, readFactoryAllowance } from "../simulate.js";
 import { feeRecipientsOf } from "../terms.js";
 import { buildApproveTx, clampLaunchGas, type LaunchGasWeight } from "../tx.js";
-import { draftSuite4Launch, type Suite4Draft } from "./draft.js";
-import type { Suite4PlanContext } from "./planChecks.js";
-import { suite4CallError } from "./revert.js";
-import type { CoinTerms, Suite4PadTerms } from "./settings.js";
+import { draftLaunch, type LaunchDraft } from "./draft.js";
+import type { LaunchPlanContext } from "./planChecks.js";
+import { launchCallError } from "./revert.js";
+import type { CoinTerms, PadTerms } from "./settings.js";
 
-// A suite 4 launch, planned against what the chain holds: the pad's defaults are read, the settings contract's
+// A launch, planned against what the chain holds: the pad's defaults are read, the settings contract's
 // `resolve` judges the launch and returns the terms its coin will freeze, and the launch is pinned to them and to
-// its token. No bound of a pad or of the owner is typed here. Vendored from core's prepareLaunchSuite4.ts.
+// its token. No bound of a pad or of the owner is typed here. Vendored from core's bankr-v4 launch preparation.
 
 const BPS = 10_000n;
 /** How often a plan resolves again when the terms move under it before its own simulation. */
 const MAX_REPLANS = 2;
 
-/** What a suite 4 plan carries beyond the launch's tuple. */
+/** What a plan carries beyond the launch's tuple. */
 export interface ResolvedLaunch {
   /** The terms the coin will freeze, as the chain's launch check resolved them: fees, shares, cap, clocks, takeover. */
   terms: CoinTerms;
@@ -42,19 +42,19 @@ export interface ResolvedLaunch {
   /** Whether the launch carries both pins (`pin`, default true). */
   pinned: boolean;
   /** The launchpad's payees the launch is held to (`operatorPayeesHash`). */
-  padTerms: Suite4PadTerms;
+  padTerms: PadTerms;
   /** What sizes the gas limit that stands in when a node gives no estimate. */
   gasWeight: LaunchGasWeight;
 }
 
-type Ctx<C extends LaunchChain> = Suite4PlanContext<C>;
+type Ctx<C extends LaunchChain> = LaunchPlanContext<C>;
 
 /** What a drafted launch is held to once it is pinned: the factory's own token read, the launch's own addresses
  *  against who it pays, and the simulation. A pin that no longer holds rejects with `TERMS_CHANGED`. */
-async function checkSuite4Draft<C extends LaunchChain>(
+async function checkDraft<C extends LaunchChain>(
   ctx: Ctx<C>,
   n: NormalizedLaunch<C>,
-  d: Suite4Draft,
+  d: LaunchDraft,
 ) {
   const chain = ctx.chain.chain;
   const a = ctx.addresses;
@@ -67,7 +67,7 @@ async function checkSuite4Draft<C extends LaunchChain>(
       functionName: "computeTokenAddress",
       args: [n.launcher, params.salt, params],
     }).catch((error: unknown) => {
-      throw suite4CallError(error, chain, t.curve);
+      throw launchCallError(error, chain, t.curve);
     }),
     getCode(ctx.client, { address: token }),
   ]);
@@ -119,33 +119,32 @@ async function checkSuite4Draft<C extends LaunchChain>(
 }
 
 /**
- * Pure mode on suite 4: the pad's defaults, the start tick, the chain's launch check (refusals worded from their own
+ * A plan: the pad's defaults, the start tick, the chain's launch check (refusals worded from their own
  * arguments), the vanity salt mined from the resolved terms, both pins, a signed pad's signature, and the simulation.
  * A plan whose terms move after its launch check is resolved again, at most twice.
  */
-export async function planSuite4Launch<C extends LaunchChain>(
+export async function planLaunch<C extends LaunchChain>(
   ctx: Ctx<C>,
   input: LaunchInput<C>,
 ): Promise<LaunchPlan<C>> {
   const caps = ctx.chain;
   const chain = caps.chain;
   const a = ctx.addresses;
-  const n = normalizeLaunchInput(caps, input, ctx.usedSalts, { suite: 4 });
-  // Bankr signs every id-0 launch with its own key, reachable only through the prepare endpoint, which the provider
-  // refuses on these contracts: say so, since the code's own message points there.
+  const n = normalizeLaunchInput(caps, input, ctx.usedSalts);
+  // Bankr signs every id-0 launch with its own key, which nothing in this SDK version can ask for: say so.
   if (n.launchpadId === BANKR_LAUNCHPAD_ID)
     throw new LaunchRefusedError("AUTHORIZATION_REQUIRED", {
       chain,
       detail:
-        "Bankr's own launchpad (id 0) is signed by Bankr, and this SDK version cannot ask for that signature on these contracts: name your own launchpad or any open one as launchpadId.",
+        "Bankr's own launchpad (id 0) is signed by Bankr, and this SDK version cannot ask for that signature: name your own launchpad or any open one as launchpadId.",
     });
   for (let replans = 0; ; replans++) {
-    const d = await draftSuite4Launch(ctx, n);
+    const d = await draftLaunch(ctx, n);
     const { params, token, resolved } = d;
     const t = resolved.terms;
-    let checked: Awaited<ReturnType<typeof checkSuite4Draft>>;
+    let checked: Awaited<ReturnType<typeof checkDraft>>;
     try {
-      checked = await checkSuite4Draft(ctx, n, d);
+      checked = await checkDraft(ctx, n, d);
     } catch (error) {
       // An owner or pad change after `resolve`: the pin held, in the factory's token read or in the simulation, so
       // resolve again on what is in force.
@@ -191,7 +190,7 @@ export async function planSuite4Launch<C extends LaunchChain>(
       resolved: {
         terms: t,
         resolvedHash: resolved.resolvedHash,
-        pinned: n.suite4!.pin,
+        pinned: n.choices.pin,
         padTerms: resolved.padTerms,
         gasWeight,
       },

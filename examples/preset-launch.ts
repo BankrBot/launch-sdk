@@ -1,5 +1,5 @@
 /**
- * Launch a coin with Bankr's Sniper Tax preset on your own open launchpad on Base, in pure mode: no key and no call
+ * Launch a coin with Bankr's Sniper Tax preset on your own open launchpad on Base: no key and no call
  * to Bankr. Buys pay 5% more and sells 2% more for the coin's first 5 minutes; the hook binds that at launch, for
  * good. The preview is what a confirm screen shows, and says before anything is signed whether the chain takes it.
  *

@@ -13,6 +13,7 @@ import {
   type CurveMarketCapRange,
 } from "./curveMarketCaps.js";
 import { isLaunchSdkError } from "./errors.js";
+import { TEMPLATE_CURVE_RULES as rules } from "./__internal__/fakeContractsState.js";
 
 const range = (
   start: number,
@@ -215,6 +216,7 @@ describe("curveFromMarketCaps: Doppler's market-cap ranges as a launch's bands",
             startTick,
             sale,
             ownBuys: true,
+            rules,
           }).ok,
           `offset ${startOffsetTicks} from ${startTick}`,
         ).toBe(true);
@@ -233,6 +235,7 @@ describe("curveFromMarketCaps: Doppler's market-cap ranges as a launch's bands",
         startTick: -239_600,
         sale,
         ownBuys: true,
+        rules,
       });
     expect(verdict(68).ok).toBe(true);
     const refused = verdict(68.5);

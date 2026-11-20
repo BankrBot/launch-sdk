@@ -71,7 +71,8 @@ register, configure, launch, read the coin back and claim your fees.
   your own rule in Solidity. [Extensions](https://docs.bankr.bot/token-launching/launch-sdk/extensions)
 - **Coins that pay their holders.** Part of every trading fee goes to the wallets that hold the coin, with nothing to
   stake. [Fees and rewards](https://docs.bankr.bot/token-launching/launch-sdk/fees)
-- **Dashboards with no indexer.** Bankr indexes every launch on every launchpad. Read it from the SDK or over HTTP,
+- **Dashboards with no indexer.** On the chains its launch index covers, Bankr indexes every launch on every
+  launchpad. Read it from the SDK or over HTTP,
   with no key. [Reading launches](https://docs.bankr.bot/token-launching/launch-sdk/launch-index)
 
 ## Supported chains
@@ -82,6 +83,8 @@ register, configure, launch, read the coin back and claim your fees.
 | Robinhood Chain | `"robinhood"` |
 | Arbitrum        | `"arbitrum"`  |
 | Arc             | `"arc"`       |
+| Ethereum        | `"ethereum"`  |
+| BNB Chain       | `"bnb"`       |
 
 [Chains and addresses](https://docs.bankr.bot/token-launching/launch-sdk/chains) has every contract address. Before
 you register a launchpad on a chain, read `client.status()`: a launchpad launches where it reports `gated: false`.

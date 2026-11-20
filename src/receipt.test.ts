@@ -4,7 +4,7 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   bankrLaunchTokenAbi,
-} from "./abis/suite3.js";
+} from "./abis/generated.js";
 import { curveWordHex, encodeCurve } from "./curve.js";
 import { isLaunchSdkError } from "./errors.js";
 import { bucketIds } from "./lens.js";
@@ -18,7 +18,7 @@ import {
   postLaunchFixture,
 } from "./__internal__/fakeLaunch.js";
 import { eventLog } from "./__internal__/fakeRpc.js";
-import { PAD_PAYEE } from "./__internal__/fakeSuite.js";
+import { PAD_PAYEE } from "./__internal__/fakeRecord.js";
 
 const A = getAddress("0x000000000000000000000000000000000000fee1");
 const B = getAddress("0x000000000000000000000000000000000000fee2");
@@ -105,7 +105,13 @@ describe("parseLaunchReceipt: the launch's recipients, admin and start", () => {
       eventLog(
         bankrFeeLedgerAbi,
         "CreatorShares",
-        { bucketId: creatorId, creatorShares: [10n ** 18n], takeover: false },
+        {
+          bucketId: creatorId,
+          creatorShares: [10n ** 18n],
+          takeover: false,
+          notice: 0,
+          grace: 0,
+        },
         OTHER,
       ),
       eventLog(

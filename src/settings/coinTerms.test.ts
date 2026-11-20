@@ -84,9 +84,9 @@ const receipt = (logs: unknown[]) =>
   }) as unknown as TransactionReceipt;
 
 const setup = () => {
-  const suite = new FakeSettings();
-  suite.termsHashes.set(TOKEN.toLowerCase(), keccak256(RECORD.bytes));
-  return { suite, coins: createCoinTermsReads(suite.context()) };
+  const fakeSettings = new FakeSettings();
+  fakeSettings.termsHashes.set(TOKEN.toLowerCase(), keccak256(RECORD.bytes));
+  return { fakeSettings, coins: createCoinTermsReads(fakeSettings.context()) };
 };
 const code = async (run: Promise<unknown> | (() => unknown)) => {
   try {
@@ -130,29 +130,29 @@ describe("a coin's frozen terms", () => {
   });
 
   test("a range scans those blocks, in the chain's log windows", async () => {
-    const { suite, coins } = setup();
-    suite.chain.blockNumber = 5_000n;
-    suite.chain.addLog(
+    const { fakeSettings, coins } = setup();
+    fakeSettings.chain.blockNumber = 5_000n;
+    fakeSettings.chain.addLog(
       frozenLog(at(0x71), termsOf({ launchpadId: 9n }).bytes),
       2_500n,
     );
-    suite.chain.addLog(frozenLog(), 4_100n);
+    fakeSettings.chain.addLog(frozenLog(), 4_100n);
     const record = await coins.frozen(TOKEN, {
       fromBlock: 10n,
       toBlock: 5_000n,
     });
     expect(record?.terms.totalSupply).toBe(10n ** 29n);
     // 2,000 blocks a request on Base
-    expect(suite.chain.logRequests[0]).toEqual({
+    expect(fakeSettings.chain.logRequests[0]).toEqual({
       fromBlock: 10n,
       toBlock: 2_009n,
     });
-    suite.chain.logRequests.length = 0;
+    fakeSettings.chain.logRequests.length = 0;
     expect(
       (await coins.frozen(TOKEN, { fromBlock: 4_100n, toBlock: 4_100n }))
         ?.token,
     ).toBe(TOKEN);
-    expect(suite.chain.logRequests).toEqual([
+    expect(fakeSettings.chain.logRequests).toEqual([
       { fromBlock: 4_100n, toBlock: 4_100n },
     ]);
     expect(
@@ -161,15 +161,15 @@ describe("a coin's frozen terms", () => {
   });
 
   test("a range is both of its ends, and no longer than the scan covers", async () => {
-    const { suite, coins } = setup();
-    suite.chain.blockNumber = 5_000_000n;
-    suite.chain.addLog(frozenLog(), 4_100n);
+    const { fakeSettings, coins } = setup();
+    fakeSettings.chain.blockNumber = 5_000_000n;
+    fakeSettings.chain.addLog(frozenLog(), 4_100n);
     // One end alone would fall back on a scan from the deploy block, or to the head: the scan that expires.
     for (const half of [{ fromBlock: 4_100n }, { toBlock: 4_100n }])
       expect(await code(coins.frozen(TOKEN, half as never))).toBe(
         "INVALID_PARAMS",
       );
-    expect(suite.chain.logRequests).toEqual([]);
+    expect(fakeSettings.chain.logRequests).toEqual([]);
     expect(
       await code(coins.frozen(TOKEN, { fromBlock: 10n, toBlock: 5_000_000n })),
     ).toBe("INVALID_PARAMS");
@@ -195,42 +195,42 @@ describe("a coin's frozen terms, found from its trading start", () => {
   /** A chain with `perSecond` blocks a second from block 0, and the coin's token trading from `start`. */
   const chain = (o: { perSecond?: bigint; start?: bigint } = {}) => {
     const s = setup();
-    const { suite } = s;
+    const { fakeSettings } = s;
     const perSecond = o.perSecond ?? 0n;
     const time = (n: bigint) =>
       perSecond === 0n ? 1_000_000n + 2n * n : 1_000_000n + n / perSecond;
-    suite.chain.blockNumber = HEAD;
-    suite.chain.blockTime = time;
-    suite.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
+    fakeSettings.chain.blockNumber = HEAD;
+    fakeSettings.chain.blockTime = time;
+    fakeSettings.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
       tradingStart: o.start ?? time(LAUNCH),
     });
-    suite.chain.addLog(frozenLog(), LAUNCH);
+    fakeSettings.chain.addLog(frozenLog(), LAUNCH);
     return { ...s, time };
   };
 
   test("a coin that traded from launch: one log request at the start's block, after a handful of block reads", async () => {
-    const { suite, coins } = chain();
+    const { fakeSettings, coins } = chain();
     const record = await coins.frozen(TOKEN);
     expect(record?.token).toBe(TOKEN);
     expect(record?.termsBytes).toBe(RECORD.bytes);
-    expect(suite.chain.logRequests).toHaveLength(1);
-    expectWindowAt(suite.chain.logRequests[0]!, LAUNCH);
-    expect(suite.chain.blockRequests.length).toBeLessThanOrEqual(8);
+    expect(fakeSettings.chain.logRequests).toHaveLength(1);
+    expectWindowAt(fakeSettings.chain.logRequests[0]!, LAUNCH);
+    expect(fakeSettings.chain.blockRequests.length).toBeLessThanOrEqual(8);
   });
 
   test("it does not depend on the chain's age: the same reads a billion blocks on", async () => {
-    const { suite, coins } = chain();
-    suite.chain.blockNumber = 1_000_000_000n;
+    const { fakeSettings, coins } = chain();
+    fakeSettings.chain.blockNumber = 1_000_000_000n;
     expect((await coins.frozen(TOKEN))?.token).toBe(TOKEN);
-    expect(suite.chain.logRequests).toHaveLength(1);
-    expect(suite.chain.blockRequests.length).toBeLessThanOrEqual(8);
+    expect(fakeSettings.chain.logRequests).toHaveLength(1);
+    expect(fakeSettings.chain.blockRequests.length).toBeLessThanOrEqual(8);
   });
 
   test("several blocks a second: the launch is a few blocks after the first of its second", async () => {
-    const { suite, coins } = chain({ perSecond: 4n });
+    const { fakeSettings, coins } = chain({ perSecond: 4n });
     expect((await coins.frozen(TOKEN))?.token).toBe(TOKEN);
-    expect(suite.chain.logRequests).toHaveLength(1);
-    expectWindowAt(suite.chain.logRequests[0]!, LAUNCH);
+    expect(fakeSettings.chain.logRequests).toHaveLength(1);
+    expectWindowAt(fakeSettings.chain.logRequests[0]!, LAUNCH);
   });
 
   test("uneven block times still land on the block: the halving bounds the search", async () => {
@@ -240,17 +240,17 @@ describe("a coin's frozen terms, found from its trading start", () => {
       n < 20_000_000n
         ? 1_000_000n + 2n * n
         : 41_086_400n + (n - 20_000_000n) / 2n;
-    s.suite.chain.blockNumber = HEAD;
-    s.suite.chain.blockTime = time;
-    s.suite.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
+    s.fakeSettings.chain.blockNumber = HEAD;
+    s.fakeSettings.chain.blockTime = time;
+    s.fakeSettings.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
       tradingStart: time(LAUNCH),
     });
-    s.suite.chain.addLog(frozenLog(), LAUNCH);
+    s.fakeSettings.chain.addLog(frozenLog(), LAUNCH);
     expect((await s.coins.frozen(TOKEN))?.token).toBe(TOKEN);
-    expect(s.suite.chain.logRequests).toHaveLength(1);
-    expectWindowAt(s.suite.chain.logRequests[0]!, LAUNCH);
+    expect(s.fakeSettings.chain.logRequests).toHaveLength(1);
+    expectWindowAt(s.fakeSettings.chain.logRequests[0]!, LAUNCH);
     // At most two reads a halving of 50 million blocks.
-    expect(s.suite.chain.blockRequests.length).toBeLessThanOrEqual(54);
+    expect(s.fakeSettings.chain.blockRequests.length).toBeLessThanOrEqual(54);
   });
 
   test("the search stops at a window's precision: a chain whose pace keeps changing costs no reads past that", async () => {
@@ -262,26 +262,28 @@ describe("a coin's frozen terms, found from its trading start", () => {
       return 1_000_000n + era * 2_000_000n + within;
     };
     const launch = 30_250_123n;
-    s.suite.chain.blockNumber = HEAD;
-    s.suite.chain.blockTime = time;
-    s.suite.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
+    s.fakeSettings.chain.blockNumber = HEAD;
+    s.fakeSettings.chain.blockTime = time;
+    s.fakeSettings.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
       tradingStart: time(launch),
     });
-    s.suite.chain.addLog(frozenLog(), launch);
+    s.fakeSettings.chain.addLog(frozenLog(), launch);
     expect((await s.coins.frozen(TOKEN))?.token).toBe(TOKEN);
-    expect(s.suite.chain.logRequests).toHaveLength(1);
-    expectWindowAt(s.suite.chain.logRequests[0]!, launch);
-    expect(s.suite.chain.blockRequests.length).toBeLessThanOrEqual(READS);
+    expect(s.fakeSettings.chain.logRequests).toHaveLength(1);
+    expectWindowAt(s.fakeSettings.chain.logRequests[0]!, launch);
+    expect(s.fakeSettings.chain.blockRequests.length).toBeLessThanOrEqual(
+      READS,
+    );
   });
 
   test("a scheduled start: the record is found by walking back from the start, as far as the coin's own delay", async () => {
     // Three days ahead on a 2 s chain: 129,600 blocks, 65 windows back.
-    const { suite, coins, time } = chain();
-    suite.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
+    const { fakeSettings, coins, time } = chain();
+    fakeSettings.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
       tradingStart: time(LAUNCH) + 259_200n,
     });
     expect((await coins.frozen(TOKEN))?.token).toBe(TOKEN);
-    const asked = suite.chain.logRequests;
+    const asked = fakeSettings.chain.logRequests;
     expectWindowAt(asked[0]!, LAUNCH + 129_600n);
     expect(asked.length).toBeGreaterThan(60);
     expect(asked.length).toBeLessThanOrEqual(1 + 68);
@@ -290,38 +292,38 @@ describe("a coin's frozen terms, found from its trading start", () => {
   });
 
   test("a start still ahead of the chain's clock: the walk starts at the head", async () => {
-    const { suite, coins, time } = chain();
-    suite.chain.blockNumber = LAUNCH + 500n;
-    suite.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
+    const { fakeSettings, coins, time } = chain();
+    fakeSettings.chain.blockNumber = LAUNCH + 500n;
+    fakeSettings.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
       tradingStart: time(LAUNCH) + 86_400n,
     });
     expect((await coins.frozen(TOKEN))?.token).toBe(TOKEN);
     // The last window of the chain, in one request.
-    expect(suite.chain.logRequests).toEqual([
+    expect(fakeSettings.chain.logRequests).toEqual([
       { fromBlock: LAUNCH - 1_499n, toBlock: LAUNCH + 500n },
     ]);
   });
 
   test("an address the factory never launched is null without a log request; addresses with no deploy block still find a coin", async () => {
-    const { suite, coins } = chain();
+    const { fakeSettings, coins } = chain();
     expect(await coins.frozen(at(0x72))).toBeNull();
-    expect(suite.chain.logRequests).toEqual([]);
+    expect(fakeSettings.chain.logRequests).toEqual([]);
     // A coin the factory did launch whose log the node does not hold is the node's gap, never "not launched".
     const lost = at(0x73);
-    suite.termsHashes.set(lost.toLowerCase(), keccak256(RECORD.bytes));
-    suite.chain.contract(lost, bankrLaunchTokenAbi as Abi, {
+    fakeSettings.termsHashes.set(lost.toLowerCase(), keccak256(RECORD.bytes));
+    fakeSettings.chain.contract(lost, bankrLaunchTokenAbi as Abi, {
       tradingStart: 1_000_000n + 2n * 2_000n,
     });
     expect(await code(coins.frozen(lost))).toContain("serves no log");
     const addresses = { ...SUITE, blockNumber: undefined };
-    const bare = createCoinTermsReads({ ...suite.context(), addresses });
+    const bare = createCoinTermsReads({ ...fakeSettings.context(), addresses });
     expect((await bare.frozen(TOKEN))?.token).toBe(TOKEN);
   });
 
   test("a start scheduled further ahead than the walk covers is refused, and names the range to pass", async () => {
     // 2,000 windows of 2,000 blocks: 92 days on a 2 s chain. This coin scheduled 100.
-    const { suite, coins, time } = chain();
-    suite.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
+    const { fakeSettings, coins, time } = chain();
+    fakeSettings.chain.contract(TOKEN, bankrLaunchTokenAbi as Abi, {
       tradingStart: time(LAUNCH) + 8_640_000n,
     });
     let thrown: unknown;
@@ -332,7 +334,7 @@ describe("a coin's frozen terms, found from its trading start", () => {
     }
     expect(isLaunchSdkError(thrown, "INVALID_PARAMS")).toBe(true);
     expect((thrown as { detail?: string }).detail).toContain("fromBlock");
-    expect(suite.chain.logRequests).toHaveLength(2_000);
+    expect(fakeSettings.chain.logRequests).toHaveLength(2_000);
     expect(
       (await coins.frozen(TOKEN, { fromBlock: LAUNCH, toBlock: LAUNCH }))
         ?.token,
@@ -348,7 +350,7 @@ describe("the fingerprint check", () => {
   });
 
   test("a record holds when its bytes hash to the fingerprint and the coin's stores still say so", async () => {
-    const { suite, coins } = setup();
+    const { fakeSettings, coins } = setup();
     const record = coins.fromReceipt(receipt([frozenLog()]));
     expect(await coins.verify(TOKEN, record)).toEqual({
       ok: true,
@@ -365,7 +367,7 @@ describe("the fingerprint check", () => {
       storesMatch: false,
     });
     // the right record over a coin whose stores moved: the lens says no
-    suite.storesHold.set(TOKEN.toLowerCase(), false);
+    fakeSettings.storesHold.set(TOKEN.toLowerCase(), false);
     expect(await coins.verify(TOKEN, record)).toMatchObject({
       ok: false,
       hashMatches: true,
@@ -379,12 +381,15 @@ describe("the fingerprint check", () => {
   });
 
   test("the stored terms are the lens's; they need its address, and a launched coin", async () => {
-    const { suite, coins } = setup();
-    suite.storedTerms.set(TOKEN.toLowerCase(), RECORD.terms);
+    const { fakeSettings, coins } = setup();
+    fakeSettings.storedTerms.set(TOKEN.toLowerCase(), RECORD.terms);
     expect((await coins.stored(TOKEN)).capSecs).toBe(86_400);
     expect(await code(coins.stored(at(0x72)))).toBe("NOT_A_LAUNCH");
     const addresses = { ...SUITE, termsLens: undefined };
-    const noLens = createCoinTermsReads({ ...suite.context(), addresses });
+    const noLens = createCoinTermsReads({
+      ...fakeSettings.context(),
+      addresses,
+    });
     expect(await code(noLens.stored(TOKEN))).toBe("PROVIDER_NOT_DEPLOYED");
     expect(await code(noLens.verify(TOKEN, RECORD.bytes))).toBe(
       "PROVIDER_NOT_DEPLOYED",

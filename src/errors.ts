@@ -27,12 +27,17 @@ const ERROR_SPEC = {
   API_KEY_IN_BROWSER: {
     kind: "config",
     message:
-      "Bankr API keys must stay on a server: use a server-side preparer in the browser.",
+      "Keys must stay on a server: sign on your server, and use remoteAuthorizer in the browser.",
   },
-  INDEX_UNAVAILABLE: {
+  INDEX_NOT_ON_FORK: {
     kind: "config",
     message:
       "Fees owed and claim all come from Bankr's API, which indexes Bankr's live contracts only: on a fork, read and claim one launch with fees.get and fees.buildClaim.",
+  },
+  INDEX_NOT_COVERED: {
+    kind: "config",
+    message:
+      "Bankr's launch index does not cover this chain. Read from the chain with client.launchInfo and client.contracts().",
   },
   PAUSED: {
     kind: "refused",
@@ -53,12 +58,12 @@ const ERROR_SPEC = {
   AUTHORIZATION_REQUIRED: {
     kind: "refused",
     message:
-      "This launchpad signs its launches: pass its authorizer, or use Bankr's prepare endpoint (API mode) for Bankr's own launchpad.",
+      "This launchpad signs its launches, and this launch has no signature from it.",
   },
   PRICE_ATTESTATION_REQUIRED: {
     kind: "refused",
     message:
-      "This quote is priced by Bankr's signed attestation: launch it through Bankr's prepare endpoint (API mode).",
+      "This quote is priced by Bankr's signed attestation, which a launch from this SDK version does not carry: pair with another quote token.",
   },
   QUOTE_NOT_ALLOWED: {
     kind: "refused",
@@ -106,11 +111,6 @@ const ERROR_SPEC = {
     kind: "refused",
     message:
       "The vesting share or schedule is outside the protocol's or this launchpad's bounds.",
-  },
-  BUILDER_LANE_NOT_ALLOWED: {
-    kind: "refused",
-    message:
-      "This launchpad does not allow a dev buy, cap exclusions or a custom supply, which this launch needs.",
   },
   OUTSIDE_LAUNCHPAD_RANGE: {
     kind: "refused",
@@ -213,7 +213,7 @@ const ERROR_SPEC = {
   VANITY_UNAVAILABLE: {
     kind: "execution",
     message:
-      "No salt giving this launchpad's vanity suffix was found within plan()'s bounded search (2^20 tries): mine one with mineVanitySalt and a larger maxTries, then pass it as `salt` (pure mode).",
+      "No salt giving this launchpad's vanity suffix was found within plan()'s bounded search (2^20 tries): mine one with mineVanitySalt and a larger maxTries, then pass it as `salt`.",
   },
   AUTHORIZATION_INVALID: {
     kind: "execution",
@@ -230,11 +230,6 @@ const ERROR_SPEC = {
     message:
       "The terms this launch would freeze, or its token address, changed after planning: plan again.",
   },
-  STALE_POLICY: {
-    kind: "execution",
-    message:
-      "The launchpad's policy changed after this setPolicy was built: rebuild it from the live policy.",
-  },
   RECEIPT_MISSING_LAUNCH: {
     kind: "execution",
     message: "The receipt holds no launch from this chain's Bankr factory.",
@@ -249,15 +244,16 @@ const ERROR_SPEC = {
     message:
       "A transaction sent for this launch reverted on-chain: re-plan before retrying.",
   },
-  API_KEY_OVERPRIVILEGED: {
-    kind: "api",
-    message:
-      "The API key can reach wallet or agent APIs: use a prepare-scoped key.",
-  },
   API_ERROR: { kind: "api", message: "The Bankr API request failed." },
   RATE_LIMITED: {
     kind: "api",
     message: "The Bankr API rate limit was hit: retry later.",
+  },
+  // The API's own code and sentence (HTTP 503): its index of a chain is behind, and a retry can succeed.
+  INDEX_UNAVAILABLE: {
+    kind: "api",
+    message:
+      "Bankr's index of this chain is not available right now. Try again shortly.",
   },
 } as const satisfies Record<
   string,
@@ -384,7 +380,7 @@ export class LaunchExecutionError extends LaunchSdkError<
   }
 }
 
-/** A Bankr API failure (API mode only). */
+/** A Bankr API failure. */
 export class LaunchApiError extends LaunchSdkError<CodeOfKind<"api">> {
   override readonly name = "LaunchApiError";
 

@@ -21,15 +21,15 @@ import { launchSdkError } from "../errors.js";
 import { HOOK_EXTENSION_ERRORS, PRESET_ERRORS } from "../unvendoredErrors.js";
 import { launchRefusal } from "./refusals.js";
 
-// A reverted suite 4 call as an SDK error: the revert is decoded against every error a contract on the launch's
+// A reverted call as an SDK error: the revert is decoded against every error a contract on the launch's
 // path declares, and worded by refusals.ts from its own arguments.
 
 const isError = <T extends { type: string }>(
   e: T,
 ): e is Extract<T, { type: "error" }> => e.type === "error";
 
-/** Every error a suite 4 launch or its `resolve` preview can revert with, to decode a revert against. */
-export const SUITE4_LAUNCH_ERRORS = [
+/** Every error a launch or its `resolve` preview can revert with, to decode a revert against. */
+export const LAUNCH_ERRORS = [
   ...bankrLaunchSettingsAbi,
   ...bankrLaunchFactoryAbi,
   ...bankrLaunchpadRegistryAbi,
@@ -42,7 +42,7 @@ export const SUITE4_LAUNCH_ERRORS = [
 
 /** The hook's error where it holds a hard bound again as it registers the pool; the hook's ABI is not vendored.
  *  Held equal to core's hook ABI entry. */
-export const SUITE4_HOOK_ERRORS = [
+export const HOOK_ERRORS = [
   {
     type: "error",
     name: "InvalidPoolInit",
@@ -53,21 +53,21 @@ export const SUITE4_HOOK_ERRORS = [
 let revertErrors: Abi | undefined;
 let launchAbi: Abi | undefined;
 
-/** Every error a contract on a suite 4 launch's path declares. A library's revert carries the name of the contract
+/** Every error a contract on a launch's path declares. A library's revert carries the name of the contract
  *  that declares it, whichever contract was called. Built on first use: simulate.ts and this module import each other. */
-const suite4RevertErrors = (): Abi =>
+const launchRevertErrors = (): Abi =>
   (revertErrors ??= [
-    ...SUITE4_LAUNCH_ERRORS,
+    ...LAUNCH_ERRORS,
     ...HOOK_EXTENSION_ERRORS,
-    ...SUITE4_HOOK_ERRORS,
+    ...HOOK_ERRORS,
     ...PRESET_ERRORS,
   ] as Abi);
 
 /** `factory.launch` with every error it can revert with, for a simulation's decode. */
-export const suite4LaunchAbi = (): Abi =>
+export const launchRevertAbi = (): Abi =>
   (launchAbi ??= [
     ...bankrLaunchFactoryAbi.filter((e) => !isError(e)),
-    ...suite4RevertErrors(),
+    ...launchRevertErrors(),
   ] as Abi);
 
 const CURVE_ROW_REVERTS: readonly string[] = [
@@ -89,7 +89,7 @@ function revertOf(error: unknown): ContractFunctionRevertedError | null {
 }
 
 /** The revert's name and arguments: viem's, decoded against the one contract called, else the raw data's against
- *  every suite 4 error (`resolve` and `computeTokenAddress` raise the factory's and the settings contract's alike). */
+ *  every error (`resolve` and `computeTokenAddress` raise the factory's and the settings contract's alike). */
 function namedRevert(revert: ContractFunctionRevertedError): {
   name: string | undefined;
   args: readonly unknown[];
@@ -99,7 +99,7 @@ function namedRevert(revert: ContractFunctionRevertedError): {
   if (!revert.raw || revert.raw === "0x") return { name: undefined, args: [] };
   try {
     const d = decodeErrorResult({
-      abi: suite4RevertErrors(),
+      abi: launchRevertErrors(),
       data: revert.raw,
     });
     return { name: d.errorName, args: d.args ?? [] };
@@ -109,11 +109,11 @@ function namedRevert(revert: ContractFunctionRevertedError): {
 }
 
 /**
- * The SDK error for a reverted suite 4 call (`resolve`, or `launch` in a simulation): the refusal's code with its
+ * The SDK error for a reverted call (`resolve`, or `launch` in a simulation): the refusal's code with its
  * sentence in `detail`, else `SIMULATION_REVERTED`, the original on `cause`. A curve revert names the coin's own
  * `rules` when the caller has them. Anything that is not a contract revert is returned as it came.
  */
-export function suite4CallError(
+export function launchCallError(
   error: unknown,
   chain: LaunchChain,
   rules?: CurveRuleFigures | null,

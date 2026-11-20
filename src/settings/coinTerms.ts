@@ -115,7 +115,7 @@ function recordOf(args: FrozenLogArgs): FrozenCoinTerms {
   };
 }
 
-/** A coin's frozen terms and their fingerprint check, for one chain's suite. */
+/** A coin's frozen terms and their fingerprint check, for one chain's contracts. */
 export function createCoinTermsReads(ctx: SettingsContext): CoinTermsReads {
   const kit: SettingsKit = settingsKit(ctx);
   const { client, factory, addresses: a, chain } = kit;

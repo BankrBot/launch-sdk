@@ -11,8 +11,8 @@ import {
 } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 import {
-  chooseSuite,
   isCompleteRecord,
+  mergeAddresses,
   PROVIDER_ADDRESS_KEYS,
   type LaunchProviderId,
   type ProviderAddresses,
@@ -22,7 +22,6 @@ import {
   BankrApiResponseError,
   REGISTER_MIN_CONFIRMATIONS,
   createBankrApi,
-  isBrowserRuntime,
   type BuilderProfile,
   type BuilderQuery,
   type FetchLike,
@@ -32,7 +31,6 @@ import {
   type LaunchQuery,
   type LaunchpadStats,
   type LaunchpadStatsQuery,
-  type Preparer,
   type RegisterResult,
 } from "./api.js";
 import type { Authorizer } from "./authorizer.js";
@@ -57,8 +55,6 @@ import type { LaunchFees } from "./fees.js";
 import type { LaunchHolders } from "./holders.js";
 import type { LaunchIterationOptions } from "./indexPages.js";
 import type { InvariantReport } from "./invariants.js";
-import type { LaunchpadInfo } from "./launchpad.js";
-import type { LaunchpadOperations } from "./launchpads.js";
 import type { LaunchInfo } from "./lens.js";
 import type { LaunchMetadataAdmin, TradingStatus } from "./token.js";
 import { requireAddress } from "./recipient.js";
@@ -69,7 +65,6 @@ import type {
   LaunchPlan,
   LaunchResult,
   LaunchStatus,
-  QuoteToken,
   ReadClient,
   SimResult,
   UnsignedTx,
@@ -85,14 +80,16 @@ export interface LaunchClientOptions<C extends LaunchChain = LaunchChain> {
   publicClient?: ReadClient;
   /** Signs `launch()`; its account must be the launcher. Not needed to plan or build unsigned transactions. */
   walletClient?: WalletClient;
-  /** Required on Arc (no verified public RPC); recommended on Robinhood (shallow history, rate limits). */
+  /** Required on Arc (no verified public RPC); recommended on Robinhood, Ethereum and BNB Chain (shallow history,
+   *  rate limits). */
   rpcUrl?: string;
-  /** Default and only provider in this version: `bankr_v4`, Bankr's v4 hook suite. */
+  /** Default and only provider in this version: `bankr_v4`, Bankr's Uniswap v4 launch contracts. */
   provider?: LaunchProviderId;
   /**
    * Signs launches on a third-party launchpad that has a signer: called with the final terms, it returns the pad
    * signer's `{ nonce, deadline, signature }`. `remoteAuthorizer(url)` in a browser; on the pad's server,
-   * `padAuthorizer` from `@bankr/launch-sdk/server`. Open pads need none; Bankr's pad (id 0) is signed in API mode.
+   * `padAuthorizer` from `@bankr/launch-sdk/server`. Open pads need none. Bankr's own pad (id 0) is signed by Bankr,
+   * and this SDK version cannot ask for that signature.
    */
   authorizer?: Authorizer;
   /** ERC-8021 builder codes appended to launch calldata (claimed, unverified). */
@@ -100,16 +97,9 @@ export interface LaunchClientOptions<C extends LaunchChain = LaunchChain> {
   /** Also append Bankr's own builder code. Default false. */
   appendBankrBuilderCode?: boolean;
   /**
-   * Leave unset: a client is on Bankr's current contracts, where every term is its launchpad's and the chain's own
-   * launch check resolves it. `3` reaches the contracts before them, on Base alone, for a coin launched there: a
-   * coin stays on the contracts it launched on. Where the chain has no record of the one asked for,
-   * `PROVIDER_NOT_DEPLOYED`.
-   */
-  suite?: 3 | 4;
-  /**
    * Fork or test override of the contracts' addresses, merged over the chain's record. One that names another
-   * `factory`, or is for a chain with no record, is merged over nothing: pass that deployment's whole record. It
-   * never enables launches on a chain this SDK version does not launch on: that takes `fork`.
+   * `factory` is merged over nothing: pass that deployment's whole record. It never makes the launch methods run
+   * against addresses this SDK version does not ship: that takes `fork`.
    */
   addresses?: Partial<ProviderAddresses>;
   /**
@@ -118,11 +108,9 @@ export interface LaunchClientOptions<C extends LaunchChain = LaunchChain> {
    */
   fork?: boolean;
   /**
-   * API mode. Set, `launch()` registers each launch with Bankr's index. With a `preparer`, Bankr's prepare endpoint
-   * builds each launch: Bankr's own pad (id 0) and SIGNED-priced quotes launch only this way, `metadata` is pinned,
-   * and a prepare-scoped key earns `prepared` attribution. Omitted or `false`: pure mode. Never takes an API key:
-   * keys stay on a server. A client on Bankr's current contracts takes no `preparer`: `createLaunchClient` refuses
-   * one with `PROVIDER_NOT_DEPLOYED`. Registration with the index needs none.
+   * Set, `launch()` registers each launch with Bankr's index once it has 5 confirmations. Omitted or `false`: the
+   * indexer picks the launch up at the chain's full depth. On a chain the index does not cover nothing is
+   * registered either way.
    */
   api?: false | LaunchApiOptions;
 }
@@ -131,17 +119,20 @@ export interface LaunchClientOptions<C extends LaunchChain = LaunchChain> {
 export interface LaunchApiOptions {
   /** Bankr's API for the index and registration. Default `https://api.bankr.bot`. */
   url?: string;
-  /** `remotePreparer` in a browser; `bankrPreparer` from `@bankr/launch-sdk/server` on a server. */
-  preparer?: Preparer;
   /** Default the global `fetch`. */
   fetch?: FetchLike;
 }
 
-/** Bankr's public launch index, scoped to the client's chain. Works without API mode (`api` sets the URL). */
+/**
+ * Bankr's public launch index, scoped to the client's chain. Works without `api` (which sets the URL). On a chain
+ * the index does not cover (`chain.indexed` false: Ethereum, BNB Chain) every method rejects `INDEX_NOT_COVERED`.
+ */
 export interface LaunchIndex {
-  /** Launches on this chain, newest first; pass `nextCursor` back as `cursor` for the next page. */
+  /** Launches on this chain, newest first; pass `nextCursor` back as `cursor` for the next page. A page that
+   *  leaves launches out, because Bankr's index of the chain is behind, says so in `incomplete`. */
   launches(query?: Omit<LaunchQuery, "chain">): Promise<LaunchPage>;
-  /** Every launch on this chain matching `query`, newest first, a page at a time (`for await`). */
+  /** Every launch on this chain matching `query`, newest first, a page at a time (`for await`). A page that leaves
+   *  launches out throws `INDEX_UNAVAILABLE` (try again) unless `options.onIncomplete` takes it. */
   all(
     query?: Omit<LaunchQuery, "chain">,
     options?: LaunchIterationOptions,
@@ -153,7 +144,7 @@ export interface LaunchIndex {
   ): Promise<IndexedLaunch | null>;
   /** A builder's public profile and stats; null for an unknown slug. */
   builder(slug: string, query?: BuilderQuery): Promise<BuilderProfile | null>;
-  /** One pad's totals on this chain's latest suite; zeros for an unknown pad. */
+  /** One pad's totals on this chain; zeros for an unknown pad. */
   launchpadStats(
     id: bigint | string,
     query?: LaunchpadStatsQuery,
@@ -170,30 +161,12 @@ export interface LaunchClient<C extends LaunchChain = LaunchChain> {
   /** The factory's pause and launch gate, read live. */
   status(): Promise<LaunchStatus>;
   /**
-   * The earlier contracts' read (`suite: 3`): a launchpad's terms, bounds, policy, vanity and signer, the defaults
-   * a launch on it takes, and their volume split. On a default client it refuses (`PROVIDER_NOT_DEPLOYED`) and
-   * names `client.contracts().settings.pad(id)`.
-   */
-  launchpad(id?: bigint): Promise<LaunchpadInfo>;
-  /**
-   * The earlier contracts' launchpad builders (`suite: 3`). On a default client every call refuses
-   * (`PROVIDER_NOT_DEPLOYED`) and names `client.contracts().launchpads`, which registers and configures a launchpad
-   * of your own.
-   */
-  readonly launchpads: LaunchpadOperations;
-  /**
-   * The settings contract by name. `settings` reads what the owner and each launchpad hold a launch to;
-   * `launchpads` and `owner` build a pad operator's and the protocol owner's changes as unsigned transactions;
-   * `coinTerms` reads a coin's frozen record and holds the coin to it; `holderLegs` reads the holders' legs. Nothing
-   * here sends. Throws `PROVIDER_NOT_DEPLOYED` on a `suite: 3` client.
+   * The contracts by name. `settings` reads what the owner and each launchpad hold a launch to (`settings.pad(id)`,
+   * `settings.quotes()`, `settings.levers()`); `launchpads` and `owner` build a pad operator's and the protocol
+   * owner's changes as unsigned transactions; `coinTerms` reads a coin's frozen record and holds the coin to it;
+   * `holderLegs` reads the holders' legs. Nothing here sends.
    */
   contracts(): LaunchContracts;
-  /**
-   * The earlier contracts' read (`suite: 3`): every quote the factory allows and prices that pad `launchpadId`
-   * (default 0) accepts, named majors first. On a default client it refuses (`PROVIDER_NOT_DEPLOYED`) and names
-   * `client.contracts().settings.quotes()`.
-   */
-  quotes(launchpadId?: bigint): Promise<QuoteToken[]>;
   /** Validates and refuses, reads the pad, prices, mines the salt, predicts the token and lists approvals. Sends nothing. */
   plan(input: LaunchInput<C>): Promise<LaunchPlan<C>>;
   /**
@@ -227,8 +200,7 @@ export interface LaunchClient<C extends LaunchChain = LaunchChain> {
     receipt: TransactionReceipt,
     expectedToken?: Address,
   ): LaunchResult<C>;
-  // After launch: reads, and unsigned transactions for the account that sends them. No wallet needed, and they work
-  // on any chain with a record, `deployed` or not.
+  // After launch: reads, and unsigned transactions for the account that sends them. No wallet needed.
   /**
    * A launch read from the chain: pool, pad, fee schedules, buckets and their shares, fee recipients, metadata admin,
    * trading start, distributor, escrow. Null for a stranger.
@@ -287,17 +259,6 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-/** Keys stay on a server: an `apiKey` smuggled into the root client is refused, loudest in a browser. */
-function refuseApiKeyOption(api: object | undefined, chain: LaunchChain): void {
-  if (api === undefined || !Object.hasOwn(api, "apiKey")) return;
-  if (isBrowserRuntime()) {
-    throw new LaunchConfigError("API_KEY_IN_BROWSER", { chain });
-  }
-  throw new TypeError(
-    "createLaunchClient takes no apiKey: pass bankrPreparer({ apiKey }) from @bankr/launch-sdk/server as api.preparer",
-  );
-}
-
 function warn(message: string): void {
   // Optional: an embedded runtime may have no `console`, and a warning must never throw.
   (globalThis as { console?: { warn?: (m: string) => void } }).console?.warn?.(
@@ -306,11 +267,11 @@ function warn(message: string): void {
 }
 
 /**
- * A launch client for one chain, on Bankr's latest contracts there. Pure mode: it needs only an RPC, and launches
- * from the builder's own wallet on an open launchpad (or a signed one with an `authorizer`). Throws
- * `UNSUPPORTED_CHAIN` for a chain outside `CHAINS`, `PROVIDER_NOT_DEPLOYED` for one this SDK version has no record
- * for (a fork passes `addresses`), and `RPC_REQUIRED` on Arc without an RPC. A fork's own record builds a client
- * whose reads work and whose launch methods refuse, unless the client is a `fork`.
+ * A launch client for one chain, on Bankr's contracts there. It needs only an RPC, and launches from the builder's
+ * own wallet on an open launchpad (or a signed one with an `authorizer`). Throws `UNSUPPORTED_CHAIN` for a chain
+ * outside `CHAINS`, `PROVIDER_NOT_DEPLOYED` for an `addresses` override that is incomplete or for another chain id,
+ * and `RPC_REQUIRED` on Arc without an RPC. A fork's own record builds a client whose reads work and whose launch
+ * methods refuse, unless the client is a `fork`.
  */
 export function createLaunchClient<C extends LaunchChain>(
   o: LaunchClientOptions<C>,
@@ -318,22 +279,7 @@ export function createLaunchClient<C extends LaunchChain>(
   const caps = getChain(o.chain);
   const chain = caps.chain;
   const api = o.api || undefined;
-  refuseApiKeyOption(api, chain);
-  // The latest contracts unless the caller asked for the ones before them.
-  const { suite, addresses: merged } = chooseSuite(chain, o);
-  // The earlier contracts have no settings contract, and their record is the one override that names none.
-  if (suite === 4 && o.addresses !== undefined && merged.settings === undefined)
-    throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
-      chain,
-      detail:
-        "addresses is missing addresses.settings: a record names its factory's settings contract. A record of the earlier contracts, which have none, is passed with `suite: 3`.",
-    });
-  if (suite === 3 && merged.settings !== undefined)
-    throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
-      chain,
-      detail:
-        "addresses.settings names a settings contract and suite 3 has none: drop it, or drop `suite: 3`.",
-    });
+  const merged = mergeAddresses(chain, o.addresses);
   const providerId = o.provider ?? "bankr_v4";
   if (providerId !== "bankr_v4") {
     throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
@@ -347,11 +293,7 @@ export function createLaunchClient<C extends LaunchChain>(
     );
     throw new LaunchConfigError("PROVIDER_NOT_DEPLOYED", {
       chain,
-      detail: o.addresses
-        ? `addresses is missing ${missing.map((k) => `addresses.${k}`).join(", ")}: an override that names its own factory, or is for a chain with no record, is the whole record.`
-        : suite === 3
-          ? `The contracts before Bankr's current ones are not on ${chain}: drop \`suite: 3\`.`
-          : `Bankr's contracts on ${chain} are not in this SDK version yet. On a local fork, pass the fork's whole record as \`addresses\` and set \`fork: true\`.`,
+      detail: `addresses is missing ${missing.map((k) => `addresses.${k}`).join(", ")}: an override that names its own factory is the whole record.`,
     });
   }
   if (merged.chainId !== caps.chainId) {
@@ -384,7 +326,8 @@ export function createLaunchClient<C extends LaunchChain>(
       batch: { multicall: true },
     });
   const bankrApi = createBankrApi({ url: api?.url, fetch: api?.fetch });
-  const apiMode = api !== undefined;
+  // A client built with `api` registers each launch with Bankr's index, where the index covers the chain.
+  const registers = api !== undefined && caps.indexed;
   const usedSalts = new Set<string>();
   const provider = createBankrV4Adapter({
     chain: caps,
@@ -393,7 +336,6 @@ export function createLaunchClient<C extends LaunchChain>(
     dataSuffix,
     fork: o.fork === true,
     usedSalts,
-    preparer: api?.preparer,
     authorizer: o.authorizer,
     index: bankrApi,
   });
@@ -504,8 +446,6 @@ export function createLaunchClient<C extends LaunchChain>(
     provider: provider.info,
     publicClient,
     status: () => provider.status(),
-    launchpad: (id) => provider.launchpad(id),
-    quotes: (launchpadId) => provider.readQuotes(launchpadId),
     plan: (input) => provider.plan(input),
     previewExtension: (extension, options) =>
       provider.previewExtension(extension, options),
@@ -519,7 +459,6 @@ export function createLaunchClient<C extends LaunchChain>(
     holders: provider.holders,
     vesting: provider.vesting,
     metadataAdmin: provider.metadataAdmin,
-    launchpads: provider.launchpads,
     contracts: () => provider.contracts(),
     verifyTokenInvariants: (token, receipt) =>
       provider.verifyTokenInvariants(token, receipt),
@@ -530,7 +469,12 @@ export function createLaunchClient<C extends LaunchChain>(
       // Async, so a malformed address rejects like the read itself.
       launch: async (token, query) =>
         bankrApi.launch(chain, requireAddress(token, chain), query),
-      builder: (slug, query) => bankrApi.builder(slug, query),
+      // A builder's profile names no chain: on a chain the index does not cover the client has no index at all.
+      builder: async (slug, query) => {
+        if (!caps.indexed)
+          throw new LaunchConfigError("INDEX_NOT_COVERED", { chain });
+        return bankrApi.builder(slug, query);
+      },
       launchpadStats: (id, query) => bankrApi.launchpadStats(chain, id, query),
       register: (txHash) => bankrApi.register(chain, txHash),
     },
@@ -547,8 +491,7 @@ export function createLaunchClient<C extends LaunchChain>(
         throw new LaunchRefusedError("LAUNCHER_MISMATCH", { chain });
       }
 
-      // A moved tick, a lapsed authorization, a taken token or (suite 4) a pin that no longer holds is fixed by a
-      // fresh plan. A broadcast salt is burned, so a caller's own salt is re-planned only before it is sent, and
+      // A moved tick, a lapsed authorization, a taken token or a pin that no longer holds is fixed by a fresh plan. A broadcast salt is burned, so a caller's own salt is re-planned only before it is sent, and
       // never after a taken token.
       const replannable = (err: unknown, broadcast: boolean): boolean =>
         ((isLaunchSdkError(err, "START_TICK_CHANGED") ||
@@ -589,7 +532,7 @@ export function createLaunchClient<C extends LaunchChain>(
         const receipt = await send(wallet, account, tx);
         if (receipt.status === "success") {
           const result = provider.parseReceipt(receipt, plan.predictedToken);
-          return apiMode
+          return registers
             ? { ...result, registration: await register(receipt) }
             : result;
         }

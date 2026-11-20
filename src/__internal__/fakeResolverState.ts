@@ -17,7 +17,7 @@ import type {
 import {
   LAUNCH_OPTION,
   type LaunchOptions as BankrV4LaunchOptions,
-} from "../suite4/options.js";
+} from "../launch/options.js";
 import {
   KNOB as K,
   type CoinTerms as BankrV4CoinTerms,
@@ -26,9 +26,9 @@ import {
   type KnobRange as BankrV4Range,
   type PadConfig as BankrV4PadConfig,
   type QuoteTerms as BankrV4QuoteTerms,
-  type Suite4LaunchParams as BankrV4ResolveParams,
-  type Suite4PadTerms as BankrV4PadTerms,
-} from "../suite4/settings.js";
+  type ContractLaunchParams as BankrV4ResolveParams,
+  type PadTerms as BankrV4PadTerms,
+} from "../launch/settings.js";
 import type { BankrV4BoundVerdict } from "./fakeHardBounds.js";
 
 /** Core's BANKR_V4_OPTION: an option's mask by its Solidity name. */

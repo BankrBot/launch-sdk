@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeFunctionData, getAddress, zeroAddress } from "viem";
-import { bankrLaunchTokenAbi } from "./abis/suite3.js";
+import { bankrLaunchTokenAbi } from "./abis/generated.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
 import {
   LAUNCHER,

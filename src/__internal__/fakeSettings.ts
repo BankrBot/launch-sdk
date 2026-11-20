@@ -1,4 +1,4 @@
-// Test-only: suite 4's settings contract, launchpad registry and the factory's owner levers as in-memory state on
+// Test-only: the settings contract, the launchpad registry and the factory's owner levers as in-memory state on
 // the fake node, with `apply` writing a built transaction the way the contracts store it (no checks: a test asserts
 // what a builder refuses, and what its calldata writes). Excluded from the build; viem and relative imports only.
 import {
@@ -117,7 +117,7 @@ const knob = (name: string): number =>
   SETTINGS_KNOBS.find((k) => k.name === name)!.id;
 const pin = (v: bigint): Range => ({ min: v, max: v, dflt: v });
 
-/** The settings a fresh fake suite starts with: suite 3's figures where a test reads them. */
+/** The settings a fresh fake suite starts with. */
 export class FakeSettings {
   readonly chain = new FakeChain(base);
   owner = OWNER;
@@ -129,7 +129,7 @@ export class FakeSettings {
   treasury = at(0xe1);
   hook = at(0xc1);
   holderLeg = at(0xd1);
-  readonly suiteCode = new Set<string>([
+  readonly bankrCode = new Set<string>([
     lower(SUITE.factory),
     lower(SUITE.ledger),
   ]);
@@ -400,7 +400,7 @@ export class FakeSettings {
       launchpadRegistry: () => SUITE.launchpadRegistry,
       ledger: () => SUITE.ledger,
       isSuite: (a: readonly unknown[]) =>
-        this.suiteCode.has(lower(arg<Address>(a))),
+        this.bankrCode.has(lower(arg<Address>(a))),
       termsHashOf: (a: readonly unknown[]) =>
         this.termsHashes.get(lower(arg<Address>(a))) ?? zeroHash,
     });
