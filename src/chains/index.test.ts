@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  BANKR_V4_EARLIER_ADDRESSES,
   BANKR_V4_LAUNCH_ADDRESSES,
   BANKR_V4_CAP_EXCLUSIONS,
-  requireCapExclusions,
 } from "../addresses.js";
 import { isLaunchSdkError } from "../errors.js";
 import {
@@ -25,8 +23,16 @@ function expectCode(fn: () => unknown, code: string): void {
 }
 
 describe("CHAINS capability table", () => {
-  test("the four v4 chains, keyed by their own name", () => {
+  test("the six chains, keyed by their own name: the four Bankr indexes, then Ethereum and BNB Chain", () => {
     expect([...LAUNCH_CHAINS]).toEqual([
+      "base",
+      "robinhood",
+      "arbitrum",
+      "arc",
+      "ethereum",
+      "bnb",
+    ]);
+    expect(LAUNCH_CHAINS.filter((c) => CHAINS[c].indexed)).toEqual([
       "base",
       "robinhood",
       "arbitrum",
@@ -38,7 +44,7 @@ describe("CHAINS capability table", () => {
       expect(CHAINS[chain].viemChain.id).toBe(CHAINS[chain].chainId);
     }
     expect(LAUNCH_CHAINS.map((c) => CHAINS[c].chainId)).toEqual([
-      8453, 4663, 42161, 5042,
+      8453, 4663, 42161, 5042, 1, 56,
     ]);
   });
 
@@ -63,37 +69,32 @@ describe("CHAINS capability table", () => {
     expect(CHAINS.arc.holderPayout).toBe("quote");
   });
 
-  test("gas ceilings: EIP-7825's 2^24 on Base and Arc, Nitro's 32M on Arbitrum and Robinhood", () => {
-    expect(CHAINS.base.maxTxGas).toBe(EIP_7825_MAX_TX_GAS);
-    expect(CHAINS.arc.maxTxGas).toBe(EIP_7825_MAX_TX_GAS);
+  test("gas ceilings: 2^24 on Base, Arc, Ethereum and BNB Chain, Nitro's 32M on Arbitrum and Robinhood", () => {
+    for (const chain of ["base", "arc", "ethereum", "bnb"] as const)
+      expect(CHAINS[chain].maxTxGas, chain).toBe(EIP_7825_MAX_TX_GAS);
     expect(CHAINS.arbitrum.maxTxGas).toBe(32_000_000n);
     expect(CHAINS.robinhood.maxTxGas).toBe(32_000_000n);
   });
 
-  test("the earlier contracts are on Base alone, and only Base is `deployed`; the latest are on every chain", () => {
+  test("a chain is live by its record alone: every chain has one, and the capability table carries no flag beside it", () => {
     for (const chain of LAUNCH_CHAINS) {
-      expect(CHAINS[chain].deployed, chain).toBe(chain === "base");
-      expect(BANKR_V4_EARLIER_ADDRESSES[chain] === null, chain).toBe(
-        chain !== "base",
-      );
-      expect(BANKR_V4_LAUNCH_ADDRESSES[chain]?.chainId, chain).toBe(
+      expect("deployed" in CHAINS[chain], chain).toBe(false);
+      expect(BANKR_V4_LAUNCH_ADDRESSES[chain].chainId, chain).toBe(
         CHAINS[chain].chainId,
       );
       expect(Object.isFrozen(BANKR_V4_LAUNCH_ADDRESSES[chain]), chain).toBe(
         true,
       );
     }
-    expect(BANKR_V4_EARLIER_ADDRESSES.base?.chainId).toBe(CHAINS.base.chainId);
-    expect(Object.isFrozen(BANKR_V4_EARLIER_ADDRESSES.base)).toBe(true);
   });
 
-  test("every chain has a suite config; Arbitrum's and Arc's list no cap exclusions", () => {
+  test("every chain has a config; only Base's and Robinhood's list cap exclusions", () => {
     for (const chain of LAUNCH_CHAINS) {
       expect(BANKR_V4_CAP_EXCLUSIONS[chain], chain).toBeDefined();
     }
-    expect(requireCapExclusions("arc")).toEqual([]);
-    expect(requireCapExclusions("arbitrum")).toEqual([]);
-    expect(requireCapExclusions("base").length).toBe(7);
+    for (const chain of ["arc", "arbitrum", "ethereum", "bnb"] as const)
+      expect(BANKR_V4_CAP_EXCLUSIONS[chain], chain).toEqual([]);
+    expect(BANKR_V4_CAP_EXCLUSIONS.base.length).toBe(7);
   });
 
   test("the table is frozen", () => {
@@ -106,8 +107,8 @@ describe("CHAINS capability table", () => {
 
   test("getChain and isLaunchChain refuse anything else", () => {
     expect(isLaunchChain("base")).toBe(true);
-    for (const v of ["ethereum", "BASE", "", null, 8453])
+    for (const v of ["polygon", "mainnet", "bsc", "BASE", "", null, 8453])
       expect(isLaunchChain(v)).toBe(false);
-    expectCode(() => getChain("ethereum"), "UNSUPPORTED_CHAIN");
+    expectCode(() => getChain("polygon"), "UNSUPPORTED_CHAIN");
   });
 });

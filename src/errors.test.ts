@@ -18,7 +18,8 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "RPC_REQUIRED",
   "WALLET_REQUIRED",
   "API_KEY_IN_BROWSER",
-  "INDEX_UNAVAILABLE",
+  "INDEX_NOT_ON_FORK",
+  "INDEX_NOT_COVERED",
   "PAUSED",
   "LAUNCHPAD_GATED",
   "UNKNOWN_LAUNCHPAD",
@@ -35,8 +36,7 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "FEE_OUT_OF_BOUNDS",
   "SPLIT_OUT_OF_BOUNDS",
   "VESTING_OUT_OF_BOUNDS",
-  "BUILDER_LANE_NOT_ALLOWED",
-  // Suite 4: the launch check's refusals carry their own arguments in `detail`.
+  // The launch check's refusals carry their own arguments in `detail`.
   "OUTSIDE_LAUNCHPAD_RANGE",
   "NOT_ALLOWED_BY_LAUNCHPAD",
   "HARD_BOUND",
@@ -62,13 +62,12 @@ const PLAN_CODES: readonly LaunchSdkErrorCode[] = [
   "AUTHORIZATION_INVALID",
   "LAUNCHPAD_TERMS_CHANGED",
   "TERMS_CHANGED",
-  "STALE_POLICY",
   "RECEIPT_MISSING_LAUNCH",
   "RECEIPT_MISSING_LAUNCHPAD",
   "TRANSACTION_REVERTED",
-  "API_KEY_OVERPRIVILEGED",
   "API_ERROR",
   "RATE_LIMITED",
+  "INDEX_UNAVAILABLE",
 ];
 
 const SUBCLASSES = [
@@ -101,10 +100,12 @@ describe("LaunchSdkError hierarchy", () => {
     }
   });
 
-  // Which contract set a client is on is the SDK's business: no message asks the reader to know of one.
-  test("no code's message names a suite", () => {
+  // No message asks the reader to know of a contract set, or points at a way to launch this SDK version has not.
+  test("no code's message names a suite, a mode or Bankr's prepare endpoint", () => {
     for (const code of LAUNCH_SDK_ERROR_CODES)
-      expect(launchSdkError(code).message, code).not.toMatch(/suite/i);
+      expect(launchSdkError(code).message, code).not.toMatch(
+        /suite|API mode|pure mode|prepare|preparer/i,
+      );
   });
 
   test("codes land in the category the plan's refusal model implies", () => {
@@ -133,12 +134,15 @@ describe("LaunchSdkError hierarchy", () => {
     expect(launchSdkError("RATE_LIMITED")).toBeInstanceOf(LaunchApiError);
   });
 
-  test("no B20 or keeper code survives the move to the v4 hook", () => {
+  test("no B20 or keeper code survives the move to the v4 hook, and none that only the earlier contracts raised", () => {
     for (const gone of [
       "B20_NOT_ACTIVATED",
       "KEEPER_NOT_LIVE",
       "NOT_FEE_RECIPIENT",
       "NO_HOLDER_REWARDS",
+      "BUILDER_LANE_NOT_ALLOWED",
+      "STALE_POLICY",
+      "API_KEY_OVERPRIVILEGED",
     ]) {
       expect(
         (LAUNCH_SDK_ERROR_CODES as readonly string[]).includes(gone),

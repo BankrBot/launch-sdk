@@ -14,20 +14,21 @@ import {
   bankrLaunchTokenAbi,
   creatorVestingEscrowAbi,
   holderRewardsDistributorAbi,
-} from "../abis/suite3.js";
+} from "../abis/generated.js";
 import type { FetchLike } from "../api.js";
 import { CONVERT_GAS } from "../conversion.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "../errors.js";
 import { HOLDER_CLAIM_ALL_GAS } from "../holderClaimAll.js";
 import { bucketIds } from "../lens.js";
-import { LAUNCHER, OTHER } from "../__internal__/fakeLaunch.js";
 import {
   COIN_LEG,
-  suite4PostLaunchFixture,
-} from "../__internal__/fakeSuite4Launch.js";
+  LAUNCHER,
+  OTHER,
+  postLaunchFixture,
+} from "../__internal__/fakeLaunch.js";
 
-// A client that names no suite reads a coin of the latest contracts: the ledger's packed pool terms, the hook
-// lens's longer pool record, the token's own link limit and the leg the coin froze at launch.
+// What a client reads of a launched coin: the ledger's packed pool terms, the hook lens's pool record, the token's
+// own link limit and the leg the coin froze at launch.
 
 const WAD = 10n ** 18n;
 const FLOOR = 2n * 10n ** 15n;
@@ -52,14 +53,14 @@ async function expectCode(p: Promise<unknown>, code: LaunchSdkErrorCode) {
 const ledgerCall = (data: Hex) =>
   decodeFunctionData({ abi: bankrFeeLedgerAbi, data });
 
-describe("launchInfo and tradingStatus on the latest contracts", () => {
+describe("launchInfo and tradingStatus", () => {
   test("launchInfo reads the pool's packed terms, the lens's record and the buckets by role", async () => {
-    const { client, s4, launch } = suite4PostLaunchFixture();
+    const { client, s4, launch } = postLaunchFixture();
     const l = launch({
       launcher: LAUNCHER,
       referrerBps: 250,
       creatorShares: [
-        { account: s4.suite.hook, sharesWad: 3n * 10n ** 17n },
+        { account: s4.deployment.hook, sharesWad: 3n * 10n ** 17n },
         { account: LAUNCHER, sharesWad: 7n * 10n ** 17n },
       ],
       decayShares: [{ account: LAUNCHER, sharesWad: WAD }],
@@ -71,7 +72,7 @@ describe("launchInfo and tradingStatus on the latest contracts", () => {
       poolId: l.poolId,
       quote: s4.quote,
       tokenIsCurrency0: l.tokenIsCurrency0,
-      hook: s4.suite.hook,
+      hook: s4.deployment.hook,
       launcher: LAUNCHER,
       launchpadId: 1n,
       distributor: l.distributor,
@@ -95,7 +96,7 @@ describe("launchInfo and tradingStatus on the latest contracts", () => {
       bankr: bucketIds.bankr(s4.quote),
     });
     expect(info.creatorShares.map((s) => [s.role, s.account])).toEqual([
-      ["autoLp", s4.suite.hook],
+      ["autoLp", s4.deployment.hook],
       ["creator", LAUNCHER],
     ]);
     expect(info.feeRecipients).toEqual([
@@ -105,7 +106,7 @@ describe("launchInfo and tradingStatus on the latest contracts", () => {
   });
 
   test("a coin without a decay split or a waiver reads so; a stranger is null", async () => {
-    const { client, launch } = suite4PostLaunchFixture();
+    const { client, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER });
     expect(await client.launchInfo(l.token)).toMatchObject({
       waived: false,
@@ -117,7 +118,7 @@ describe("launchInfo and tradingStatus on the latest contracts", () => {
   });
 
   test("tradingStatus holds the token's start to the latest block", async () => {
-    const { client, f, launch } = suite4PostLaunchFixture();
+    const { client, f, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER });
     l.setToken("tradingStart", 2_000n);
     f.fake.timestamp = 1_990n;
@@ -134,7 +135,7 @@ describe("launchInfo and tradingStatus on the latest contracts", () => {
 
 describe("fees on the latest contracts", () => {
   test("get and buildClaim: the recipient's shares and claimable by side, claimed from the ledger", async () => {
-    const { client, s4, launch } = suite4PostLaunchFixture();
+    const { client, s4, launch } = postLaunchFixture();
     const l = launch({
       launcher: LAUNCHER,
       decayShares: [{ account: LAUNCHER, sharesWad: WAD }],
@@ -157,7 +158,7 @@ describe("fees on the latest contracts", () => {
       decay: { sharesWad: WAD, claimableQuote: 9n },
     });
     const [tx] = await client.fees.buildClaim(l.token, LAUNCHER);
-    expect(tx).toMatchObject({ from: LAUNCHER, to: s4.suite.ledger });
+    expect(tx).toMatchObject({ from: LAUNCHER, to: s4.deployment.ledger });
     expect(ledgerCall(tx!.data)).toEqual({
       functionName: "collectFeesMany",
       args: [[creator, decay]],
@@ -169,7 +170,7 @@ describe("fees on the latest contracts", () => {
   });
 
   test("buildSetFeeRecipient reads the factory's own pointers, which hold no cap controller", async () => {
-    const { client, s4, launch } = suite4PostLaunchFixture();
+    const { client, s4, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER });
     const tx = await client.fees.buildSetFeeRecipient(l.token, LAUNCHER, OTHER);
     expect(ledgerCall(tx.data)).toEqual({
@@ -178,7 +179,7 @@ describe("fees on the latest contracts", () => {
     });
     // A contract of the launch itself could never claim.
     await expectCode(
-      client.fees.buildSetFeeRecipient(l.token, LAUNCHER, s4.suite.ledger),
+      client.fees.buildSetFeeRecipient(l.token, LAUNCHER, s4.deployment.ledger),
       "FEE_RECIPIENT_CANNOT_CLAIM",
     );
     await expectCode(
@@ -198,7 +199,7 @@ describe("fees on the latest contracts", () => {
         headers: { "content-type": "application/json" },
       });
     };
-    const { client, s4, launch } = suite4PostLaunchFixture({
+    const { client, s4, launch } = postLaunchFixture({
       api: { url: "https://api.test", fetch },
     });
     launch({ launcher: LAUNCHER });
@@ -216,14 +217,14 @@ describe("fees on the latest contracts", () => {
     answer.body = {
       chainId: 8453,
       account: OTHER,
-      ledger: s4.suite.ledger,
+      ledger: s4.deployment.ledger,
       balances: [],
       buckets: [bucket(1, s4.quote, "1000"), bucket(2, MEME, "900")],
       totalByQuote: [],
       bucketCount: 2,
     };
     const all = await client.fees.buildClaimAll(OTHER);
-    expect(urls[0]!.searchParams.get("ledger")).toBe(s4.suite.ledger);
+    expect(urls[0]!.searchParams.get("ledger")).toBe(s4.deployment.ledger);
     // The suite's quote is listed by its settings row; MEME has none and is left for includeUnlisted.
     expect(all.plan.unlisted).toEqual([{ quote: MEME, amount: 900n }]);
     expect(all.txs.map((t) => ledgerCall(t.data).args![1])).toEqual([
@@ -234,7 +235,7 @@ describe("fees on the latest contracts", () => {
 
 describe("holders on the latest contracts", () => {
   test("get and buildClaim read and pay through the coin's distributor", async () => {
-    const { client, s4, launch } = suite4PostLaunchFixture();
+    const { client, s4, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER });
     l.balances.set(OTHER.toLowerCase(), 500n);
     l.earned.set(`1:${OTHER.toLowerCase()}`, 7n);
@@ -258,7 +259,7 @@ describe("holders on the latest contracts", () => {
   });
 
   test("getConversion reads the pile at the coin's own leg: under its floor it waits, at it the wake and the poke are due", async () => {
-    const { client, f, s4, launch, setPile } = suite4PostLaunchFixture();
+    const { client, f, s4, launch, setPile } = postLaunchFixture();
     f.fake.timestamp = 1_000_000n;
     const l = launch({ launcher: LAUNCHER });
     setPile(l, FLOOR - 1n);
@@ -286,7 +287,9 @@ describe("holders on the latest contracts", () => {
     });
     // Every read of the pile went to the coin's leg, none to the one the record names for new launches.
     expect(f.fake.calls.some((c) => c.to === COIN_LEG)).toBe(true);
-    expect(f.fake.calls.some((c) => c.to === s4.suite.holderLeg)).toBe(false);
+    expect(f.fake.calls.some((c) => c.to === s4.deployment.holderLeg)).toBe(
+      false,
+    );
     // The pool's terms are read once a call: the leg's id comes with the launch's record.
     f.fake.calls.length = 0;
     await client.holders.getConversion(l.token);
@@ -294,7 +297,7 @@ describe("holders on the latest contracts", () => {
   });
 
   test("getConversion: a spent window waits until it reopens; a staged pile past the leg's stale period forwards", async () => {
-    const { client, f, leg, launch, setPile } = suite4PostLaunchFixture();
+    const { client, f, leg, launch, setPile } = postLaunchFixture();
     f.fake.timestamp = 1_000_000n;
     const l = launch({ launcher: LAUNCHER });
     setPile(l, FLOOR);
@@ -319,7 +322,7 @@ describe("holders on the latest contracts", () => {
   });
 
   test("buildConvert pokes the coin's own leg at the convert action's gas", async () => {
-    const { client, launch } = suite4PostLaunchFixture();
+    const { client, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER });
     const tx = await client.holders.buildConvert(l.token, OTHER);
     expect(tx).toMatchObject({ from: OTHER, to: COIN_LEG, gas: CONVERT_GAS });
@@ -329,7 +332,7 @@ describe("holders on the latest contracts", () => {
   });
 
   test("a pool whose holders' bucket names no leg is not a launch: no pile is read at the record's leg in its place", async () => {
-    const { client, f, s4, launch } = suite4PostLaunchFixture();
+    const { client, f, s4, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER });
     l.earned.set(`1:${OTHER.toLowerCase()}`, 7n);
     l.shares.delete(`${bucketIds.holders(l.poolId)}:${COIN_LEG.toLowerCase()}`);
@@ -338,11 +341,13 @@ describe("holders on the latest contracts", () => {
       "NOT_A_LAUNCH",
     );
     await expectCode(client.holders.getConversion(l.token), "NOT_A_LAUNCH");
-    expect(f.fake.calls.some((c) => c.to === s4.suite.holderLeg)).toBe(false);
+    expect(f.fake.calls.some((c) => c.to === s4.deployment.holderLeg)).toBe(
+      false,
+    );
   });
 
   test("buildClaimAll claims each coin and pokes a due pile at the coin's own leg", async () => {
-    const { client, launch, setPile } = suite4PostLaunchFixture();
+    const { client, launch, setPile } = postLaunchFixture();
     const earning = launch({
       launcher: LAUNCHER,
       salt: keccak256(toHex("earning")),
@@ -387,7 +392,7 @@ describe("holders on the latest contracts", () => {
 
 describe("vesting and the metadata link on the latest contracts", () => {
   test("vesting reads the escrow's schedules and releases the creator's", async () => {
-    const { client, launch } = suite4PostLaunchFixture();
+    const { client, launch } = postLaunchFixture();
     const l = launch({
       launcher: LAUNCHER,
       schedules: [
@@ -424,7 +429,7 @@ describe("vesting and the metadata link on the latest contracts", () => {
   });
 
   test("the metadata link's limit is the coin's own, read from the token", async () => {
-    const { client, launch } = suite4PostLaunchFixture();
+    const { client, launch } = postLaunchFixture();
     const l = launch({ launcher: LAUNCHER, metadataAdmin: LAUNCHER });
     expect(await client.metadataAdmin.get(l.token)).toEqual({
       token: l.token,
@@ -453,7 +458,7 @@ describe("vesting and the metadata link on the latest contracts", () => {
     expect(isLaunchSdkError(typed, "INVALID_PARAMS")).toBe(true);
     expect(typed.detail).toContain("string");
     expect(typed.detail).not.toContain("bytes");
-    // A coin whose launchpad allowed a longer link than the earlier contracts' 2,048 bytes takes one.
+    // A coin whose launchpad allowed a longer link than the template's 2,048 bytes takes one.
     l.setToken("metadataMaxBytes", 4_096);
     const long = await client.metadataAdmin.buildSetUri(
       l.token,
@@ -464,46 +469,19 @@ describe("vesting and the metadata link on the latest contracts", () => {
   });
 });
 
-describe("the calls a default client refuses say what to use, and never name a suite", () => {
-  test("launchpad(), quotes() and the old pad builders point at the settings accessor", async () => {
-    const { client } = suite4PostLaunchFixture();
-    for (const [call, instead] of [
-      [client.launchpad(1n), "client.contracts().settings.pad(id)"],
-      [client.quotes(), "client.contracts().settings.quotes()"],
-      [client.launchpads.setSigner(1n, OTHER), "client.contracts().launchpads"],
-    ] as const) {
-      const err = (await codeOf(call)) as { detail?: string };
-      expect(isLaunchSdkError(err, "PROVIDER_NOT_DEPLOYED")).toBe(true);
-      expect(err.detail).toContain(instead);
-      expect(err.detail).not.toMatch(/suite/i);
-    }
+describe("what this SDK version leaves out is said in plain words", () => {
+  test("a launchpad's terms and a chain's quotes are read in one place: client.contracts()", () => {
+    const { client } = postLaunchFixture();
+    for (const gone of ["launchpad", "launchpads", "quotes"])
+      expect(gone in client, gone).toBe(false);
+    const { settings, launchpads } = client.contracts();
+    expect(typeof settings.pad).toBe("function");
+    expect(typeof settings.quotes).toBe("function");
+    expect(typeof launchpads.register).toBe("function");
   });
 
-  test("API mode is refused in plain words when the client is built, before anything is planned", async () => {
-    const err = (await codeOf(
-      Promise.resolve().then(() =>
-        suite4PostLaunchFixture({
-          fork: true,
-          api: {
-            url: "https://api.test",
-            preparer: async () => {
-              throw new Error("never asked");
-            },
-          },
-        }),
-      ),
-    )) as { detail?: string };
-    expect(isLaunchSdkError(err, "PROVIDER_NOT_DEPLOYED")).toBe(true);
-    // The index alone (no preparer) still builds: registration works on these contracts.
-    expect(
-      suite4PostLaunchFixture({ api: { url: "https://api.test" } }).client,
-    ).toBeDefined();
-    expect(err.detail).toContain("api.preparer");
-    expect(err.detail).not.toMatch(/suite|go-live|prepare route/i);
-  });
-
-  test("Bankr's own launchpad in pure mode: the refusal says to name another launchpad, not to use the API", async () => {
-    const { client } = suite4PostLaunchFixture({ fork: true });
+  test("Bankr's own launchpad: the refusal says to name another launchpad, not to use the API", async () => {
+    const { client } = postLaunchFixture({ fork: true });
     const err = (await codeOf(
       client.plan({
         launcher: LAUNCHER,

@@ -1,7 +1,7 @@
 /**
- * Register a launchpad of your own on Bankr's contracts, set its parameters, and launch a coin on it, in pure
- * mode: no key and no call to Bankr. The operator's wallet sends three transactions: the registration (it pays the
- * registry's bond), one `configure`, and the launch.
+ * Register a launchpad of your own on Bankr's contracts, set its parameters, and launch a coin on it: no key and no
+ * call to Bankr. The operator's wallet sends three transactions: the registration (it pays the registry's bond), one
+ * `configure`, and the launch.
  *
  *   OPERATOR_KEYSTORE=~/.foundry/keystores/operator KEYSTORE_PASSWORD=… bun examples/own-launchpad.ts
  *

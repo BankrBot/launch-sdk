@@ -31,26 +31,24 @@ import {
   knobInForce,
   type CoinTerms,
   type KnobName,
-  type Suite4LaunchState,
+  type LaunchState,
 } from "./settings.js";
 
-// What a suite 4 plan settles before the chain's launch check: the pad's default economics, the start tick, the
+// What a plan settles before the chain's launch check: the pad's default economics, the start tick, the
 // factory's and the pad's gates on the quote, and (after it) the claim operator a takeover coin's contract recipient
-// needs. Vendored from core's launchParamsSuite4.ts and prepareLaunchSuite4Checks.ts.
+// needs. Vendored from core's bankr-v4 launch preparation.
 
 const PRICING = ["none", "chainlink", "signed"] as const;
 
-/** A plan's context on a suite 4 record: its settings contract is named. */
-export type Suite4PlanContext<C extends LaunchChain = LaunchChain> =
-  PlanContext<C> & {
-    addresses: PlanContext<C>["addresses"] & { settings: Address };
-  };
+/** A plan's context. */
+export type LaunchPlanContext<C extends LaunchChain = LaunchChain> =
+  PlanContext<C>;
 
-type Ctx<C extends LaunchChain> = Suite4PlanContext<C>;
+type Ctx<C extends LaunchChain> = LaunchPlanContext<C>;
 
-/** The launch's economics on a suite 4 pad: what it names, and for the rest the pad's default as the owner's limits
+/** The launch's economics on a pad: what it names, and for the rest the pad's default as the owner's limits
  *  leave it. A pad's opening fee applies with its default decay; with either missing the fee is flat. */
-export function suite4Economics(
+export function economicsOf(
   n: Pick<
     NormalizedLaunch,
     | "schedule"
@@ -61,7 +59,7 @@ export function suite4Economics(
     | "vestToHolders"
     | "chain"
   >,
-  s: Pick<Suite4LaunchState, "pad" | "limits">,
+  s: Pick<LaunchState, "pad" | "limits">,
 ): LaunchEconomics {
   const dflt = (knob: KnobName) => Number(knobInForce(s, knob).dflt);
   const steadyPips = dflt("steadyPips");
@@ -99,14 +97,14 @@ export function suite4Economics(
 }
 
 /**
- * The start tick on suite 4. An unlisted quote's comes from `startFdv` alone: the launcher prices it, and the curve
+ * The start tick. An unlisted quote's comes from `startFdv` alone: the launcher prices it, and the curve
  * and the launch check decide whether it launches. A listed quote's sits in the pad's USD window at the quote's
  * price (`settings.startTickBounds`): `startFdv`'s, the start the launch's curve names, or the pad's default.
  */
-export async function placeSuite4StartTick(
+export async function placeStartTick(
   ctx: Ctx<LaunchChain>,
   n: Pick<NormalizedLaunch, "startFdv" | "curve" | "launchpadId">,
-  s: Suite4LaunchState,
+  s: LaunchState,
   quote: Pick<QuoteToken, "address" | "listed">,
   supply: bigint | undefined,
 ): Promise<StartTick> {
@@ -205,10 +203,10 @@ export async function placeSuite4StartTick(
 }
 
 /** The pad's and the factory's gates, and the quote as this launch may use it. */
-export async function suite4Quote<C extends LaunchChain>(
+export async function launchQuote<C extends LaunchChain>(
   ctx: Ctx<C>,
   n: NormalizedLaunch<C>,
-  s: Suite4LaunchState,
+  s: LaunchState,
 ): Promise<QuoteToken> {
   const chain = ctx.chain.chain;
   const refuse = (code: CodeOfKind<"refused">, detail?: string): never => {
@@ -247,12 +245,7 @@ export async function suite4Quote<C extends LaunchChain>(
       "INVALID_PARAMS",
       "The quote's decimals() cannot be read, or is above 36: it is not an ERC-20 the launch can use.",
     );
-  return quoteToken(
-    ctx.chain,
-    n.quote,
-    { listed, padAllows: true, pricing, decimals },
-    s.weth,
-  );
+  return quoteToken(ctx.chain, n.quote, { listed, pricing, decimals }, s.weth);
 }
 
 /**
@@ -267,7 +260,7 @@ export async function requireClaimOperators<C extends LaunchChain>(
   terms: CoinTerms,
 ): Promise<void> {
   if (!terms.takeover) return;
-  const operator = n.suite4?.claimOperator;
+  const operator = n.choices.claimOperator;
   const l = { address: ledger, abi: bankrFeeLedgerAbi } as const;
   await Promise.all(
     n.feeRecipients.map(async ({ recipient }) => {

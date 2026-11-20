@@ -4,12 +4,10 @@ import {
   BankrApiResponseError,
   DEFAULT_BANKR_API_URL,
   createBankrApi,
-  remotePreparer,
   type AccountFeesResponse,
   type FetchLike,
   type LaunchPage,
   type LaunchpadStats,
-  type PrepareRequest,
   type RegisterResult,
 } from "./api.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
@@ -64,17 +62,6 @@ async function expectCode(
   const err = await rejection(promise);
   expect(isLaunchSdkError(err, code), `${code}, got ${String(err)}`).toBe(true);
   return err;
-}
-
-/** Runs `fn` with `window` and `document` defined, as a browser bundle sees them. */
-function inBrowser<T>(fn: () => T): T {
-  Object.assign(globalThis, { window: {}, document: {} });
-  try {
-    return fn();
-  } finally {
-    Reflect.deleteProperty(globalThis, "window");
-    Reflect.deleteProperty(globalThis, "document");
-  }
 }
 
 const PAGE: LaunchPage = {
@@ -302,19 +289,6 @@ describe("API errors", () => {
     expect(cause.retryAfterSeconds).toBe(42);
   });
 
-  test("403 API_KEY_OVERPRIVILEGED keeps its code", async () => {
-    const { fetch } = fakeFetch(() =>
-      json(403, {
-        error: "Key can move funds.",
-        code: "API_KEY_OVERPRIVILEGED",
-      }),
-    );
-    await expectCode(
-      createBankrApi({ fetch }).register("arbitrum", TX_HASH),
-      "API_KEY_OVERPRIVILEGED",
-    );
-  });
-
   test("any other failure is API_ERROR with a fixed message; the server's text and code ride on the cause", async () => {
     const { fetch } = fakeFetch(() =>
       json(409, {
@@ -352,98 +326,15 @@ describe("API errors", () => {
   });
 });
 
-const REQUEST: PrepareRequest = {
-  chain: "arbitrum",
-  launcher: "0x1111111111111111111111111111111111111111",
-  name: "Launch",
-  symbol: "LNCH",
-};
-
-describe("remotePreparer", () => {
-  test("POSTs the prepare request to the builder's endpoint with the caller's init", async () => {
-    const { fetch, calls } = fakeFetch(() => json(200, { stub: true }));
-    const prepare = remotePreparer(
-      "/api/launch/prepare",
-      { credentials: "include", headers: { "x-csrf": "t" } },
-      { fetch },
-    );
-    // The shape is checked here; the launch client verifies the rest against its own plan.
-    await expectCode(prepare(REQUEST), "API_ERROR");
-    expect(calls[0]!.url.pathname).toBe("/api/launch/prepare");
-    expect(calls[0]!.init?.method).toBe("POST");
-    expect(calls[0]!.init?.credentials).toBe("include");
-    const headers = new Headers(calls[0]!.init?.headers);
-    expect(headers.get("x-csrf")).toBe("t");
-    expect(headers.get("content-type")).toBe("application/json");
-    expect(calls[0]!.body).toEqual(REQUEST);
-  });
-
-  test("maps the endpoint's errors like Bankr's: 429, an over-privileged key, anything else", async () => {
-    const cases: [Response, LaunchSdkErrorCode][] = [
-      [
-        json(429, { error: "Slow down.", code: "RATE_LIMITED" }),
-        "RATE_LIMITED",
-      ],
-      [
-        json(502, { error: "x", code: "API_KEY_OVERPRIVILEGED" }),
-        "API_KEY_OVERPRIVILEGED",
-      ],
-      [
-        json(422, {
-          error: "The launch would revert.",
-          code: "API_ERROR",
-          apiCode: "LAUNCH_V3_SIMULATION",
-        }),
-        "API_ERROR",
-      ],
-    ];
-    for (const [res, code] of cases) {
-      const { fetch } = fakeFetch(() => res);
-      const err = (await expectCode(
-        remotePreparer("/p", {}, { fetch })(REQUEST),
-        code,
-      )) as Error;
-      if (code === "API_ERROR") {
-        expect((err.cause as BankrApiResponseError).code).toBe(
-          "LAUNCH_V3_SIMULATION",
-        );
-      }
-    }
-  });
-
-  test("API_KEY_IN_BROWSER: a Bankr key in a browser's request headers", () => {
-    const keyHeaders: HeadersInit[] = [
-      { "x-api-key": "bk_usr_abc" },
-      { authorization: "Bearer bk_usr_abc" },
-      // Bankr also reads a key sent with no scheme.
-      { authorization: "bk_usr_abc" },
-    ];
-    for (const headers of keyHeaders) {
-      let thrown: unknown;
-      try {
-        inBrowser(() => remotePreparer("https://api.bankr.bot/x", { headers }));
-      } catch (err) {
-        thrown = err;
-      }
-      expect(isLaunchSdkError(thrown, "API_KEY_IN_BROWSER")).toBe(true);
-      // A server may send it to its own endpoint.
-      expect(typeof remotePreparer("/p", { headers })).toBe("function");
-    }
-    // A browser's own session auth is fine.
-    expect(
-      typeof inBrowser(() =>
-        remotePreparer("/p", { headers: { authorization: "Bearer session" } }),
-      ),
-    ).toBe("function");
-  });
-});
-
 describe("the root entry", () => {
-  test("exports the API client and remotePreparer, never the server-only key helpers", () => {
+  test("exports the API client, and nothing that prepares a launch through Bankr's API", () => {
     const exported = Object.keys(sdk);
     expect(exported).toContain("createBankrApi");
-    expect(exported).toContain("remotePreparer");
-    expect(exported).not.toContain("createPrepareHandler");
-    expect(exported).not.toContain("bankrPreparer");
+    for (const gone of [
+      "remotePreparer",
+      "createPrepareHandler",
+      "bankrPreparer",
+    ])
+      expect(exported, gone).not.toContain(gone);
   });
 });

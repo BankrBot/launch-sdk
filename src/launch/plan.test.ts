@@ -1,10 +1,10 @@
-// A suite 4 launch against the fake suite, whose settings contract runs the launch check over a state the test
-// holds: the pad's own parameters are what the coin freezes, and nothing of a pad or of the owner is typed here.
+// A launch against fake contracts whose settings contract runs the launch check over a state the test holds: the
+// pad's own parameters are what the coin freezes, and nothing of a pad or of the owner is typed here.
 import { describe, expect, test } from "bun:test";
 import { getAddress } from "viem";
 import { base } from "viem/chains";
 import { FakeChain } from "../__internal__/fakeRpc.js";
-import { installSuite4 } from "../__internal__/fakeSuite4.js";
+import { installContracts } from "../__internal__/fakeContracts.js";
 import { createLaunchClient } from "../client.js";
 import { isLaunchSdkError } from "../errors.js";
 import type { LaunchInput } from "../providers/types.js";
@@ -14,10 +14,10 @@ import { KNOB, PAD_FLAG } from "./settings.js";
 const LAUNCHER = getAddress("0x1111111111111111111111111111111111111111");
 
 function fixture() {
-  const f = installSuite4(new FakeChain(base));
+  const f = installContracts(new FakeChain(base));
   const client = createLaunchClient({
     chain: "base",
-    addresses: f.suite,
+    addresses: f.deployment,
     publicClient: f.fake.publicClient(),
     fork: true,
   });
@@ -144,7 +144,7 @@ describe("a launch on a launchpad of your own", () => {
     f.state.pad!.flags &= ~PAD_FLAG.devBuy;
     const off = createLaunchClient({
       chain: "base",
-      addresses: f.suite,
+      addresses: f.deployment,
       publicClient: f.fake.publicClient(),
       fork: true,
     });
@@ -171,15 +171,15 @@ describe("a launch on a launchpad of your own", () => {
     };
     expect(await codeOf(client.simulate(plan))).toBe("TERMS_CHANGED");
     const again = await client.plan(input());
-    expect(again.resolved!.terms.bankrFeeBps).toBe(1_100);
-    expect(again.resolved!.resolvedHash).not.toBe(plan.resolved!.resolvedHash);
+    expect(again.resolved.terms.bankrFeeBps).toBe(1_100);
+    expect(again.resolved.resolvedHash).not.toBe(plan.resolved.resolvedHash);
   });
 
-  test("a suite 4 this SDK version does not ship launches only as a fork", async () => {
-    const f = installSuite4(new FakeChain(base));
+  test("a deployment this SDK version does not ship launches only as a fork", async () => {
+    const f = installContracts(new FakeChain(base));
     const client = createLaunchClient({
       chain: "base",
-      addresses: f.suite,
+      addresses: f.deployment,
       publicClient: f.fake.publicClient(),
     });
     expect((await client.status()).deployed).toBe(false);
@@ -193,46 +193,7 @@ describe("a launch on a launchpad of your own", () => {
     expect(await codeOf(plan)).toBe("PROVIDER_NOT_DEPLOYED");
   });
 
-  test("suite 3's launchpad builders refuse by name on a suite 4 client, each one, and name suite 4's", async () => {
-    const { f, client } = fixture();
-    const suite3 = createLaunchClient({
-      chain: "base",
-      suite: 3,
-      publicClient: new FakeChain(base).publicClient(),
-    });
-    const names = Object.keys(suite3.launchpads).sort();
-    expect(Object.keys(client.launchpads).sort()).toEqual(names);
-    expect(names).toHaveLength(14);
-    const refusal = async (name: string) => {
-      const builder = (
-        client.launchpads as unknown as Record<
-          string,
-          (...args: unknown[]) => unknown
-        >
-      )[name]!;
-      // Promise.resolve().then: the one synchronous builder throws, the others reject.
-      const err: unknown = await Promise.resolve()
-        .then(() => builder(f.padId, {}))
-        .then(
-          () => null,
-          (e: unknown) => e,
-        );
-      return isLaunchSdkError(err) ? `${err.code}: ${err.detail}` : String(err);
-    };
-    for (const name of names) {
-      const said = await refusal(name);
-      expect(said, name).toStartWith("PROVIDER_NOT_DEPLOYED");
-      expect(said, name).toContain(`client.launchpads.${name}()`);
-      expect(said, name).toContain("client.contracts().launchpads");
-    }
-    // Nothing was read: suite 3's registry ABI never meets suite 4's registry.
-    expect(f.fake.calls.length).toBe(0);
-    expect(() =>
-      client.launchpads.launchpadIdFromReceipt({ logs: [] } as never),
-    ).toThrow();
-  });
-
-  test("the settings by name are on the client, and a suite 3 client has none", async () => {
+  test("the contracts by name are on the client", () => {
     const { client } = fixture();
     expect(Object.keys(client.contracts()).sort()).toEqual([
       "coinTerms",
@@ -241,12 +202,5 @@ describe("a launch on a launchpad of your own", () => {
       "owner",
       "settings",
     ]);
-    const suite3 = createLaunchClient({
-      chain: "base",
-      suite: 3,
-      publicClient: new FakeChain(base).publicClient(),
-    });
-    const refused = codeOf(Promise.resolve().then(() => suite3.contracts()));
-    expect(await refused).toBe("PROVIDER_NOT_DEPLOYED");
   });
 });

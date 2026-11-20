@@ -1,7 +1,7 @@
 import type { LaunchSdkErrorCode } from "../errors.js";
 import { KNOB, PAD_FLAG, type KnobName, type PadFlagName } from "./settings.js";
 
-// What suite 4's launch check says when it refuses a launch, in words, vendored from core's bankr-v4
+// What the contracts' launch check says when it refuses a launch, in words, vendored from core's bankr-v4
 // launchRefusal.ts (src/__internal__ holds every sentence equal). The settings contract reverts with the knob, flag
 // or bound and the numbers in force: the sentence is built from those arguments, never from a figure typed here.
 
@@ -511,7 +511,7 @@ const PLAIN: Record<string, [string, LaunchSdkErrorCode]> = {
   ],
 };
 
-/** Every error a suite 4 launch can be refused with that has a sentence. */
+/** Every error a launch can be refused with that has a sentence. */
 export const LAUNCH_REFUSALS: readonly string[] = [
   "OutsideLaunchpadRange",
   "NotAllowedByLaunchpad",
@@ -527,7 +527,7 @@ export interface LaunchRefusal {
 }
 
 /**
- * The SDK code and sentence for a refused suite 4 launch, from the error's name and arguments (`resolve`'s, the
+ * The SDK code and sentence for a refused launch, from the error's name and arguments (`resolve`'s, the
  * factory's, the hook's or the pad registry's); null for an error that is no launch refusal. Without its arguments an
  * error that carries numbers reads as its general sentence.
  */

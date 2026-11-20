@@ -8,35 +8,31 @@ import {
   type TransactionReceipt,
 } from "viem";
 import {
-  bankrFeeLedgerAbi as suite4LedgerAbi,
-  bankrLaunchFactoryAbi as suite4FactoryAbi,
-} from "./abis/generated.js";
-import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   bankrLaunchTokenAbi,
-} from "./abis/suite3.js";
+} from "./abis/generated.js";
 import type { ProviderAddresses } from "./addresses.js";
 import type { LaunchChain } from "./chains/index.js";
 import { launchCurveAt } from "./curve.js";
 import { LaunchExecutionError } from "./errors.js";
 import { bucketIds, creatorRecipientsOf } from "./lens.js";
 import type { LaunchResult } from "./providers/types.js";
-import { decodeCoinTerms } from "./suite4/settings.js";
+import { decodeCoinTerms } from "./launch/settings.js";
 
 /**
- * The launch in a mined receipt, from the `TokenLaunched` and `LaunchResolved` logs this chain's factory emitted, the
- * creator bucket its ledger registered and the token's own first log. Each log is matched by its emitter, so a copied
+ * The launch in a mined receipt, from the `TokenLaunched`, `LaunchResolved` and `CoinTermsFrozen` logs this chain's
+ * factory emitted, the creator bucket its ledger registered and the token's own first log. Each log is matched by its emitter, so a copied
  * or bundled call can never be attributed to the wrong launch. `RECEIPT_MISSING_LAUNCH` when there is no such launch,
  * or several and no `expectedToken` to choose.
  */
 export function parseLaunchReceipt<C extends LaunchChain>(
-  suite: Pick<ProviderAddresses, "factory" | "ledger" | "settings">,
+  record: Pick<ProviderAddresses, "factory" | "ledger">,
   chain: C,
   receipt: TransactionReceipt,
   expectedToken?: Address,
 ): LaunchResult<C> {
-  const { factory } = suite;
+  const { factory } = record;
   const missing = () =>
     new LaunchExecutionError("RECEIPT_MISSING_LAUNCH", { chain });
   const logs = receipt.logs.filter((log) => !log.removed);
@@ -55,45 +51,23 @@ export function parseLaunchReceipt<C extends LaunchChain>(
   const ofLaunch = (log: { address: Address; args: { token: Address } }) =>
     isAddressEqual(log.address, factory) &&
     isAddressEqual(log.args.token, launch.args.token);
-  // Suite 4's LaunchResolved carries no share or supply: the coin's record, CoinTermsFrozen, does. Paired by
-  // emitter and token, never by position (it is logged before the pool initialises and before TokenLaunched).
-  const suite4 = suite.settings !== undefined;
-  const frozen = suite4
-    ? parseEventLogs({
-        abi: suite4FactoryAbi,
-        eventName: "CoinTermsFrozen",
-        logs,
-        strict: true,
-      }).find(ofLaunch)
-    : undefined;
-  if (
-    suite4 &&
-    (!frozen || keccak256(frozen.args.terms) !== frozen.args.termsHash)
-  )
+  // LaunchResolved carries no share or supply: the coin's record, CoinTermsFrozen, does. Paired by emitter and
+  // token, never by position (it is logged before the pool initialises and before TokenLaunched).
+  const frozen = parseEventLogs({
+    abi: bankrLaunchFactoryAbi,
+    eventName: "CoinTermsFrozen",
+    logs,
+    strict: true,
+  }).find(ofLaunch);
+  if (!frozen || keccak256(frozen.args.terms) !== frozen.args.termsHash)
     throw missing();
-  const terms = frozen ? decodeCoinTerms(frozen.args.terms) : null;
-  const resolved = terms
-    ? parseEventLogs({
-        abi: suite4FactoryAbi,
-        eventName: "LaunchResolved",
-        logs,
-        strict: true,
-      })
-        .filter(ofLaunch)
-        .map(({ args }) => ({
-          args: {
-            ...args,
-            holdersBps: terms.holdersBps,
-            vestBps: terms.vestBps,
-            totalSupply: terms.totalSupply,
-          },
-        }))[0]
-    : parseEventLogs({
-        abi: bankrLaunchFactoryAbi,
-        eventName: "LaunchResolved",
-        logs,
-        strict: true,
-      }).find(ofLaunch);
+  const terms = decodeCoinTerms(frozen.args.terms);
+  const resolved = parseEventLogs({
+    abi: bankrLaunchFactoryAbi,
+    eventName: "LaunchResolved",
+    logs,
+    strict: true,
+  }).find(ofLaunch);
   if (!resolved) throw missing();
   const scheduled = parseEventLogs({
     abi: bankrLaunchFactoryAbi,
@@ -105,7 +79,7 @@ export function parseLaunchReceipt<C extends LaunchChain>(
   // The ledger logs the creator bucket's entries, then each entry's creator part beside them, on every pad.
   const creatorId = bucketIds.creator(launch.args.poolId);
   const ofBucket = (log: { address: Address; args: { bucketId: string } }) =>
-    isAddressEqual(log.address, suite.ledger) &&
+    isAddressEqual(log.address, record.ledger) &&
     log.args.bucketId.toLowerCase() === creatorId;
   const bucket = parseEventLogs({
     abi: bankrFeeLedgerAbi,
@@ -113,9 +87,8 @@ export function parseLaunchReceipt<C extends LaunchChain>(
     logs,
     strict: true,
   }).find(ofBucket);
-  // Suite 4's CreatorShares also carries the bucket's takeover clock: another topic, the same shares.
   const parts = parseEventLogs({
-    abi: suite4 ? suite4LedgerAbi : bankrFeeLedgerAbi,
+    abi: bankrFeeLedgerAbi,
     eventName: "CreatorShares",
     logs,
     strict: true,
@@ -170,14 +143,14 @@ export function parseLaunchReceipt<C extends LaunchChain>(
     ),
     tradingStart: scheduled ? Number(scheduled.args.startTime) : null,
     curve,
-    holdersBps: r.holdersBps,
+    holdersBps: terms.holdersBps,
     distributor: getAddress(r.distributor),
     escrow: isAddressEqual(r.vestingEscrow, zeroAddress)
       ? null
       : getAddress(r.vestingEscrow),
     vestingRecipient: getAddress(r.vestingRecipient),
-    vestBps: r.vestBps,
-    totalSupply: r.totalSupply,
+    vestBps: terms.vestBps,
+    totalSupply: terms.totalSupply,
     devBuyOut: r.devBuyOut,
   };
 }

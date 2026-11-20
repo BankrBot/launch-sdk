@@ -1,16 +1,16 @@
 import type { Address } from "viem";
 import type { LaunchChain } from "../chains/index.js";
 import { LaunchRefusedError } from "../errors.js";
-import type { Suite4Choices } from "./input.js";
+import type { LaunchChoices } from "./input.js";
 import type { LaunchOptionsInput } from "./options.js";
 import {
   flagInForce,
   knobInForce,
   type KnobName,
-  type Suite4LaunchState,
+  type LaunchState,
 } from "./settings.js";
 
-// A suite 4 launch's option groups against the features it has, each group whole: a term left out of a group takes
+// A launch's option groups against the features it has, each group whole: a term left out of a group takes
 // the pad's default, and an option for a feature the launch leaves off is refused by name, never dropped.
 
 /** What the launch's own fields and its pad say of the features an option belongs to. */
@@ -27,9 +27,9 @@ export interface FeatureState {
  * in force. An option for a feature the launch leaves off is `OPTION_FOR_FEATURE_OFF`, naming it: the chain would
  * refuse it with no argument (`InvalidOptions`), and dropping it would launch other terms than the caller asked for.
  */
-export function suite4OptionsOf(
-  c: Suite4Choices,
-  s: Pick<Suite4LaunchState, "pad" | "limits" | "allowedFlags">,
+export function featureOptionsOf(
+  c: LaunchChoices,
+  s: Pick<LaunchState, "pad" | "limits" | "allowedFlags">,
   f: FeatureState,
   chain?: LaunchChain,
 ): LaunchOptionsInput {
@@ -90,9 +90,9 @@ export function suite4OptionsOf(
  * and the owner allow exemptions now: sent for a feature that is off they would refuse the launch. A list the
  * caller named is never dropped: with no cap it is `OPTION_FOR_FEATURE_OFF`, on a closed pad `NOT_ALLOWED_BY_LAUNCHPAD`.
  */
-export function suite4CapExclusions(
-  c: Pick<Suite4Choices, "walletCap" | "capExclusions">,
-  s: Pick<Suite4LaunchState, "pad" | "limits" | "allowedFlags">,
+export function launchCapExclusions(
+  c: Pick<LaunchChoices, "walletCap" | "capExclusions">,
+  s: Pick<LaunchState, "pad" | "limits" | "allowedFlags">,
   settlers: readonly Address[],
   chain?: LaunchChain,
 ): readonly Address[] {

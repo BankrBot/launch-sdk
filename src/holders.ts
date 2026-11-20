@@ -9,7 +9,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { readContract } from "viem/actions";
-import { holderRewardsDistributorAbi } from "./abis/suite3.js";
+import { holderRewardsDistributorAbi } from "./abis/generated.js";
 import { LaunchRefusedError } from "./errors.js";
 import {
   HOLDER_GAS,
@@ -17,14 +17,11 @@ import {
   unclaimedHolderCoins,
   type HolderClaimAll,
 } from "./holderClaimAll.js";
-import { requireLaunch, type SuiteReadContext } from "./lens.js";
+import { requireLaunch, type ReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";
 import { requireAddress } from "./recipient.js";
-import {
-  buildConvertTx,
-  readHolderConversion,
-  type HolderConversion,
-} from "./conversion.js";
+import { buildConvertTx, type HolderConversion } from "./conversion.js";
+import { readHolderConversion } from "./launch/holderPiles.js";
 import { buildCallTx } from "./tx.js";
 
 /**
@@ -71,7 +68,7 @@ export interface HolderRewardState {
   distributor: Address;
   /** The account's token balance: what earns. */
   balance: bigint;
-  /** Excluded accounts (suite contracts, the escrow, anyone who called `excludeSelf`) earn nothing. */
+  /** Excluded accounts (Bankr's launch contracts, the escrow, anyone who called `excludeSelf`) earn nothing. */
   excluded: boolean;
   legs: Record<HolderLeg, HolderLegState>;
   /** The BNKR leg's open epoch, and the token it hands over to once its old token's last day ends (null when steady). */
@@ -131,9 +128,9 @@ export interface LaunchHolders {
   ): Promise<UnsignedTx>;
   /**
    * Whether the launch's holders' pile is due (Q4): the quote's conversion to BNKR is open, or the pile forwards in
-   * quote. `options.now` is the chain's time in Unix seconds (default the latest block's; on the earlier contracts,
-   * the clock's). The pile is read at the holder leg of the coin's own launch. Only a swap whose hookData asks for
-   * the wake and that carries its gas runs it; {@link LaunchHolders.buildConvert} runs it for anyone.
+   * quote. `options.now` is the chain's time in Unix seconds (default the latest block's). The pile is read at the
+   * holder leg of the coin's own launch. Only a swap whose hookData asks for the wake and that carries its gas runs
+   * it; {@link LaunchHolders.buildConvert} runs it for anyone.
    */
   getConversion(
     token: Address,
@@ -146,8 +143,8 @@ export interface LaunchHolders {
   buildConvert(token: Address, sender: Address): Promise<UnsignedTx>;
 }
 
-/** The holders namespace for one chain's suite. */
-export function createHolders(ctx: SuiteReadContext): LaunchHolders {
+/** The holders namespace for one chain's contracts. */
+export function createHolders(ctx: ReadContext): LaunchHolders {
   const chain = ctx.chain.chain;
   const { client } = ctx;
   const abi = holderRewardsDistributorAbi;

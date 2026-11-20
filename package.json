@@ -1,7 +1,7 @@
 {
   "name": "@bankr/launch-sdk",
   "version": "1.0.0-alpha.0",
-  "description": "Run your own launchpad on Bankr's Uniswap v4 hook with your own parameters, and launch tokens on it from your own wallet, with fees to holders and every launch indexed by Bankr.",
+  "description": "Run your own launchpad on Bankr's Uniswap v4 hook with your own parameters, and launch tokens on it from your own wallet, with fees to holders, on Base, Robinhood, Arbitrum, Arc, Ethereum and BNB Chain.",
   "type": "module",
   "license": "MIT",
   "author": "Bankr",
@@ -22,6 +22,9 @@
     "base",
     "robinhood",
     "arbitrum",
+    "arc",
+    "ethereum",
+    "bnb",
     "viem"
   ],
   "engines": {

@@ -44,7 +44,7 @@ export type HolderLegRoute = LegView<"routes">[number] & {
 /** One holder leg generation, read by its views. */
 export interface HolderLegInfo {
   leg: Address;
-  /** The ledger's id for the leg, from 1; 0: not a leg of this suite. */
+  /** The ledger's id for the leg, from 1; 0: not a leg of these contracts. */
   legId: number;
   /** The factory names this leg for launches from now on. */
   current: boolean;
@@ -82,7 +82,7 @@ export interface HolderLegs {
   ): Promise<UnsignedTx>;
 }
 
-/** Holder legs per generation and per coin, for one chain's suite. */
+/** Holder legs per generation and per coin, for one chain's contracts. */
 export function createHolderLegs(ctx: SettingsContext): HolderLegs {
   const kit: SettingsKit = settingsKit(ctx);
   const { client, factory, addresses: a, chain } = kit;

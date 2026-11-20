@@ -40,9 +40,9 @@ const rejects = async (run: Promise<unknown>, code: string) => {
 
 describe("settings reads", () => {
   test("a suite's addresses come from its factory alone", async () => {
-    const suite = new FakeSettings();
+    const fakeSettings = new FakeSettings();
     const read = await readSettingsAddresses(
-      suite.chain.publicClient(),
+      fakeSettings.chain.publicClient(),
       SUITE.factory,
       SUITE.termsLens,
     );
@@ -56,8 +56,8 @@ describe("settings reads", () => {
   });
 
   test("the owner's terms, guards, limits and allowed switches, by name", async () => {
-    const suite = new FakeSettings();
-    const settings = createSettingsReads(suite.context());
+    const fakeSettings = new FakeSettings();
+    const settings = createSettingsReads(fakeSettings.context());
     expect((await settings.protocol()).bankrFeeBps).toBe(1_000);
     expect((await settings.guards()).curveNearStep).toBe(13);
     const limits = await settings.limits();
@@ -65,7 +65,7 @@ describe("settings reads", () => {
     expect(limits.feeRecipients).toEqual({ min: 1n, max: 10n });
     const allowed = await settings.allowedSwitches();
     expect(Object.values(allowed).every(Boolean)).toBe(true);
-    suite.allowedFlags = 1n;
+    fakeSettings.allowedFlags = 1n;
     expect(await settings.allowedSwitches()).toMatchObject({
       devBuy: true,
       takeover: false,
@@ -73,14 +73,14 @@ describe("settings reads", () => {
   });
 
   test("Bankr's pad: the owner's rows, the registry owner's identity, its payees in WAD", async () => {
-    const suite = new FakeSettings();
-    suite.pad(0n).signer = at(0x51);
-    suite.pad(0n).ranges[knobId("vestBps")!] = {
+    const fakeSettings = new FakeSettings();
+    fakeSettings.pad(0n).signer = at(0x51);
+    fakeSettings.pad(0n).ranges[knobId("vestBps")!] = {
       min: 0n,
       max: 5_000n,
       dflt: 1_500n,
     };
-    const pad = await createSettingsReads(suite.context()).pad();
+    const pad = await createSettingsReads(fakeSettings.context()).pad();
     expect(pad.id).toBe(0n);
     expect(pad.operator).toBe(REGISTRY_OWNER);
     expect(pad.settingsOperator).toBe(OWNER);
@@ -117,9 +117,9 @@ describe("settings reads", () => {
   });
 
   test("a registered pad starts as the template with takeover off; an id past the last is unknown", async () => {
-    const suite = new FakeSettings();
-    const id = suite.addPad();
-    const settings = createSettingsReads(suite.context());
+    const fakeSettings = new FakeSettings();
+    const id = fakeSettings.addPad();
+    const settings = createSettingsReads(fakeSettings.context());
     const [pad, template] = await Promise.all([
       settings.pad(id),
       settings.template(),
@@ -138,9 +138,9 @@ describe("settings reads", () => {
   });
 
   test("quotes by their pricing's name; a pad's own word on a quote", async () => {
-    const suite = new FakeSettings();
+    const fakeSettings = new FakeSettings();
     const weth = at(0xe7);
-    suite.quotes.set(weth.toLowerCase(), {
+    fakeSettings.quotes.set(weth.toLowerCase(), {
       allowed: true,
       mode: 1,
       decimals: 18,
@@ -151,8 +151,8 @@ describe("settings reads", () => {
       quoteActivation: 1n,
       quotePaid: false,
     });
-    suite.quoteList = [weth];
-    const settings = createSettingsReads(suite.context());
+    fakeSettings.quoteList = [weth];
+    const settings = createSettingsReads(fakeSettings.context());
     expect(await settings.quotes()).toEqual([
       {
         quote: weth,
@@ -169,10 +169,10 @@ describe("settings reads", () => {
     ]);
     const other = await settings.quote(at(0xe8));
     expect(other).toMatchObject({ listed: false, pricing: "none", feed: null });
-    const id = suite.addPad();
+    const id = fakeSettings.addPad();
     // a pad that lists no quote takes every quote
     expect((await settings.padQuote(id, weth)).launches).toBe(true);
-    suite.pad(id).quotes.set(at(0xe8).toLowerCase(), {
+    fakeSettings.pad(id).quotes.set(at(0xe8).toLowerCase(), {
       allowed: true,
       ownAmounts: false,
       compoundFloor: 0n,
@@ -189,8 +189,8 @@ describe("settings reads", () => {
   });
 
   test("presets, the allowlist, pricing and the suite's own levers", async () => {
-    const suite = new FakeSettings();
-    const settings = createSettingsReads(suite.context());
+    const fakeSettings = new FakeSettings();
+    const settings = createSettingsReads(fakeSettings.context());
     const presets = await settings.presets();
     expect(Object.keys(presets)).toEqual([
       "sniperTax",
@@ -201,7 +201,7 @@ describe("settings reads", () => {
     expect(presets.sniperTax.deployer).toBe(zeroAddress);
     const key = `0x${"ab".repeat(32)}` as const;
     expect(await settings.extensionAllowed(key)).toBe(false);
-    suite.extAllowed.add(key);
+    fakeSettings.extAllowed.add(key);
     expect(await settings.extensionAllowed(key)).toBe(true);
     expect(await settings.pricing()).toEqual({
       priceSigner: null,
@@ -213,10 +213,10 @@ describe("settings reads", () => {
       pendingOwner: null,
       paused: true,
       launchGated: true,
-      treasury: suite.treasury,
-      hook: suite.hook,
-      hookGenerations: [suite.hook],
-      holderLeg: suite.holderLeg,
+      treasury: fakeSettings.treasury,
+      hook: fakeSettings.hook,
+      hookGenerations: [fakeSettings.hook],
+      holderLeg: fakeSettings.holderLeg,
       registryOwner: REGISTRY_OWNER,
       registrationBondWei: 10n ** 16n,
       maxPadUriBytes: 2_048,
@@ -225,13 +225,17 @@ describe("settings reads", () => {
   });
 
   test("what a launch meets: each knob inside the owner's limit as it stands, and only the allowed switches", async () => {
-    const suite = new FakeSettings();
-    const id = suite.addPad();
-    const settings = createSettingsReads(suite.context());
+    const fakeSettings = new FakeSettings();
+    const id = fakeSettings.addPad();
+    const settings = createSettingsReads(fakeSettings.context());
     const capSecs = knobId("capSecs")!;
-    suite.pad(id).ranges[capSecs] = { min: 60n, max: 86_400n, dflt: 86_400n };
-    suite.apply(
-      await createLaunchpadAdmin(suite.context()).setTakeover(id, true),
+    fakeSettings.pad(id).ranges[capSecs] = {
+      min: 60n,
+      max: 86_400n,
+      dflt: 86_400n,
+    };
+    fakeSettings.apply(
+      await createLaunchpadAdmin(fakeSettings.context()).setTakeover(id, true),
     );
     const before = await settings.pad(id);
     // nothing narrowed: a launch meets the rows as stored
@@ -240,10 +244,10 @@ describe("settings reads", () => {
       switches: before.switches,
     });
     // the owner narrows a limit and the allowed switches past the pad's rows, which the chain does not rewrite
-    suite.limits[capSecs] = { min: 0n, max: 86_399n };
-    suite.allowedFlags = switchWord(
+    fakeSettings.limits[capSecs] = { min: 0n, max: 86_399n };
+    fakeSettings.allowedFlags = switchWord(
       { takeover: false, devBuy: false },
-      suite.allowedFlags,
+      fakeSettings.allowedFlags,
     );
     const after = await settings.pad(id);
     expect(after.knobs).toEqual(before.knobs);
@@ -263,7 +267,7 @@ describe("settings reads", () => {
       devBuy: false,
     });
     // a limit moved wholly past the row: the nearest edge of the limit
-    suite.limits[capSecs] = { min: 0n, max: 30n };
+    fakeSettings.limits[capSecs] = { min: 0n, max: 30n };
     expect((await settings.pad(id)).atLaunch.knobs.capSecs).toEqual({
       min: 30n,
       max: 30n,
@@ -272,12 +276,12 @@ describe("settings reads", () => {
   });
 
   test("a launch the chain refuses is a simulation revert with the contract's error on cause; a failed request is not", async () => {
-    const suite = new FakeSettings();
-    const settings = createSettingsReads(suite.context());
+    const fakeSettings = new FakeSettings();
+    const settings = createSettingsReads(fakeSettings.context());
     const params = zeroOf(
       getAbiItem({ abi: bankrLaunchSettingsAbi, name: "resolve" }).inputs[2],
     ) as never;
-    suite.chain.contract(SUITE.settings, bankrLaunchSettingsAbi, {
+    fakeSettings.chain.contract(SUITE.settings, bankrLaunchSettingsAbi, {
       resolve: () => {
         throw Object.assign(new Error("execution reverted"), {
           code: 3,
@@ -307,7 +311,7 @@ describe("settings reads", () => {
 
     // a node that does not answer is no refusal: the error comes back as it came, with no SDK code on it
     const dead = createSettingsReads({
-      ...suite.context(),
+      ...fakeSettings.context(),
       client: createPublicClient({
         chain: base,
         transport: http("http://127.0.0.1:9", { retryCount: 0 }),

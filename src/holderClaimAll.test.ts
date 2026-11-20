@@ -5,64 +5,42 @@ import {
   keccak256,
   multicall3Abi,
   toHex,
-  zeroAddress,
   type Address,
 } from "viem";
-import {
-  bankrFeeLedgerAbi,
-  bankrLaunchFactoryAbi,
-  holderRewardsDistributorAbi,
-} from "./abis/suite3.js";
-import { CONVERT_GAS, EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+import { holderRewardsDistributorAbi } from "./abis/generated.js";
+import { bnkrHolderLegAbi } from "./abis/settings.js";
+import { CONVERT_GAS } from "./conversion.js";
 import { isLaunchSdkError } from "./errors.js";
 import { HOLDER_CLAIM_ALL_GAS, HOLDER_GAS } from "./holderClaimAll.js";
 import { bucketIds } from "./lens.js";
 import {
-  FAKE_BNKR,
+  COIN_LEG,
   LAUNCHER,
   OTHER,
-  SUITE,
   WETH,
   installLaunch,
   postLaunchFixture,
 } from "./__internal__/fakeLaunch.js";
 
-/** The chain's clock (the latest block's) and the leg's two constants. */
+/** The chain's clock (the latest block's) and the leg's stale period. */
 const NOW = 1_800_000_000n;
-const MIN_CONVERT_INTERVAL = 1_800n;
 const STALE_AFTER = 604_800n;
-const wakeAt = (floor: bigint) => (floor << 160n) | BigInt(SUITE.holderLeg);
 
-/** A route's hop to `tokenOut` (the predicate reads only where the route ends). */
-const hop = (tokenOut: Address) => ({
-  tokenOut,
-  v3Pool: zeroAddress,
-  v4Key: {
-    currency0: zeroAddress,
-    currency1: zeroAddress,
-    fee: 0,
-    tickSpacing: 0,
-    hooks: zeroAddress,
-  },
-});
-
-/** WETH's piles by coin index and the leg's state. Default: armed at a floor of 5, BNKR mode, a live route to BNKR,
- *  never converted, nothing queued. */
+/** WETH's piles by coin index and the coins' leg. Default: a floor of 5, BNKR mode, a live route, an open window,
+ *  nothing staged. */
 interface Piles {
   pile?: Record<number, bigint>;
   staged?: Record<number, bigint>;
   /** When each staged pile was first staged (unix seconds). */
   since?: Record<number, bigint>;
-  /** WETH's wake word; 0 for unarmed. */
-  wake?: bigint;
-  /** The factory's compound floor for WETH (none unless set). */
-  compound?: bigint;
+  /** The leg's floor for WETH (`minPile`); 0: a quote it was never floored for. */
+  floor?: bigint;
   /** PayoutMode: 0 BNKR (the default), 1 QUOTE. */
   mode?: number;
-  lastConvertAt?: bigint;
-  /** Where the live route ends: default the leg's BNKR; null for no route. */
-  route?: Address | null;
-  bnkrExecuteAfter?: bigint;
+  /** The ledger's shared conversion window for WETH: until when, and what is left of its cap. */
+  window?: [until: bigint, left: bigint];
+  /** false: the leg holds no route for WETH. */
+  routed?: boolean;
 }
 
 /** Which coins (by index) OTHER has rewards on, default all, and which it holds a balance of, default none. */
@@ -74,8 +52,14 @@ interface Holdings {
 /** `n` coins on WETH (listed) over the piles and leg state given, earning for OTHER or held by it as `who` says. */
 function setup(n: number, o: Piles = {}, who: Holdings = {}) {
   const fixture = postLaunchFixture();
-  const { f } = fixture;
+  const { f, leg } = fixture;
   f.fake.timestamp = NOW;
+  leg.minPile = o.floor ?? 5n;
+  leg.wakeFloor = leg.minPile === 0n ? null : leg.minPile;
+  leg.payoutMode = o.mode ?? 0;
+  leg.routed = o.routed ?? true;
+  leg.staleAfter = Number(STALE_AFTER);
+  if (o.window) leg.window = [Number(o.window[0]), o.window[1]];
   const launches = Array.from({ length: n }, (_, i) => {
     const l = installLaunch(f, {
       launcher: LAUNCHER,
@@ -85,48 +69,18 @@ function setup(n: number, o: Piles = {}, who: Holdings = {}) {
     if (who.earning?.includes(i) ?? true)
       l.earned.set(`1:${OTHER.toLowerCase()}`, 1n);
     if (who.held?.includes(i)) l.balances.set(OTHER.toLowerCase(), 1n);
+    const pile = o.pile?.[i] ?? 0n;
+    l.claimable.set(
+      `${bucketIds.holders(l.poolId)}:${COIN_LEG.toLowerCase()}`,
+      l.tokenIsCurrency0 ? [0n, pile] : [pile, 0n],
+    );
+    if (o.staged?.[i] !== undefined)
+      leg.pending.set(l.poolId, [o.staged[i]!, o.since?.[i] ?? 0n]);
     return l;
   });
-  const byPool = (poolId: unknown) =>
-    launches.findIndex((l) => l.poolId === poolId);
-  f.fake.contract(SUITE.ledger, bankrFeeLedgerAbi, {
-    holdersWake: () => o.wake ?? wakeAt(5n),
-    claimable: ([bucket, who]: readonly unknown[]) => {
-      expect(String(who).toLowerCase()).toBe(SUITE.holderLeg.toLowerCase());
-      const i = launches.findIndex(
-        (l) => bucketIds.holders(l.poolId) === bucket,
-      );
-      return [0n, o.pile?.[i] ?? 0n];
-    },
-  });
-  f.fake.contract(SUITE.factory, bankrLaunchFactoryAbi, {
-    // The leg's poke has no pause gate: the plan must not depend on the factory's switch.
-    paused: () => {
-      throw new Error("paused was read");
-    },
-    quoteEntry: () => ({
-      allowed: true,
-      minCompoundQuote: o.compound ?? 0n,
-      maxCompoundQuote: 0n,
-      maxCompoundBps: 0,
-      maxCompoundDeviationBps: 500,
-      minCompoundInterval: 300,
-      removalExecuteAfter: 0n,
-    }),
-  });
-  f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
-    payoutMode: o.mode ?? 0,
-    bnkr: FAKE_BNKR,
-    retiredBnkr: false,
-    lastConvertAt: o.lastConvertAt ?? 0n,
-    MIN_CONVERT_INTERVAL: Number(MIN_CONVERT_INTERVAL),
-    pending: ([p]: readonly unknown[]) => o.staged?.[byPool(p)] ?? 0n,
-    pendingSince: ([p]: readonly unknown[]) => o.since?.[byPool(p)] ?? 0n,
-    STALE_AFTER,
-    bnkrExecuteAfter: o.bnkrExecuteAfter ?? 0n,
-    routeExecuteAfter: 0n,
-    pendingRouteOf: [],
-    routeOf: o.route === null ? [] : [hop(o.route ?? FAKE_BNKR)],
+  // The leg's poke has no pause gate: the plan must not depend on the factory's switch.
+  f.set("factory", "paused", () => {
+    throw new Error("paused was read");
   });
   const build = (maxGasPerTx?: bigint) =>
     fixture.client.holders.buildClaimAll(
@@ -148,10 +102,10 @@ const claimCall = (target: Address) => ({
   callData: claimFor,
 });
 const pokeCall = (poolId: `0x${string}`) => ({
-  target: SUITE.holderLeg,
+  target: COIN_LEG,
   allowFailure: true,
   callData: encodeFunctionData({
-    abi: EARLIER_HOLDER_LEG_WAKE_ABI,
+    abi: bnkrHolderLegAbi,
     functionName: "poke",
     args: [poolId],
   }),
@@ -162,7 +116,7 @@ const aggregate = (data: `0x${string}`) =>
 const { base, perCoin, perPoke, perConvertPoke } = HOLDER_CLAIM_ALL_GAS;
 
 describe("holders.buildClaimAll under always-on: no ordinary swap wakes a pile, so the claim-all pokes every due one", () => {
-  test("a listed coin whose pile reached its quote's floor is poked after the claims, at the wake's stipend; a pile under the floor waits", async () => {
+  test("a listed coin whose pile reached its leg's floor is poked after the claims, at the wake's stipend; a pile under the floor waits", async () => {
     const t = setup(2, { pile: { 0: 5n, 1: 4n } });
     const all = await t.build();
     expect(all.mode).toBe("multicall");
@@ -181,7 +135,7 @@ describe("holders.buildClaimAll under always-on: no ordinary swap wakes a pile, 
     ]);
   });
 
-  test("due is core's predicate over the pile the poke would stage: staged counts, the window and the forward rule decide what the poke does", async () => {
+  test("due is the leg's own rule over the pile the poke would stage: staged counts, the window and the forward rule decide what the poke does", async () => {
     /** The poke's budget for one coin; null when the coin is not poked. */
     const poked = async (o: Piles) => {
       const all = await setup(1, o).build();
@@ -205,46 +159,39 @@ describe("holders.buildClaimAll under always-on: no ordinary swap wakes a pile, 
         since: { 0: NOW - 60n },
       }),
     ).toBeNull();
-    // Inside the quote's 30-minute window a conversion waits, by the chain's clock; once it ends the pile is due.
-    const at = (lastConvertAt: bigint): Piles => ({
+    // While the ledger's shared window is open with under a floor pile left a conversion waits, by the chain's
+    // clock; once it ends, or with a floor pile left of its cap, the pile is due.
+    const spent = (until: bigint, left = 4n): Piles => ({
       pile: { 0: 9n },
-      lastConvertAt,
+      window: [until, left],
     });
-    expect(await poked(at(NOW - MIN_CONVERT_INTERVAL + 1n))).toBeNull();
-    expect(await poked(at(NOW - MIN_CONVERT_INTERVAL))).toBe(perConvertPoke);
-    // The forward rule (QUOTE mode, a queued BNKR swap, a stale staged pile) pays in quote with no interval: the
-    // forward-only budget, even inside the window.
-    expect(await poked({ ...at(NOW - 1n), mode: 1 })).toBe(perPoke);
-    expect(
-      await poked({ ...at(NOW - 1n), bnkrExecuteAfter: NOW + 3_600n }),
-    ).toBe(perPoke);
+    expect(await poked(spent(NOW + 1n))).toBeNull();
+    expect(await poked(spent(NOW))).toBe(perConvertPoke);
+    expect(await poked(spent(NOW + 1n, 5n))).toBe(perConvertPoke);
+    // The forward rule (QUOTE mode, a stale staged pile) pays in quote with no interval: the forward-only budget,
+    // even inside a spent window.
+    expect(await poked({ ...spent(NOW + 1n), mode: 1 })).toBe(perPoke);
     expect(
       await poked({
         staged: { 0: 5n },
         since: { 0: NOW - STALE_AFTER },
-        lastConvertAt: NOW - 1n,
+        window: [NOW + 1n, 4n],
       }),
     ).toBe(perPoke);
-    // Without a route to BNKR the one stage that starts the stale clock is due; a pile already staged only waits.
-    expect(await poked({ route: null, pile: { 0: 5n } })).toBe(perConvertPoke);
+    // Without a route the one stage that starts the stale clock is due; a pile already staged only waits.
+    expect(await poked({ routed: false, pile: { 0: 5n } })).toBe(
+      perConvertPoke,
+    );
     expect(
       await poked({
-        route: null,
+        routed: false,
         staged: { 0: 5n },
         since: { 0: NOW - 60n },
       }),
     ).toBeNull();
-    // An unarmed quote with no floor keeps the any-quote rule: any pile, forward-only.
-    expect(await poked({ wake: 0n, pile: { 0: 1n } })).toBe(perPoke);
-    expect(await poked({ wake: 0n })).toBeNull();
-    // Unarmed with a compound floor: no swap wakes it either, and the poke's own stage arms it at that floor over 50.
-    const unarmed = (pile: bigint): Piles => ({
-      wake: 0n,
-      compound: 250n,
-      pile: { 0: pile },
-    });
-    expect(await poked(unarmed(5n))).toBe(perConvertPoke);
-    expect(await poked(unarmed(4n))).toBeNull();
+    // A quote the leg was never floored for keeps the any-quote rule: any pile, forward-only.
+    expect(await poked({ floor: 0n, pile: { 0: 1n } })).toBe(perPoke);
+    expect(await poked({ floor: 0n })).toBeNull();
   });
 
   test("the batch stays inside the per-transaction budget: 4 coins with a converting poke each at 15M, 2 at 10M, claims before pokes in every transaction", async () => {
@@ -294,7 +241,7 @@ describe("holders.buildClaimAll under always-on: no ordinary swap wakes a pile, 
     expect(all.txs.map((x) => [x.to, x.gas])).toEqual([
       [t.launches[0]!.distributor, HOLDER_GAS.claim],
       [t.launches[1]!.distributor, HOLDER_GAS.claim],
-      [SUITE.holderLeg, CONVERT_GAS],
+      [COIN_LEG, CONVERT_GAS],
     ]);
     expect(all.txs[2]!.data).toBe(pokeCall(t.launches[0]!.poolId).callData);
     expect(CONVERT_GAS).toBe(2_100_000n);
@@ -379,11 +326,7 @@ describe("holders.buildClaimAll pokes a named coin's due pile before the account
     safe.f.fake.setCode(OTHER, "0x6080");
     const direct = await safe.build();
     expect(direct.txs.map((x) => [x.to, x.gas, x.data])).toEqual([
-      [
-        SUITE.holderLeg,
-        CONVERT_GAS,
-        pokeCall(safe.launches[0]!.poolId).callData,
-      ],
+      [COIN_LEG, CONVERT_GAS, pokeCall(safe.launches[0]!.poolId).callData],
     ]);
     // An account the distributor excludes is still left out, and so is a named coin with no pile due.
     const excluded = setup(2, piles, NONE);
@@ -486,7 +429,7 @@ describe("holders.buildClaimAll pokes a named coin's due pile before the account
     const all = await t.build();
     expect(all.mode).toBe("direct");
     expect(all.txs.map((x) => [x.to, x.gas, x.data])).toEqual([
-      [SUITE.holderLeg, CONVERT_GAS, pokeCall(t.launches[0]!.poolId).callData],
+      [COIN_LEG, CONVERT_GAS, pokeCall(t.launches[0]!.poolId).callData],
     ]);
   });
 });

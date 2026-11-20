@@ -8,11 +8,9 @@ import {
   type Hex,
 } from "viem";
 import { getBlock, readContract } from "viem/actions";
-import { bankrLaunchTokenAbi as suite4TokenAbi } from "./abis/generated.js";
-import { bankrLaunchTokenAbi } from "./abis/suite3.js";
-import { MAX_METADATA_URI_BYTES } from "./economics.js";
+import { bankrLaunchTokenAbi } from "./abis/generated.js";
 import { LaunchRefusedError } from "./errors.js";
-import { requireLaunch, type SuiteReadContext } from "./lens.js";
+import { requireLaunch, type ReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";
 import { requireAddress } from "./recipient.js";
 import { buildCallTx } from "./tx.js";
@@ -32,7 +30,7 @@ export interface TradingStatus {
 
 /** A launch's trading start against the latest block. `NOT_A_LAUNCH` for a token this factory never launched. */
 export async function readTradingStatus(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   token: unknown,
 ): Promise<TradingStatus> {
   const [info, block] = await Promise.all([
@@ -68,8 +66,8 @@ export interface TokenMetadataState {
 export interface LaunchMetadataAdmin {
   /** `NOT_A_LAUNCH` for a token this chain's factory never launched. */
   get(token: Address): Promise<TokenMetadataState>;
-  /** `setMetadataUri(metadataUri)`: at most the token's own limit in UTF-8 bytes (2,048 on the earlier contracts);
-   *  the name and symbol never change. */
+  /** `setMetadataUri(metadataUri)`: at most the token's own limit in UTF-8 bytes; the name and symbol never
+   *  change. */
   buildSetUri(
     token: Address,
     account: Address,
@@ -93,10 +91,8 @@ export interface LaunchMetadataAdmin {
 const orNull = (a: Address): Address | null =>
   isAddressEqual(a, zeroAddress) ? null : getAddress(a);
 
-/** The metadata admin namespace for one chain's suite. */
-export function createMetadataAdmin(
-  ctx: SuiteReadContext,
-): LaunchMetadataAdmin {
+/** The metadata admin namespace for one chain's contracts. */
+export function createMetadataAdmin(ctx: ReadContext): LaunchMetadataAdmin {
   const chain = ctx.chain.chain;
   const { client } = ctx;
   const refuse = (detail: string): never => {
@@ -139,26 +135,19 @@ export function createMetadataAdmin(
           chain,
           detail: `The metadata link can be at most ${max.toLocaleString("en-US")} bytes.`,
         });
-      // The token counts bytes, not characters (MetadataTooLong). Suite 3 compiles the limit in; a suite 4 token
-      // holds the one its launch froze, under the constant or over it.
-      const on4 = ctx.addresses.settings !== undefined;
       if (typeof metadataUri !== "string")
         throw new LaunchRefusedError("INVALID_PARAMS", {
           chain,
           detail: "The metadata link is a string.",
         });
-      const bytes = stringToBytes(metadataUri).length;
-      if (!on4 && bytes > MAX_METADATA_URI_BYTES)
-        throw tooLong(MAX_METADATA_URI_BYTES);
       const a = await asAdmin(token, account);
-      if (on4) {
-        const max = await readContract(client, {
-          address: a.token,
-          abi: suite4TokenAbi,
-          functionName: "metadataMaxBytes",
-        });
-        if (bytes > max) throw tooLong(max);
-      }
+      // The token counts bytes, not characters (MetadataTooLong), against the limit its launch froze.
+      const max = await readContract(client, {
+        address: a.token,
+        abi: bankrLaunchTokenAbi,
+        functionName: "metadataMaxBytes",
+      });
+      if (stringToBytes(metadataUri).length > max) throw tooLong(max);
       return tx(
         a.who,
         a.token,

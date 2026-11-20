@@ -12,18 +12,23 @@ import {
 } from "./salt.js";
 import {
   fakeAddress,
-  liveSuiteOf,
-  testSuite,
-} from "./__internal__/fakeSuite.js";
+  livePointersOf,
+  testRecord,
+} from "./__internal__/fakeRecord.js";
 
-const suite = liveSuiteOf(testSuite(8453));
+const live = livePointersOf(testRecord(8453));
 const identity = {
   name: "Moon",
   symbol: "MOON",
   metadataUri: "ipfs://moon",
   metadataAdmin: zeroAddress,
-  totalSupply: 0n,
   capExclusions: [],
+  terms: {
+    totalSupply: 10n ** 29n,
+    capAmount: 2n * 10n ** 27n,
+    capSecs: 86_400,
+    capController: fakeAddress(0xca),
+  },
 };
 const launcher = fakeAddress(0xc1);
 
@@ -41,7 +46,7 @@ describe("the vanity miner stays bounded", () => {
     const rule = vanityRule(7n, { suffix: 0xabcd, nibbles: 4 });
     for (const maxTries of [0, -1, 1.5, Number.POSITIVE_INFINITY]) {
       await expect(
-        mineVanitySalt({ suite, identity, launcher, rule, maxTries }),
+        mineVanitySalt({ live, identity, launcher, rule, maxTries }),
       ).rejects.toThrow(RangeError);
     }
   });
@@ -49,7 +54,7 @@ describe("the vanity miner stays bounded", () => {
   test("a mined salt carries the rule, and a spent budget is null", async () => {
     const rule = vanityRule(7n, { suffix: 0xa, nibbles: 1 });
     const mined = await mineVanitySalt({
-      suite,
+      live,
       identity,
       launcher,
       rule,
@@ -57,13 +62,13 @@ describe("the vanity miner stays bounded", () => {
     });
     expect(mined).not.toBeNull();
     expect(
-      predictToken(suite, identity, launcher, mined!.salt).toLowerCase(),
+      predictToken(live, identity, launcher, mined!.salt).toLowerCase(),
     ).toBe(mined!.token.toLowerCase());
     expect(addressMatchesVanity(mined!.token, rule)).toBe(true);
     const sixDigits = vanityRule(7n, { suffix: 0xabcdef, nibbles: 6 });
     expect(
       await mineVanitySalt({
-        suite,
+        live,
         identity,
         launcher,
         rule: sixDigits,

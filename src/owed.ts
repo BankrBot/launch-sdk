@@ -8,7 +8,7 @@ import {
 import type { AccountFeesResponse, BankrApi } from "./api.js";
 import type { LaunchChain } from "./chains/index.js";
 import { LaunchApiError } from "./errors.js";
-import type { SuiteReadContext } from "./lens.js";
+import type { ReadContext } from "./lens.js";
 import type { ClaimAllBucket, QuoteAmount } from "./planClaimAll.js";
 
 /** One fee-bucket share with something claimable: a launch's creator or decay bucket. */
@@ -68,8 +68,7 @@ function fromApi(
   };
   if (r.chainId !== chainId || !isAddressEqual(r.account, account))
     throw new TypeError("another account or chain");
-  // Each suite has its own ledger and a ledger skips another's buckets, so an answer for another, or one that
-  // names none, is refused.
+  // A ledger skips another ledger's buckets, so an answer for another, or one that names none, is refused.
   if (!isAddress(r.ledger) || !isAddressEqual(r.ledger, ledger))
     throw new TypeError("another ledger");
   const balances = r.balances
@@ -103,7 +102,7 @@ function fromApi(
 
 /** What `account` is owed on the client's own ledger, from Bankr's account index; its failures keep their code. */
 export async function readOwed(
-  ctx: SuiteReadContext,
+  ctx: ReadContext,
   index: BankrApi,
   account: Address,
 ): Promise<OwedState> {

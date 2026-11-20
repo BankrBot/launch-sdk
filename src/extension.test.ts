@@ -11,18 +11,18 @@ import {
   extensionAllowlistKey,
   extensionKind,
   normalizeExtension,
-  padAllowsExtension,
   type LaunchExtensionInput,
 } from "./extension.js";
 import {
   EXTENSION_PRESETS,
-  PRESET_BOUNDS,
-  decodePresetParams,
   describePreset,
-  encodePresetParams,
   presetTerms,
   type PresetParams,
 } from "./presets.js";
+import {
+  decodeExtensionPresetParams,
+  encodeExtensionPresetParams,
+} from "./launch/presets.js";
 import { NO_EXTENSION } from "./terms.js";
 
 const U24 = { type: "uint24" } as const;
@@ -144,8 +144,7 @@ describe("a preset by name or id: the launch struct the factory takes", () => {
   });
 });
 
-describe("each preset's bounds are its constructor's (BankrPreset.sol), refused with the bound", () => {
-  // [input, the parameter's sentence, lowest and highest value the contract takes]
+describe("a preset's parameters are held to their widths; the launchpad's limits for them follow on chain", () => {
   const SNIPER = { ...sniper, endSecs: 300 };
   const DECAY = {
     preset: "decay_tax",
@@ -158,24 +157,28 @@ describe("each preset's bounds are its constructor's (BankrPreset.sol), refused 
     brakePips: 30_000,
     thresholdTicks: 23_027,
   };
+  const U24_MAX = 2 ** 24 - 1;
+  const U32_MAX = 2 ** 32 - 1;
+  // [input, field, the parameter's sentence, lowest and highest value its ABI type carries]
   const cases: [object, string, string, number, number][] = [
-    [SNIPER, "buyPips", "Sniper Tax buy fee (pips)", 1, 100_000],
-    [SNIPER, "sellPips", "Sniper Tax sell fee (pips)", 0, 100_000],
-    [SNIPER, "endSecs", "Sniper Tax end (seconds)", 121, 3_600],
-    [DECAY, "startBuyPips", "Decay Tax start buy fee (pips)", 0, 100_000],
-    [DECAY, "startSellPips", "Decay Tax start sell fee (pips)", 0, 100_000],
-    [DECAY, "decaySecs", "Decay Tax duration (seconds)", 121, 604_800],
-    [BRAKE, "brakePips", "Pump Brake fee (pips)", 1, 100_000],
+    [SNIPER, "buyPips", "Sniper Tax buy fee (pips)", 0, U24_MAX],
+    [SNIPER, "sellPips", "Sniper Tax sell fee (pips)", 0, U24_MAX],
+    [SNIPER, "endSecs", "Sniper Tax end (seconds)", 0, U32_MAX],
+    [DECAY, "startBuyPips", "Decay Tax start buy fee (pips)", 0, U24_MAX],
+    [DECAY, "startSellPips", "Decay Tax start sell fee (pips)", 0, U24_MAX],
+    [DECAY, "decaySecs", "Decay Tax duration (seconds)", 0, U32_MAX],
+    [BRAKE, "brakePips", "Pump Brake fee (pips)", 0, U24_MAX],
     [
       BRAKE,
       "thresholdTicks",
       "Pump Brake threshold (ticks above launch)",
-      6_932,
-      887_272,
+      -(2 ** 23),
+      2 ** 23 - 1,
     ],
   ];
+  const count = (n: number) => n.toLocaleString("en-US");
 
-  test("both edges pass, one step outside either is EXTENSION_OUT_OF_BOUNDS naming the bound", () => {
+  test("both edges pass, one step outside either is EXTENSION_OUT_OF_BOUNDS naming the width", () => {
     for (const [base, field, what, lo, hi] of cases) {
       for (const ok of [lo, hi])
         expect(
@@ -186,45 +189,21 @@ describe("each preset's bounds are its constructor's (BankrPreset.sol), refused 
         const r = refusal(() => normalizeExtension({ ...base, [field]: bad }));
         expect(r, `${field}=${bad}`).toEqual({
           code: "EXTENSION_OUT_OF_BOUNDS",
-          detail: `${what} must be between ${lo} and ${hi}.`,
+          detail: `${what} must be between ${count(lo)} and ${count(hi)}.`,
         });
       }
     }
   });
 
-  test("the bounds table carries the same numbers", () => {
-    expect(PRESET_BOUNDS).toEqual({
-      sniper_tax: {
-        buyPips: [1, 100_000],
-        sellPips: [0, 100_000],
-        endSecs: [121, 3_600],
-      },
-      decay_tax: {
-        startBuyPips: [0, 100_000],
-        startSellPips: [0, 100_000],
-        decaySecs: [121, 604_800],
-      },
-      pump_brake: {
-        brakePips: [1, 100_000],
-        thresholdTicks: [6_932, 887_272],
-      },
-      raffle_run: {
-        buyPips: [0, 100_000],
-        sellPips: [0, 100_000],
-        runSecs: [121, 2_592_000],
-      },
-    });
-  });
-
-  test("a Decay Tax with no fee either way is refused (PresetFeeOutOfBounds)", () => {
-    refuses(
+  test("no launchpad's limit is typed here: a window or a fee only some launchpad allows is a shape the SDK takes", () => {
+    // A minute's Sniper Tax, a year's Decay Tax, a 50 % fee: each launchpad's own limits judge them, on chain.
+    for (const input of [
+      { ...SNIPER, endSecs: 60 },
+      { ...DECAY, decaySecs: 365 * 86_400 },
+      { ...SNIPER, buyPips: 500_000 },
       { ...DECAY, startBuyPips: 0, startSellPips: 0 },
-      "EXTENSION_OUT_OF_BOUNDS",
-      "Decay Tax needs a buy or a sell fee.",
-    );
-    expect(() =>
-      normalizeExtension({ ...DECAY, startBuyPips: 0 }),
-    ).not.toThrow();
+    ])
+      expect(() => normalizeExtension(input)).not.toThrow();
   });
 
   test("a missing or non-numeric parameter is refused the same way", () => {
@@ -238,12 +217,13 @@ describe("each preset's bounds are its constructor's (BankrPreset.sol), refused 
 });
 
 describe("a raw preset: id and encoded params", () => {
+  const U256 = { type: "uint256" } as const;
   const raffle = encodeAbiParameters(
-    [U24, U24, U32, { type: "uint256" }],
-    [10_000, 5_000, 86_400, 10n ** 15n],
+    [U24, U24, U32, U256, U256, U32],
+    [10_000, 5_000, 86_400, 10n ** 15n, 10n ** 13n, 43_200],
   );
 
-  test("Raffle Run (the reference extension) binds by id 4 and its four words; it calls out", () => {
+  test("Raffle Run (the reference extension) binds by id 4 and its six words; it calls out", () => {
     const n = normalizeExtension({ presetId: 4, params: raffle });
     expect(n.params).toEqual({ ...NO_EXTENSION, id: 4, params: raffle });
     expect(n.preset).toEqual({
@@ -252,6 +232,8 @@ describe("a raw preset: id and encoded params", () => {
       sellPips: 5_000,
       runSecs: 86_400,
       minTicketQuote: 10n ** 15n,
+      minBuyback: 10n ** 13n,
+      anchorTauSecs: 43_200,
     });
     expect(n.terms).toEqual({
       maxBuyPips: 10_000,
@@ -262,30 +244,11 @@ describe("a raw preset: id and encoded params", () => {
     expect(n.gas).toEqual({ quoteGas: 50_000, afterGas: 150_000 });
   });
 
-  test("a Bankr preset by raw id is the typed form's launch, held to the same bounds", () => {
+  test("a Bankr preset by raw id is the typed form's launch", () => {
     const typed = normalizeExtension({ ...sniper, endSecs: 300 });
     expect(
       normalizeExtension({ presetId: 1, params: typed.params.params }),
     ).toEqual(typed);
-    refuses(
-      {
-        presetId: 1,
-        params: encodeAbiParameters([U24, U24, U32], [50_000, 20_000, 60]),
-      },
-      "EXTENSION_OUT_OF_BOUNDS",
-      "Sniper Tax end (seconds) must be between 121 and 3600.",
-    );
-    refuses(
-      {
-        presetId: 4,
-        params: encodeAbiParameters(
-          [U24, U24, U32, { type: "uint256" }],
-          [1, 1, 30 * 86_400 + 1, 0n],
-        ),
-      },
-      "EXTENSION_OUT_OF_BOUNDS",
-      "Raffle Run length (seconds) must be between 121 and 2592000.",
-    );
   });
 
   test("params of another length, or with bits above a parameter's width, are refused (PresetParamsMalformed)", () => {
@@ -300,20 +263,21 @@ describe("a raw preset: id and encoded params", () => {
     refuses({ presetId: 1, params: "0xzz" }, "INVALID_PARAMS", "params");
   });
 
-  test("an id the suite's preset deployer does not know is refused (UnknownPreset)", () => {
+  test("an id no preset has is refused (UnknownPreset)", () => {
     for (const presetId of [0, 5, 256, 1.5, "1"])
       refuses({ presetId, params: raffle }, "INVALID_PARAMS", "presetId");
   });
 
-  test("decodePresetParams reads a launch's id and params back, and is null for anything malformed", () => {
+  test("decodeExtensionPresetParams reads a launch's id and params back, and is null for anything malformed", () => {
     const p: PresetParams = {
       preset: "pump_brake",
       brakePips: 30_000,
       thresholdTicks: 23_027,
     };
-    expect(decodePresetParams(3, encodePresetParams(p))).toEqual(p);
-    expect(decodePresetParams(9, encodePresetParams(p))).toBeNull();
-    expect(decodePresetParams(1, encodePresetParams(p))).toBeNull();
+    const bytes = encodeExtensionPresetParams(p);
+    expect(decodeExtensionPresetParams(3, bytes)).toEqual(p);
+    expect(decodeExtensionPresetParams(9, bytes)).toBeNull();
+    expect(decodeExtensionPresetParams(1, bytes)).toBeNull();
   });
 });
 
@@ -357,16 +321,19 @@ describe("custom code by address and codehash", () => {
     ).toEqual({ quoteGas: 250_000, afterGas: 0 });
   });
 
-  test("the hook's bounds: maxima up to 10 %, a 32-bit sunset, budgets inside their floors and ceilings", () => {
+  test("the hook's bounds: 24-bit maxima (the launchpad's ceiling judges them on chain), a 32-bit sunset, budgets inside their floors and ceilings", () => {
+    expect(() =>
+      normalizeExtension({ ...custom, maxBuyPips: 250_000 }),
+    ).not.toThrow();
     refuses(
-      { ...custom, maxBuyPips: 100_001 },
+      { ...custom, maxBuyPips: 2 ** 24 },
       "EXTENSION_OUT_OF_BOUNDS",
-      "Maximum buy fee (pips) must be between 0 and 100000.",
+      "Maximum buy fee (pips) must be between 0 and 16777215.",
     );
     refuses(
       { ...custom, maxSellPips: -1 },
       "EXTENSION_OUT_OF_BOUNDS",
-      "Maximum sell fee (pips) must be between 0 and 100000.",
+      "Maximum sell fee (pips) must be between 0 and 16777215.",
     );
     refuses(
       { ...custom, sunsetSecs: 2 ** 32 },
@@ -415,7 +382,7 @@ describe("one way to name an extension", () => {
   });
 });
 
-describe("the registry's view of an extension", () => {
+describe("the chain's view of an extension", () => {
   const preset = (input: LaunchExtensionInput) =>
     normalizeExtension(input).params;
   const custom = (o: object = {}) =>
@@ -430,9 +397,15 @@ describe("the registry's view of an extension", () => {
       ...o,
     }).params;
 
-  test("the allowlist key: Base's six Day-0 keys (config/base.extension-keys.json)", () => {
-    expect(extensionAllowlistKey(preset({ ...sniper, endSecs: 300 }))).toBe(
-      "0x8005c9b750c1543f5b448a646bd9428da2f48ef14cc36fe9eeb5ed765290ad8f",
+  test("the allowlist key: Base's four Day-0 preset keys (config/base.extension-keys.json), each with its creation-code hash", () => {
+    const sniperTax = preset({ ...sniper, endSecs: 300 });
+    expect(
+      extensionAllowlistKey(
+        sniperTax,
+        "0x97cbc1c7137f415b6cc4b19f044f979774cdc80514f0b02a8759ae20c96786cb",
+      ),
+    ).toBe(
+      "0xf80001c93438d14882ba9d72107d6b061180b49d61bc94508910cc450bd22d1c",
     );
     expect(
       extensionAllowlistKey(
@@ -442,31 +415,32 @@ describe("the registry's view of an extension", () => {
           startSellPips: 0,
           decaySecs: 600,
         }),
+        "0x9144cb4a6abb224139a698d55e5f801971b09da35b4791bdf80ea8cae6f1ccac",
       ),
     ).toBe(
-      "0xf0ac260593df0ff1cfef919ad7581fc2217aacce5aacf215e64763fd30850428",
+      "0x3d61b513b1284fd5e664da4ef40bdc7ed58bbf2a685f7efa0fa1901c02b7beb0",
     );
     expect(
       extensionAllowlistKey(
         preset({ preset: "pump_brake", brakePips: 1, thresholdTicks: 6_932 }),
+        "0x9400acb3d3cee5af519a244abdc4845f06074fdfca988958d7a15afbc12020b5",
       ),
     ).toBe(
-      "0x24b53338c17e19e71bdddb9ada2f2612285316679d21b65c2af209a6b716f782",
+      "0xe8e7b3d9b1f873c3d79879e5798194bc2d9c59ed543208eb2a8135568927ac88",
     );
     expect(
       extensionAllowlistKey(
-        preset({
-          presetId: 4,
-          params: encodeAbiParameters(
-            [U24, U24, U32, { type: "uint256" }],
-            [1, 1, 600, 0n],
-          ),
-        }),
+        { ...NO_EXTENSION, id: 4 },
+        "0xc736c4218cdf1a0f64be7be98580bccd526210ce3e73a8cd985127575c839eab",
       ),
     ).toBe(
-      "0x7d52695281d3a69f1551f9d8eefef58418480342df3a08e87d82b72b7fc7dd87",
+      "0xcf30961002197f70b721de7217c69f5464a8b40702770d61aa143c05b86e3aec",
     );
-    // Custom code at the floors is keyed by its codehash; with a budget named, by sha256 over it and both budgets.
+    // A preset's key is its code's: without the creation-code hash there is no key to ask for.
+    expect(() => extensionAllowlistKey(sniperTax)).toThrow(TypeError);
+  });
+
+  test("custom code at the floors is keyed by its codehash; with a budget named, by sha256 over it and both budgets", () => {
     expect(extensionAllowlistKey(custom())).toBe(
       "0xb7d4a1371b0cc4b0e66fa6fd602f6a90bf25731533f670c393e7303c7488d56a",
     );
@@ -478,37 +452,11 @@ describe("the registry's view of an extension", () => {
     expect(extensionAllowlistKey({ ...NO_EXTENSION })).toBeNull();
   });
 
-  test("the kind a launchpad's policy switches: preset, custom quote-only, custom with a post-swap call", () => {
+  test("the kind a launchpad's switches name: preset, custom quote-only, custom with a post-swap call", () => {
     expect(extensionKind({ ...NO_EXTENSION })).toBe(0);
     expect(extensionKind(preset({ ...sniper, endSecs: 300 }))).toBe(1);
     expect(extensionKind(custom({ quoteOnly: true }))).toBe(2);
     expect(extensionKind(custom())).toBe(3);
-  });
-
-  test("a launchpad's policy: the kind's bit, and custom code's larger maximum within maxExtensionPips", () => {
-    const presetsOnly = { allowedExtensions: 1, maxExtensionPips: 100_000 };
-    const sniperTax = preset({ ...sniper, endSecs: 300 });
-    expect(padAllowsExtension(presetsOnly, sniperTax)).toBe(true);
-    expect(padAllowsExtension(presetsOnly, custom())).toBe(false);
-    expect(
-      padAllowsExtension({ ...presetsOnly, allowedExtensions: 6 }, sniperTax),
-    ).toBe(false);
-    const all = { allowedExtensions: 7, maxExtensionPips: 50_000 };
-    expect(padAllowsExtension(all, custom())).toBe(true);
-    expect(padAllowsExtension(all, custom({ maxBuyPips: 50_001 }))).toBe(false);
-    // A preset's fee is bounded by its own code, not by the pad's ceiling for custom code.
-    expect(
-      padAllowsExtension(
-        { allowedExtensions: 1, maxExtensionPips: 0 },
-        sniperTax,
-      ),
-    ).toBe(true);
-    expect(
-      padAllowsExtension(
-        { allowedExtensions: 2, maxExtensionPips: 100_000 },
-        custom(),
-      ),
-    ).toBe(false);
   });
 });
 

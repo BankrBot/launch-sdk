@@ -6,9 +6,9 @@ import type { LaunchChain } from "../chains/index.js";
 import type { FeeSchedule } from "../economics.js";
 import { LaunchRefusedError } from "../errors.js";
 import {
+  extensionAllowlistKey,
   extensionKind,
   normalizeExtension,
-  suite4ExtensionAllowlistKey,
   type LaunchExtensionInput,
   type NormalizedExtension,
 } from "../extension.js";
@@ -29,26 +29,26 @@ import {
   PAD_FLAG,
   flagInForce,
   knobInForce,
-  readSuite4LaunchState,
+  readLaunchState,
   type CoinTerms,
   type PadFlagName,
-  type Suite4LaunchState,
+  type LaunchState,
 } from "./settings.js";
 
-// A suite 4 launch's extension against what the settings contract holds, in the order its launch check refuses:
+// A launch's extension against what the settings contract holds, in the order its launch check refuses:
 // the pad's switch for the extension's kind, the preset's record and the pad's limits for it, custom code's declared
 // maximum against the pad's ceiling, the owner's off switch for a fee, then the owner's allowlist.
 
-export interface Suite4ExtensionContext {
+export interface ExtensionContext {
   chain: { chain: LaunchChain };
   addresses: Pick<
     ProviderAddresses,
-    "factory" | "launchpadRegistry" | "create3Factory"
-  > & { settings: Address };
+    "factory" | "launchpadRegistry" | "create3Factory" | "settings"
+  >;
   client: ReadClient;
 }
 
-type State = Pick<Suite4LaunchState, "pad" | "limits" | "allowedFlags">;
+type State = Pick<LaunchState, "pad" | "limits" | "allowedFlags">;
 
 const KIND_FLAG: readonly PadFlagName[] = [
   "extPresets",
@@ -103,8 +103,8 @@ function refusalOf(
  * cut of its fee) beside the pad's row, and builds the preview. Never refuses an extension the chain would turn
  * away: that is `refusal`. Custom code that fails the hook's admission is `INVALID_PARAMS`.
  */
-export async function readSuite4ExtensionPreview(
-  ctx: Suite4ExtensionContext,
+export async function readExtensionPreview(
+  ctx: ExtensionContext,
   e: NormalizedExtension,
   i: {
     state: State;
@@ -127,7 +127,7 @@ export async function readSuite4ExtensionPreview(
     readContract(ctx.client, { ...s, functionName: "protocolTerms" }),
     custom ? inspectExtensionCode(ctx, e.params.ext, e.params.codehash) : null,
   ]);
-  const key = suite4ExtensionAllowlistKey(e.params, record?.creationCodeHash)!;
+  const key = extensionAllowlistKey(e.params, record?.creationCodeHash)!;
   const allowlisted = await readContract(ctx.client, {
     ...s,
     functionName: "extensionAllowed",
@@ -177,12 +177,12 @@ export function pinExtensionPreview(
 }
 
 /**
- * A suite 4 launch's extension held to the chain before anything is mined or signed: `EXTENSION_NOT_ALLOWED`, with
+ * A launch's extension held to the chain before anything is mined or signed: `EXTENSION_NOT_ALLOWED`, with
  * the reason, where the launch check would turn it away. `payee` is the launch's first fee recipient, paid when the
  * extension names nobody.
  */
-export async function requireSuite4Extension(
-  ctx: Suite4ExtensionContext,
+export async function requireExtension(
+  ctx: ExtensionContext,
   e: NormalizedExtension,
   i: {
     state: State;
@@ -193,7 +193,7 @@ export async function requireSuite4Extension(
 ): Promise<LaunchExtensionPreview> {
   const named = BigInt(e.params.payee) !== 0n;
   const [preview] = await Promise.all([
-    readSuite4ExtensionPreview(ctx, e, {
+    readExtensionPreview(ctx, e, {
       ...i,
       payee: named ? e.params.payee : i.payee,
     }),
@@ -220,19 +220,19 @@ function padDefaultFees(s: State): FeeSchedule {
   };
 }
 
-/** `client.previewExtension` on suite 4: the extension's shape, then the launchpad's row and the chain's answers. */
-export async function previewSuite4Extension(
-  ctx: Suite4ExtensionContext,
+/** `client.previewExtension`: the extension's shape, then the launchpad's row and the chain's answers. */
+export async function previewLaunchExtension(
+  ctx: ExtensionContext,
   input: LaunchExtensionInput,
   o: PreviewExtensionOptions = {},
 ): Promise<LaunchExtensionPreview> {
   const chain = ctx.chain.chain;
-  const e = normalizeExtension(input, chain, 4);
+  const e = normalizeExtension(input, chain);
   const padId = o.launchpadId ?? BANKR_LAUNCHPAD_ID;
   const named = BigInt(e.params.payee) !== 0n ? e.params.payee : null;
   // The quote is no part of an extension's admission: any address reads the pad's row.
   const [state] = await Promise.all([
-    readSuite4LaunchState(ctx.client, ctx.addresses, {
+    readLaunchState(ctx.client, ctx.addresses, {
       padId,
       quote: ctx.addresses.factory,
     }),
@@ -241,7 +241,7 @@ export async function previewSuite4Extension(
   if (padId > state.padCount)
     throw new LaunchRefusedError("UNKNOWN_LAUNCHPAD", { chain });
   const own = o.schedule ?? padDefaultFees(state);
-  return readSuite4ExtensionPreview(ctx, e, {
+  return readExtensionPreview(ctx, e, {
     state,
     fees: o.fees ?? { buy: own, sell: own },
     payee: named,

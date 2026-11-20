@@ -7,10 +7,29 @@
  * Env: PAD_SIGNER_KEY (the key whose address is your pad's `signer`), LAUNCHPAD_ID. Use a KMS- or HSM-backed viem
  * account in production. In your app, import from "@bankr/launch-sdk/server".
  */
+import { parseUnits, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { createAuthorizeHandler } from "../src/server.js";
+import { CHAINS, createAuthorizeHandler } from "../src/server.js";
 
-const MAX_DEV_BUY_WEI = 10n ** 17n;
+// This pad's dev-buy cap per quote, each in the quote's own units. Decimals differ by token and by chain (USDC has
+// 6 here and 18 on BNB Chain), so one number is never a cap for every quote.
+const { WETH, USDC } = CHAINS.base.quotes;
+const MAX_DEV_BUY: Readonly<Record<string, bigint>> = {
+  [WETH.address]: parseUnits("0.1", WETH.decimals),
+  [USDC.address]: parseUnits("250", USDC.decimals),
+};
+
+/** Whether a launch's dev buy is inside this pad's cap for its quote. A quote with no cap here takes no dev buy. */
+export function devBuyWithinCap(launch: {
+  nativeDevBuy: bigint;
+  params: { quote: Address; devBuyAmountIn: bigint };
+}): boolean {
+  // A native dev buy is paid in the wrapped native quote's own units.
+  const amount = launch.nativeDevBuy + launch.params.devBuyAmountIn;
+  if (amount === 0n) return true;
+  const cap = MAX_DEV_BUY[launch.params.quote.toLowerCase()];
+  return cap !== undefined && amount <= cap;
+}
 
 export const POST = createAuthorizeHandler({
   account: privateKeyToAccount(process.env.PAD_SIGNER_KEY as `0x${string}`),
@@ -23,7 +42,7 @@ export const POST = createAuthorizeHandler({
         status: 401,
       });
     }
-    if (launch.nativeDevBuy + launch.params.devBuyAmountIn > MAX_DEV_BUY_WEI) {
+    if (!devBuyWithinCap(launch)) {
       throw new Response(
         JSON.stringify({ error: "Dev buys on this pad are capped." }),
         { status: 403 },

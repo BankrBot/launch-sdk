@@ -1,5 +1,5 @@
 import type { Address, Hex } from "viem";
-import { requireCapExclusions } from "../addresses.js";
+import { BANKR_V4_CAP_EXCLUSIONS } from "../addresses.js";
 import { parseAuthorization } from "../authorizer.js";
 import type { LaunchChain } from "../chains/index.js";
 import { refuseBrokenCurve, refuseMalformedCurve } from "../curveDetail.js";
@@ -24,43 +24,43 @@ import {
   vanityUnavailable,
 } from "../salt.js";
 import { launchTermsHash } from "../terms.js";
-import { pinExtensionPreview, requireSuite4Extension } from "./extension.js";
-import { suite4CapExclusions, suite4OptionsOf } from "./featureOptions.js";
+import { pinExtensionPreview, requireExtension } from "./extension.js";
+import { launchCapExclusions, featureOptionsOf } from "./featureOptions.js";
 import {
   encodeLaunchOptions,
   launchOptions,
   pinLaunchOptions,
 } from "./options.js";
-import { checkSuite4LaunchPreset, presetIsQuoteOnly } from "./presets.js";
+import { checkLaunchPreset, presetIsQuoteOnly } from "./presets.js";
 import {
-  placeSuite4StartTick,
+  placeStartTick,
   requireClaimOperators,
-  suite4Economics,
-  suite4Quote,
-  type Suite4PlanContext,
+  economicsOf,
+  launchQuote,
+  type LaunchPlanContext,
 } from "./planChecks.js";
-import { suite4CallError } from "./revert.js";
+import { launchCallError } from "./revert.js";
 import {
   knobInForce,
-  readSuite4LaunchState,
+  readLaunchState,
   resolveLaunchTerms,
-  suite4OperatorShareBps,
-  suite4PadTermsHash,
+  maxOperatorShareBps,
+  padTermsHash,
   type ResolvedTerms,
-  type Suite4LaunchParams,
-  type Suite4LaunchState,
+  type ContractLaunchParams,
+  type LaunchState,
 } from "./settings.js";
 
-// One pass of a suite 4 plan up to its signature: the pad's defaults, the start, the chain's launch check, the salt
-// and the pins. plan.ts holds the result to the factory and simulates it. Vendored from core's prepareLaunchSuite4.ts.
+// One pass of a plan up to its signature: the pad's defaults, the start, the chain's launch check, the salt
+// and the pins. plan.ts holds the result to the factory and simulates it. Vendored from core's bankr-v4 launch preparation.
 
-type Ctx<C extends LaunchChain> = Suite4PlanContext<C>;
+type Ctx<C extends LaunchChain> = LaunchPlanContext<C>;
 
-export interface Suite4Draft {
-  s: Suite4LaunchState;
+export interface LaunchDraft {
+  s: LaunchState;
   live: LivePointers;
   quote: QuoteToken;
-  params: Suite4LaunchParams;
+  params: ContractLaunchParams;
   value: bigint;
   token: Address;
   resolved: ResolvedTerms;
@@ -68,32 +68,36 @@ export interface Suite4Draft {
 }
 
 export /** One pass: the draft, the launch check, the checks only the factory runs, the salt, the pins and the signature. */
-async function draftSuite4Launch<C extends LaunchChain>(
+async function draftLaunch<C extends LaunchChain>(
   ctx: Ctx<C>,
   n: NormalizedLaunch<C>,
-): Promise<Suite4Draft> {
+): Promise<LaunchDraft> {
   const caps = ctx.chain;
   const chain = caps.chain;
   const a = ctx.addresses;
-  const c = n.suite4!;
+  const c = n.choices;
   const refuse = (code: CodeOfKind<"refused">, detail?: string): never => {
     throw new LaunchRefusedError(code, { chain, detail });
   };
   const [s, live] = await Promise.all([
-    readSuite4LaunchState(ctx.client, a, {
+    readLaunchState(ctx.client, a, {
       padId: n.launchpadId,
       quote: n.quote.address,
     }),
     readLivePointers(ctx.client, a.factory),
   ]);
-  const quote = await suite4Quote(ctx, n, s);
+  const quote = await launchQuote(ctx, n, s);
   const signer =
     BigInt(s.registryPad.signer) === 0n ? null : s.registryPad.signer;
-  if (signer !== null && !ctx.authorizer) refuse("AUTHORIZATION_REQUIRED");
+  if (signer !== null && !ctx.authorizer)
+    throw new LaunchRefusedError("AUTHORIZATION_REQUIRED", {
+      chain,
+      detail: "Pass the client this launchpad's authorizer.",
+    });
 
-  const economics = suite4Economics(n, s);
+  const economics = economicsOf(n, s);
   const vestBps = n.vestBps ?? Number(knobInForce(s, "vestBps").dflt);
-  const options = suite4OptionsOf(
+  const options = featureOptionsOf(
     c,
     s,
     {
@@ -104,19 +108,19 @@ async function draftSuite4Launch<C extends LaunchChain>(
     },
     chain,
   );
-  const capExclusions = suite4CapExclusions(
+  const capExclusions = launchCapExclusions(
     c,
     s,
-    requireCapExclusions(chain),
+    BANKR_V4_CAP_EXCLUSIONS[chain],
     chain,
   );
   const native = quote.devBuy === "native";
   const [start, allowCodeVestingRecipient, preview] = await Promise.all([
-    placeSuite4StartTick(ctx, n, s, quote, c.supply),
+    placeStartTick(ctx, n, s, quote, c.supply),
     checkRecipients(ctx, n, live, vestBps),
     n.extension === null
       ? null
-      : requireSuite4Extension(ctx, n.extension, {
+      : requireExtension(ctx, n.extension, {
           state: s,
           fees: economics,
           payee: n.feeRecipients[0]!.recipient,
@@ -129,7 +133,7 @@ async function draftSuite4Launch<C extends LaunchChain>(
   // `resolve` raises a table's form as a bare InvalidCurve: held here first, where the sentence says what to change.
   if (curve.builtIn === null)
     refuseMalformedCurve(curve.word, start.tick, chain);
-  const draft: Suite4LaunchParams = {
+  const draft: ContractLaunchParams = {
     ...buildLaunchParams({
       ...n,
       curve,
@@ -140,8 +144,8 @@ async function draftSuite4Launch<C extends LaunchChain>(
       economics,
       launchpadId: n.launchpadId,
       // Pin the pad's payees as read: an operator change before inclusion reverts the launch.
-      maxOperatorShareBps: suite4OperatorShareBps(s.pad.terms),
-      operatorPayeesHash: suite4PadTermsHash(s.pad.terms),
+      maxOperatorShareBps: maxOperatorShareBps(s.pad.terms),
+      operatorPayeesHash: padTermsHash(s.pad.terms),
       vestBps,
       allowCodeVestingRecipient,
       devBuyAmountIn: native ? 0n : n.devBuyAmount,
@@ -156,11 +160,11 @@ async function draftSuite4Launch<C extends LaunchChain>(
     nativeDevBuy: value,
     params: draft,
   }).catch((error: unknown) => {
-    throw suite4CallError(error, chain);
+    throw launchCallError(error, chain);
   });
   const t = resolved.terms;
   // `resolve` builds no preset: its constructor's bounds are held here, against the site the coin will freeze.
-  checkSuite4LaunchPreset(draft.extension, t.presetSite, chain);
+  checkLaunchPreset(draft.extension, t.presetSite, chain);
   // The preview was read before `resolve`: its cut, ceiling and fees are shown as the pinned terms hold them.
   const extension =
     preview === null || n.extension === null
@@ -200,7 +204,7 @@ async function draftSuite4Launch<C extends LaunchChain>(
       );
   } else {
     const mined = await mineVanitySalt({
-      suite: live,
+      live,
       identity,
       launcher: n.launcher,
       rule,
@@ -208,7 +212,7 @@ async function draftSuite4Launch<C extends LaunchChain>(
     if (mined === null) throw vanityUnavailable(chain, n.launchpadId, rule);
     ({ salt, token } = mined);
   }
-  let params: Suite4LaunchParams = {
+  let params: ContractLaunchParams = {
     ...draft,
     salt,
     options: c.pin

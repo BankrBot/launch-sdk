@@ -1,17 +1,12 @@
 /**
- * Launch on Bankr's own launchpad (id 0) on Base from a Node backend in API mode: Bankr's prepare endpoint signs the
- * pad's terms, mines the `…ba3` salt, pins the metadata and records the prepare (the `prepared` attribution tier);
- * your wallet signs the launch and pays the gas. The signer is an encrypted
- * keystore (`cast wallet import launcher --interactive`), never a raw key in an env file.
+ * Launch a coin on a launchpad on Base from a Node backend: no key and no call to Bankr before the launch. Your
+ * wallet signs the launch and pays the gas, and every field left out takes the launchpad's own default. The signer
+ * is an encrypted keystore (`cast wallet import launcher --interactive`), never a raw key in an env file.
  *
- *   LAUNCHER_KEYSTORE=~/.foundry/keystores/launcher KEYSTORE_PASSWORD=… BANKR_PREPARE_KEY=bk_… \
- *     bun examples/node-launch.ts
+ *   LAUNCHER_KEYSTORE=~/.foundry/keystores/launcher KEYSTORE_PASSWORD=… LAUNCHPAD_ID=7 bun examples/node-launch.ts
  *
- * BANKR_PREPARE_KEY must be prepare-scoped (wallet and agent APIs disabled), or Bankr answers
- * API_KEY_OVERPRIVILEGED. In your app, import from "@bankr/launch-sdk" and "@bankr/launch-sdk/server".
- *
- * Not available yet: on Bankr's current contracts this SDK version refuses API mode (`PROVIDER_NOT_DEPLOYED`), so
- * this example runs once a later version ships it. Until then launch in pure mode (`own-launchpad.ts`).
+ * LAUNCHPAD_ID is a launchpad without a signer (`own-launchpad.ts` registers one); one with a signer also takes
+ * its `authorizer` on the client. In your app, import from "@bankr/launch-sdk".
  */
 import { createDecipheriv, pbkdf2Sync, scryptSync } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -20,13 +15,11 @@ import {
   createWalletClient,
   http,
   keccak256,
-  parseEther,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { createLaunchClient, isLaunchSdkError } from "../src/index.js";
-import { bankrPreparer } from "../src/server.js";
 
 interface KeystoreV3 {
   crypto: {
@@ -98,9 +91,6 @@ async function main(): Promise<void> {
       chain: base,
       transport: http(rpcUrl),
     }),
-    api: {
-      preparer: bankrPreparer({ apiKey: requireEnv("BANKR_PREPARE_KEY") }),
-    },
   });
 
   try {
@@ -108,15 +98,8 @@ async function main(): Promise<void> {
       name: "My Token",
       symbol: "MINE",
       launcher: account.address,
-      // Bankr's pad (the default launchpadId 0); every economic field omitted takes the pad's terms.
-      // API mode: Bankr pins this JSON and the token's metadata URI is the pin.
-      metadata: {
-        image: "https://example.com/mine.png",
-        description: "Launched with @bankr/launch-sdk",
-      },
-      // Half of the creator's own take to the coin's holders, on top of the holders' share of Bankr's slice.
-      holderShareBps: 5_000,
-      devBuy: { amount: parseEther("0.001") },
+      launchpadId: BigInt(requireEnv("LAUNCHPAD_ID")),
+      metadataUri: "ipfs://bafy…", // your token's metadata JSON
     });
     console.log(
       `Launched ${launch.token} (pool ${launch.poolId}) in ${launch.txHash}`,

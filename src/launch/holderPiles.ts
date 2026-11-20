@@ -7,7 +7,7 @@ import type { HolderPile, HolderPoke } from "../holderPiles.js";
 import {
   readQuoteListed,
   requireLaunchRecord,
-  type SuiteReadContext,
+  type ReadContext,
 } from "../lens.js";
 import {
   legOfWake,
@@ -21,14 +21,11 @@ import {
   type HolderPileReads,
 } from "../settings/holderPile.js";
 
-// A suite 4 coin's holders' pile waits at the leg its launch froze, never at the one the record names for launches
+// A coin's holders' pile waits at the leg its launch froze, never at the one the record names for launches
 // from now on: that leg's own floor and terms, and the ledger's shared window, decide what a wake or a poke does.
 
 /** The leg of a launched pool's coin; a pool whose holders' bucket names none is no launch of this ledger. */
-async function requireCoinLeg(
-  ctx: SuiteReadContext,
-  poolId: Hex,
-): Promise<Address> {
+async function requireCoinLeg(ctx: ReadContext, poolId: Hex): Promise<Address> {
   const leg = await readCoinLeg(ctx.client, ctx.addresses.ledger, poolId);
   if (!leg)
     throw new LaunchRefusedError("NOT_A_LAUNCH", { chain: ctx.chain.chain });
@@ -53,12 +50,12 @@ function pokeOf(
   return !w.due ? "none" : w.forwardsNow ? "forward" : "convert";
 }
 
-const chainNow = async (ctx: SuiteReadContext): Promise<bigint> =>
+const chainNow = async (ctx: ReadContext): Promise<bigint> =>
   (await getBlock(ctx.client, { blockTag: "latest" })).timestamp;
 
 /** Per pool, in order: the coin's own leg and what a poke of its pile there would do at the chain's clock. */
-export async function readSuite4HolderPiles(
-  ctx: SuiteReadContext,
+export async function readHolderPiles(
+  ctx: ReadContext,
   pools: readonly { poolId: Hex; quote: Address }[],
 ): Promise<HolderPile[]> {
   if (pools.length === 0) return [];
@@ -87,17 +84,15 @@ export async function readSuite4HolderPiles(
   }));
 }
 
-/** `holders.getConversion` for a suite 4 coin: its pile at its own leg, at `now` (default the chain's clock). */
-export async function readSuite4HolderConversion(
-  ctx: SuiteReadContext,
+/** `holders.getConversion` for a coin: its pile at its own leg, at `now` (default the chain's clock). */
+export async function readHolderConversion(
+  ctx: ReadContext,
   token: unknown,
   now?: number,
 ): Promise<HolderConversion> {
   const { info, legId } = await requireLaunchRecord(ctx, token);
   const { client, addresses: a } = ctx;
   const chain = ctx.chain.chain;
-  // Suite 3's terms name no leg; this read is suite 4's alone.
-  if (legId === null) throw new LaunchRefusedError("NOT_A_LAUNCH", { chain });
   const [leg, paused, at] = await Promise.all([
     requireCoinLeg(ctx, info.poolId),
     readContract(client, {

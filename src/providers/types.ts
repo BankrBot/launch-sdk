@@ -28,12 +28,11 @@ import type {
 } from "../extensionPreview.js";
 import type { LaunchFees } from "../fees.js";
 import type { LaunchHolders } from "../holders.js";
-import type { LaunchpadOperations } from "../launchpads.js";
 import type { LaunchContracts } from "../settings/index.js";
 import type { InvariantReport } from "../invariants.js";
-import type { LaunchpadInfo, VolumeSplit } from "../launchpad.js";
+import type { VolumeSplit } from "../launchpad.js";
 import type { LaunchInfo } from "../lens.js";
-import type { ResolvedLaunch } from "../suite4/plan.js";
+import type { ResolvedLaunch } from "../launch/plan.js";
 import type { LaunchMetadataAdmin, TradingStatus } from "../token.js";
 import type { LaunchVesting } from "../vesting.js";
 
@@ -45,53 +44,45 @@ export type { FeeRecipient, FeeSchedule, LaunchEconomics, LaunchParams };
  */
 export type ReadClient = Client<Transport, Chain | undefined>;
 
-/** How a quote funds a dev buy: `msg.value` (WETH), an ERC-20 approved to the factory, or not at all. */
+/** How a quote funds a dev buy: `msg.value` (WETH, WBNB), an ERC-20 approved to the factory, or not at all. */
 export type DevBuyKind = "native" | "erc20" | "none";
 
-/** Token metadata Bankr pins for you in API mode. Pure mode takes a ready `metadataUri` instead. */
-export interface LaunchMetadata {
-  image?: string;
-  description?: string;
-  tweetUrl?: string;
-  websiteUrl?: string;
-}
-
 /**
- * One launch. Every economic field defaults to the launchpad's terms (`client.launchpad(id)` shows them) and is
- * checked against the protocol's bounds and the pad's before anything is signed.
+ * One launch. Every term left unset takes the launchpad's default (`client.contracts().settings.pad(id)` shows
+ * them), and the chain's own launch check holds each to the launchpad's range before anything is signed.
  */
 export interface LaunchInput<C extends LaunchChain = LaunchChain> {
   /** 1–100 characters. */
   name: string;
   /** 1–20 characters. */
   symbol: string;
-  /** Pure mode: the token's metadata URI, at most 2,048 bytes; after launch only `metadataAdmin` may replace it.
-   *  Defaults to "". */
+  /** The token's metadata URI, at most the launchpad's `metadataBytes`; after launch only `metadataAdmin` may
+   *  replace it. Defaults to "". */
   metadataUri?: string;
   /** Who may replace the token's metadata URI after launch, hand that role on or renounce it. Default nobody: the URI
    *  is fixed from the first block. It is part of the token's address. */
   metadataAdmin?: Address;
-  /** API mode only (Bankr pins the JSON); pure mode refuses it. */
-  metadata?: LaunchMetadata;
   /**
    * The account that is `msg.sender` at the factory (not necessarily `tx.from`): it pays the dev buy, receives the
    * dev-buy tokens, and is the default fee and vesting recipient. A relayer or multicall becomes the launcher.
    */
   launcher: Address;
   /**
-   * The launchpad (uint64). Default `0n`, Bankr's own pad, which Bankr signs: launch it in API mode. Open pads
-   * launch unsigned; a pad with a signer needs the client's `authorizer`.
+   * The launchpad (uint64). Default `0n`, Bankr's own pad, which Bankr signs and this SDK version cannot launch
+   * on: name your own or any open one. Open pads launch unsigned; a pad with a signer needs the client's
+   * `authorizer`.
    */
   launchpadId?: bigint;
   /**
-   * A named major (`CHAINS[chain].quotes`) or any ERC-20's address. Default WETH (USDC on Arc). On a pad other than
-   * Bankr's, a quote the factory does not list launches too (any-quote pairing): set `startFdv`, and no auto-LP.
+   * A named major (`CHAINS[chain].quotes`) or any ERC-20's address. Default the chain's wrapped native token
+   * (WETH; WBNB on BNB Chain; USDC on Arc). Amounts are in the quote's own decimals. On a pad that
+   * allows it, a quote Bankr does not list launches too (any-quote pairing): set `startFdv`, and no auto-LP.
    */
   quote?: QuoteFor[C] | Address;
   /**
    * The start FDV of the whole supply, in the quote's base units: the start tick is
-   * `floor200(ln(startFdv / supply) / ln(1.0001))`. Required for a quote the factory does not list (the launcher prices
-   * it; no USD bound), optional for a listed one, where it must sit in the factory's USD window.
+   * `floor200(ln(startFdv / supply) / ln(1.0001))`. Required for a quote Bankr does not list (the launcher prices
+   * it; no USD bound), optional for a listed one, where it must sit in the launchpad's USD window.
    */
   startFdv?: bigint;
   /**
@@ -115,29 +106,29 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
    *  for them. Without it the factory reverts such a launch (`OpenContractFeeRecipient`). Default false. */
   allowOpenCodeFeeRecipients?: boolean;
   /**
-   * When public trading opens: a `Date` (floored to the second) or unix seconds, after now and at most 7 days ahead,
-   * or the pad's shorter `policy.maxStartDelay`. Default (or 0): at launch. Fixed for good once the launch lands.
+   * When public trading opens: a `Date` (floored to the second) or unix seconds, after now and at most the pad's
+   * `startDelaySecs` ahead. Default (or 0): at launch. Fixed for good once the launch lands.
    */
   startTime?: Date | number;
   /** Each direction's schedule (a buy is quote in). Default: the pad's. Set `fees` or `schedule`, not both. */
   fees?: { buy: FeeSchedule; sell: FeeSchedule };
   /** One schedule for both directions. */
   schedule?: FeeSchedule;
-  /** The referrer's slice of each fee, in bps of the fee (at most 500, and the pad's maximum). Default 0. */
+  /** The referrer's slice of each fee, in bps of the fee, inside the pad's range. Default: the pad's. */
   referrerBps?: number;
   /**
    * Fees to the coin's holders, in bps of the creator's own take (what the creator keeps after auto-LP and buyback):
    * 10,000 sends all of it to holders. Converted with {@link holderShareToHoldersBps}. Default: the pad's.
    */
   holderShareBps?: number;
-  /** Auto-liquidity, in bps of the creator side. Default: the pad's (Bankr's pad floors it at 30 %). */
+  /** Auto-liquidity, in bps of the creator side. Default: the pad's. */
   autoLpBps?: number;
-  /** Buyback, in bps of the creator side. Default 0. */
+  /** Buyback, in bps of the creator side. Default: the pad's. */
   buybackBps?: number;
   /**
-   * Creator vesting. Default: the pad's share and schedule (suite 3: a 30-day cliff, then linear to 365 days).
-   * `recipient` defaults to the launcher. Suite 4: `cliffSeconds` and `durationSeconds` name the schedule inside the
-   * pad's range (name one and the other takes the pad's default); both 0 unlock the slice at the trading start.
+   * Creator vesting. Default: the pad's share and schedule. `recipient` defaults to the launcher. `cliffSeconds`
+   * and `durationSeconds` name the schedule inside the pad's range (name one and the other takes the pad's
+   * default); both 0 unlock the slice at the trading start.
    */
   vesting?: {
     bps: number;
@@ -146,23 +137,24 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
     cliffSeconds?: number;
     durationSeconds?: number;
   };
-  /** A share of supply vested to the coin's holders, pushed to the launch's distributor. Counts toward the 50 % cap. */
+  /** A share of supply vested to the coin's holders, pushed to the launch's distributor. Counts toward the pad's
+   *  `vestedTotalBps`. */
   vestToHolders?: {
     bps: number;
     cliffSeconds: number;
     durationSeconds: number;
   };
-  /** In the quote's base units; native on WETH (not on Arc), an ERC-20 approval to the factory otherwise. `slippageBps` defaults to 200. */
+  /** In the quote's base units; native on the wrapped native token (not on Arc), an ERC-20 approval to the factory
+   *  otherwise. `slippageBps` defaults to 200. */
   devBuy?: { amount: bigint; slippageBps?: number };
   /**
    * An extension the hook binds to the pool for good: one of Bankr's presets by name or id with its parameters
    * (`{ preset: "sniper_tax", buyPips, sellPips, endSecs }`, `"decay_tax"`, `"pump_brake"`), a raw preset
-   * (`{ presetId, params }`), or custom code the suite's allowlist holds (`{ address, codehash, … }`). Each parameter
-   * is held to its contract's bound (`EXTENSION_OUT_OF_BOUNDS`), then the registry's allowlist and the launchpad's
-   * policy are read (`EXTENSION_NOT_ALLOWED`). Pure mode only. Default: none.
+   * (`{ presetId, params }`), or custom code Bankr's allowlist holds (`{ address, codehash, … }`). Each parameter
+   * is held to its bound (`EXTENSION_OUT_OF_BOUNDS`), then the allowlist and the launchpad's switches are read
+   * (`EXTENSION_NOT_ALLOWED`). Default: none.
    */
   extension?: LaunchExtensionInput;
-  // Suite 4 only, each optional: unset takes the launchpad's default, resolved on chain. A suite 3 launch refuses them.
   /** The total supply in the token's base units (18 decimals), inside the pad's range. Default: the pad's. */
   supply?: bigint;
   /** The wallet cap: its size in bps of supply and its length in seconds, or `false` for none. Default: the pad's. */
@@ -192,7 +184,7 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
   /** How the holders' rewards stream: over how many seconds, and the share of a top-up that restarts the clock. */
   holderStream?: { seconds: number; restartBps: number };
   /**
-   * Wallets exempt from the wallet cap beside the suite's own. Default: the chain's settlers, sent only where the
+   * Wallets exempt from the wallet cap beside the contracts' own. Default: the chain's settlers, sent only where the
    * launch has a cap and the pad allows exemptions. Refused when named on a launch with no cap.
    */
   capExclusions?: readonly Address[];
@@ -209,13 +201,13 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
    * the launch is refused (`CLAIM_OPERATOR_REQUIRED`). A wallet, a Safe and an EIP-7702 account need none.
    */
   claimOperator?: Address;
-  /** Pure mode only: a single-use bytes32 that satisfies the pad's vanity. By default the SDK mines a fresh one. */
+  /** A single-use bytes32 that satisfies the pad's vanity. By default the SDK mines a fresh one. */
   salt?: Hex;
   /** Default 1,200. Raise it for Safe or ERC-4337 launchers, whose signing latency can outlast the default. */
   deadlineSeconds?: number;
 }
 
-/** One builder allocation of a suite 4 launch. */
+/** One builder allocation of a launch. */
 export interface LaunchAllocation {
   recipient: Address;
   /** In the token's base units. */
@@ -226,17 +218,17 @@ export interface LaunchAllocation {
   durationSeconds?: number;
 }
 
-/** One quote the chain's factory allows, prices and the launch's pad accepts. */
+/** The quote a launch pairs with, as the chain holds it. */
 export interface QuoteToken {
   /** The SDK's name for a named major; null for any other quote. */
   symbol: string | null;
   address: Address;
   decimals: number;
   isDefault: boolean;
-  /** Listed by the chain's factory; an unlisted quote launches only on a pad other than Bankr's, in pure mode. */
+  /** Bankr lists it on the chain; an unlisted quote launches only on a pad that allows one. */
   listed: boolean;
-  /** CHAINLINK quotes launch in pure mode; SIGNED ones need Bankr's price attestation (API mode); an unlisted quote
-   *  is `unpriced` (its launcher sets `startFdv`). */
+  /** CHAINLINK quotes launch from the SDK; SIGNED ones need Bankr's price attestation, which a launch from the SDK
+   *  does not carry; an unlisted quote is `unpriced` (its launcher sets `startFdv`). */
   pricing: "chainlink" | "signed" | "unpriced";
   devBuy: DevBuyKind;
 }
@@ -260,10 +252,10 @@ export interface LaunchPlan<C extends LaunchChain = LaunchChain> {
   factory: Address;
   launcher: Address;
   launchpadId: bigint;
-  /** `factory.launch`'s tuple. A suite 4 launch carries `options`: what it names beyond the pad's defaults, and its pins. */
-  params: LaunchParams & { options?: Hex };
-  /** A suite 4 launch: the terms its coin will freeze, as the chain's launch check resolved them. */
-  resolved?: ResolvedLaunch;
+  /** `factory.launch`'s tuple. Its `options` carry what the launch names beyond the pad's defaults, and its pins. */
+  params: LaunchParams;
+  /** The terms the coin will freeze, as the chain's launch check resolved them. */
+  resolved: ResolvedLaunch;
   /** `msg.value`: a native dev buy, else 0. */
   value: bigint;
   predictedToken: Address;
@@ -290,8 +282,6 @@ export interface LaunchPlan<C extends LaunchChain = LaunchChain> {
   gasEstimate: bigint | null;
   /** The ERC-8021 builder-code suffix appended to the launch calldata, if any. */
   dataSuffix: Hex | undefined;
-  /** API mode with a prepare-scoped key: Bankr's record of the prepare. */
-  prepareId?: string;
 }
 
 /** A launch that simulated cleanly. */
@@ -341,17 +331,17 @@ export interface LaunchResult<C extends LaunchChain = LaunchChain> {
   totalSupply: bigint;
   devBuyOut: bigint;
   /**
-   * API mode's `launch()` only: Bankr's index registration at 5 confirmations, or null when it failed (the indexer
-   * still indexes the launch at the chain's full depth).
+   * `launch()` on a client with `api` only, on a chain Bankr's index covers: its registration at 5 confirmations,
+   * or null when it failed (the indexer still indexes the launch at the chain's full depth).
    */
   registration?: RegisterResult | null;
 }
 
-/** Live state of a chain's suite. */
+/** Live state of a chain's contracts. */
 export interface LaunchStatus {
-  /** This SDK version launches on the chain: `CHAINS[chain].deployed`, whatever the client's options. */
+  /** The client is on the contracts this SDK version ships for the chain: its record, not a fork's own. */
   deployed: boolean;
-  /** The client was built with `fork: true`, so its launch methods run whether or not the chain is `deployed`. */
+  /** The client was built with `fork: true`, so its launch methods run whether or not it is `deployed`. */
   fork: boolean;
   /** New launches are paused at the factory. */
   paused: boolean;
@@ -365,8 +355,6 @@ export interface LaunchProviderAdapter<C extends LaunchChain = LaunchChain> {
   readonly chain: ChainCapabilities<C>;
   readonly info: ProviderInfo<C>;
   status(): Promise<LaunchStatus>;
-  launchpad(id?: bigint): Promise<LaunchpadInfo>;
-  readQuotes(launchpadId?: bigint): Promise<QuoteToken[]>;
   plan(input: LaunchInput<C>): Promise<LaunchPlan<C>>;
   previewExtension(
     extension: LaunchExtensionInput,
@@ -388,7 +376,6 @@ export interface LaunchProviderAdapter<C extends LaunchChain = LaunchChain> {
   readonly holders: LaunchHolders;
   readonly vesting: LaunchVesting;
   readonly metadataAdmin: LaunchMetadataAdmin;
-  readonly launchpads: LaunchpadOperations;
   contracts(): LaunchContracts;
   verifyTokenInvariants(
     token: Address,

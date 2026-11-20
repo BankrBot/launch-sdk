@@ -97,7 +97,7 @@ export interface LaunchpadAdmin {
   acceptOperator(id: bigint): Promise<UnsignedTx>;
 }
 
-/** The launchpad admin namespace for one chain's suite: no wallet needed. */
+/** The launchpad admin namespace for one chain's contracts: no wallet needed. */
 export function createLaunchpadAdmin(ctx: SettingsContext): LaunchpadAdmin {
   const kit: SettingsKit = settingsKit(ctx);
   const r = settingsReaders(kit);

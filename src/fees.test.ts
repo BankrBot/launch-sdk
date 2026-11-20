@@ -8,7 +8,7 @@ import {
   zeroAddress,
   type Hex,
 } from "viem";
-import { bankrFeeLedgerAbi } from "./abis/suite3.js";
+import { bankrFeeLedgerAbi } from "./abis/generated.js";
 import type { FetchLike } from "./api.js";
 import { CHAINS } from "./chains/index.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";

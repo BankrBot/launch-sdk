@@ -1,147 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import {
-  ContractFunctionRevertedError,
-  createPublicClient,
-  custom,
-  encodeErrorResult,
-  getAddress,
-  type Abi,
-} from "viem";
+import { createPublicClient, custom, getAddress } from "viem";
 import { base } from "viem/chains";
-import {
-  bankrFeeLedgerAbi,
-  bankrLaunchFactoryAbi,
-  bankrLaunchTokenAbi,
-  bankrLaunchpadRegistryAbi,
-} from "./abis/suite3.js";
-import { CHAINS } from "./chains/index.js";
 import { createLaunchClient } from "./client.js";
-import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
-import { callLaunch, launchCallError, launchRevertName } from "./simulate.js";
-import { HOOK_EXTENSION_ERRORS } from "./unvendoredErrors.js";
+import { isLaunchSdkError } from "./errors.js";
+import { callLaunch } from "./simulate.js";
 import { FakeChain } from "./__internal__/fakeRpc.js";
-import { installSuite, testSuite } from "./__internal__/fakeSuite.js";
-
-// A revert as viem reports it from a simulated launch, decoded against the contract that declares the error.
-function reverted(abi: Abi, errorName: string, args: unknown[] = []) {
-  return new ContractFunctionRevertedError({
-    abi,
-    data: encodeErrorResult({ abi, errorName, args }),
-    functionName: "launch",
-  });
-}
-
-// Every error the fee recipient list, the metadata admin and the scheduled start added to a launch's path.
-const ROWS: [Abi, string, unknown[], LaunchSdkErrorCode, string][] = [
-  [
-    bankrLaunchFactoryAbi,
-    "InvalidFeeRecipients",
-    [],
-    "INVALID_PARAMS",
-    "fee recipients",
-  ],
-  [
-    bankrLaunchFactoryAbi,
-    "OpenContractFeeRecipient",
-    ["0x2222222222222222222222222222222222222222"],
-    "FEE_RECIPIENT_CANNOT_CLAIM",
-    "allowOpenCodeFeeRecipients",
-  ],
-  [
-    bankrLaunchFactoryAbi,
-    "ExtensionPayeeUnnamed",
-    [],
-    "INVALID_PARAMS",
-    "extension's payee",
-  ],
-  [bankrFeeLedgerAbi, "TooManyCreators", [], "INVALID_PARAMS", "at most 10"],
-  // The ledger refuses a pool's own currencies when it binds a launch's buckets: a recipient or a pad's payee.
-  [
-    bankrFeeLedgerAbi,
-    "InvalidBeneficiary",
-    [],
-    "FEE_RECIPIENT_CANNOT_CLAIM",
-    "is the launch's quote token",
-  ],
-  [bankrLaunchTokenAbi, "MetadataTooLong", [], "INVALID_PARAMS", "2,048"],
-  [bankrLaunchFactoryAbi, "StartPassed", [], "INVALID_PARAMS", "later"],
-  [bankrLaunchFactoryAbi, "StartTooFar", [], "INVALID_PARAMS", "7 days"],
-  [
-    bankrLaunchpadRegistryAbi,
-    "StartDelayAboveLaunchpadMax",
-    [],
-    "INVALID_PARAMS",
-    "launchpad allows",
-  ],
-  [
-    bankrLaunchFactoryAbi,
-    "DevBuyerExcluded",
-    [],
-    "DEV_BUY_UNAVAILABLE",
-    "scheduled start",
-  ],
-  [
-    bankrLaunchTokenAbi,
-    "TradingNotStarted",
-    [],
-    "SIMULATION_REVERTED",
-    "trading start",
-  ],
-  // Extensions always on: the binding's gas budgets, and a buy the extension turns away.
-  [
-    HOOK_EXTENSION_ERRORS,
-    "ExtensionGasBudget",
-    [],
-    "INVALID_PARAMS",
-    "50,000 to 250,000",
-  ],
-  [
-    bankrLaunchFactoryAbi,
-    "AmbiguousExtension",
-    [],
-    "INVALID_PARAMS",
-    "at its floor as 0",
-  ],
-  [
-    HOOK_EXTENSION_ERRORS,
-    "ExtensionRefusedBuy",
-    [],
-    "SIMULATION_REVERTED",
-    "never refuse a sell",
-  ],
-];
-
-describe("launchCallError: the three features' and the extension's reverts", () => {
-  test("each maps to a code and the SDK's own sentence, with the revert kept on cause", () => {
-    for (const [abi, name, args, code, says] of ROWS) {
-      const cause = reverted(abi, name, args);
-      const err = launchCallError(cause, "base");
-      expect(isLaunchSdkError(err, code), name).toBe(true);
-      const sdk = err as { detail?: string; cause?: unknown };
-      expect(sdk.detail, name).toContain(says);
-      expect(launchRevertName(sdk.cause)).toBe(name);
-    }
-  });
-
-  test("a revert with no sentence of its own keeps its code and carries no detail", () => {
-    const err = launchCallError(
-      reverted(bankrLaunchFactoryAbi, "Paused"),
-      "base",
-    );
-    expect(isLaunchSdkError(err, "PAUSED")).toBe(true);
-    expect((err as { detail?: string }).detail).toBeUndefined();
-  });
-});
+import { installContracts } from "./__internal__/fakeContracts.js";
 
 describe("a node that gives no gas estimate for a launch, as one does for a launch over its per-transaction cap", () => {
-  const SUITE = testSuite(8453);
   const LAUNCHER = getAddress("0x1111111111111111111111111111111111111111");
 
   // eth_call answers and eth_estimateGas fails with `refusal`; the plan is the SDK's own, allocations the caller's.
   async function unestimated(refusal: string) {
-    const f = installSuite(new FakeChain(base), SUITE, {
-      [CHAINS.base.quotes.WETH.address]: { decimals: 18 },
-    });
+    const f = installContracts(new FakeChain(base));
     const node = f.fake.publicClient();
     const publicClient = createPublicClient({
       chain: base,
@@ -158,8 +29,7 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
     const sdk = createLaunchClient({
       chain: "base",
       publicClient,
-      suite: 3,
-      addresses: SUITE,
+      addresses: f.deployment,
       fork: true,
     });
     const plan = await sdk.plan({
@@ -167,7 +37,10 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
       symbol: "LSDK",
       metadataUri: "ipfs://bafy-test",
       launcher: LAUNCHER,
-      launchpadId: 1n,
+      launchpadId: f.padId,
+      quote: f.quote,
+      // The altered launches below are not the ones the plan pinned: send them unpinned.
+      pin: false,
     });
     expect(plan.gasEstimate).toBeNull();
     const withAllocations = async (count: number) => {

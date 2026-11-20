@@ -1,5 +1,4 @@
 import {
-  decodeAbiParameters,
   encodeAbiParameters,
   hashTypedData,
   isAddressEqual,
@@ -10,8 +9,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { bankrLaunchFactoryAbi as suite4FactoryAbi } from "./abis/generated.js";
-import { bankrLaunchFactoryAbi } from "./abis/suite3.js";
+import { bankrLaunchFactoryAbi } from "./abis/generated.js";
 import type { LaunchParams } from "./economics.js";
 
 // The terms a pad's signer signs and the EIP-712 authorization over them, vendored from core's bankr-v4
@@ -24,21 +22,6 @@ const launchFn = bankrLaunchFactoryAbi.find(
 export const LAUNCH_PARAMS_PARAM = (
   launchFn?.type === "function" ? launchFn.inputs[0] : undefined
 ) as AbiParameter;
-
-const suite4LaunchFn = suite4FactoryAbi.find(
-  (e) => e.type === "function" && e.name === "launch",
-);
-/** Suite 4's `LaunchParams` tuple: suite 3's fields, then `options`. */
-export const SUITE4_LAUNCH_PARAMS_PARAM = (
-  suite4LaunchFn?.type === "function" ? suite4LaunchFn.inputs[0] : undefined
-) as AbiParameter;
-
-/** A launch's tuple on either suite: a suite 4 launch carries `options` (empty bytes where it names nothing). */
-export type AnyLaunchParams = LaunchParams & { options?: Hex };
-
-/** The tuple a launch's params encode under: suite 4's exactly when they carry `options`. */
-export const launchParamsParam = (p: { options?: unknown }): AbiParameter =>
-  p.options === undefined ? LAUNCH_PARAMS_PARAM : SUITE4_LAUNCH_PARAMS_PARAM;
 
 export type LaunchAuthorization = LaunchParams["authorization"];
 
@@ -72,22 +55,8 @@ export const NO_EXTENSION: LaunchExtension = Object.freeze({
   afterGas: 0,
 });
 
-export function encodeLaunchParams(p: AnyLaunchParams): Hex {
-  return encodeAbiParameters([launchParamsParam(p)], [p]);
-}
-
-/** A suite 4 launch's `abi.encode(p)` back into its tuple. */
-export function decodeSuite4LaunchParams(
-  data: Hex,
-): LaunchParams & { options: Hex } {
-  return decodeAbiParameters(
-    [SUITE4_LAUNCH_PARAMS_PARAM],
-    data,
-  )[0] as LaunchParams & { options: Hex };
-}
-
-export function decodeLaunchParams(data: Hex): LaunchParams {
-  return decodeAbiParameters([LAUNCH_PARAMS_PARAM], data)[0] as LaunchParams;
+export function encodeLaunchParams(p: LaunchParams): Hex {
+  return encodeAbiParameters([LAUNCH_PARAMS_PARAM], [p]);
 }
 
 const isZero = (a: Address) => isAddressEqual(a, zeroAddress);
@@ -106,11 +75,11 @@ export function feeRecipientsOf(
  * `factory.hashLaunchTerms(p, launcher, nativeDevBuy)`: what a pad's signer signs. Timing and signatures are blanked
  * (so `deadline` and `devBuyMinOut` may change after signing), payees resolved as the factory resolves them, a
  * native dev buy folded in, and the extension cleared when none is named. A named recipient list (in its order), the
- * open-code waiver, the metadata admin and the start time hash as given, and on suite 4 the launch's `options` with
- * both pins: a pad's signature covers the terms the launch was shown.
+ * open-code waiver, the metadata admin and the start time hash as given, and so do the launch's `options` with both
+ * pins: a pad's signature covers the terms the launch was shown.
  */
 export function launchTermsHash(
-  p: AnyLaunchParams,
+  p: LaunchParams,
   launcher: Address,
   nativeDevBuy: bigint,
 ): Hex {

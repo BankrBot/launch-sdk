@@ -15,7 +15,7 @@ export const legOfWake = (wake: bigint): Address =>
   );
 
 /** The leg of a pool's coin: its holders' bucket has that one beneficiary, locked for life. Undefined for a pool
- *  the ledger holds no holders' bucket of. Both suites' ledgers answer it alike. */
+ *  the ledger holds no holders' bucket of. */
 export async function readCoinLeg(
   client: ReadClient,
   ledger: Address,
@@ -44,7 +44,7 @@ export function once(): Once {
   };
 }
 
-/** What a suite 4 leg's rule reads for one pool, the ledger's wake word and the factory's pause aside. */
+/** What a leg's rule reads for one pool, the ledger's wake word and the factory's pause aside. */
 export async function readLegPile(
   client: ReadClient,
   ledger: Address,

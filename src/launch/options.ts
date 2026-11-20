@@ -9,7 +9,7 @@ import {
   type Hex,
 } from "viem";
 
-// Suite 4's `LaunchParams.options`, vendored from core's bankr-v4 launchOptions.ts (src/__internal__ holds them
+// The contracts' `LaunchParams.options`, vendored from core's bankr-v4 launchOptions.ts (src/__internal__ holds them
 // equal, and both to forge's option blobs): empty, or abi.encode(LaunchOptions). A set bit names its fields, a clear
 // bit takes the pad's default and leaves them zero; the two pins ride in the same struct.
 

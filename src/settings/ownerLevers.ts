@@ -60,7 +60,7 @@ export interface OwnerLeversAdmin {
   acceptRegistryOwnership(): Promise<UnsignedTx>;
 }
 
-/** The owner's factory and registry levers for one chain's suite. */
+/** The owner's factory and registry levers for one chain's contracts. */
 export function createOwnerLeversAdmin(ctx: SettingsContext): OwnerLeversAdmin {
   const kit: SettingsKit = settingsKit(ctx);
   const { client, factory, registry, addresses: a, ownerRule } = kit;
@@ -132,7 +132,7 @@ export function createOwnerLeversAdmin(ctx: SettingsContext): OwnerLeversAdmin {
 
     async setTreasury(treasury) {
       const to = kit.address(treasury, "The treasury");
-      const [suite, named] = await Promise.all([
+      const [ours, named] = await Promise.all([
         readContract(client, {
           ...factory,
           functionName: "isSuite",
@@ -145,7 +145,7 @@ export function createOwnerLeversAdmin(ctx: SettingsContext): OwnerLeversAdmin {
           args: [to],
         }),
       ]);
-      if (suite || (named & 1n) !== 0n)
+      if (ours || (named & 1n) !== 0n)
         ownerRule(
           "The treasury is never one of Bankr's launch contracts or a quote ever listed: nothing could spend what is pushed there.",
         );
