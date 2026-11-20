@@ -1,0 +1,14 @@
+{
+  "source": "packages/core/src/bankr-v4/abi/generated.ts",
+  "knobs": "packages/core/src/bankr-v4/knobs.ts",
+  "solc": "0.8.26+commit.8a97fa7a",
+  "abis": {
+    "bankrLaunchSettingsAbi": "0x15f684c72316c368675abe2b5afda7ee4ad64d2079de557e594e39effa1b171a",
+    "bankrTermsLensAbi": "0x698ea0b6dcd190dada6a855ea2e5f0c82040d9ec7c6b1f02ac498fb36cc1d96a",
+    "bankrLaunchFactoryAbi": "0x0ecb331f2b539a94e1802d3aef53ef1cad7c7d4065987a5727f03762eb9c8e2f",
+    "bankrLaunchpadRegistryAbi": "0x5cc3e4db50746020612d6c8ccc9ffcddcb6f8cbda1940af5022e288e7d035a77",
+    "bankrFeeLedgerAbi": "0x36b2bb5f26ca6485defccfd8275c5dfe55bfe393cad293897653504581d9408e",
+    "bnkrHolderLegAbi": "0x4c05d2d603518384a835140b53067fc14e318aa13fa74dc208c62158e9d1bbc7"
+  },
+  "knobTable": "0xc2d4b0d46712ecbbc9343a2378ea1319340bd70eb4a827873d56e27ecc0a9d33"
+}

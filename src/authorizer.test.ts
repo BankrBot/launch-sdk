@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { getAddress, recoverTypedDataAddress, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { launchParamsFromJson, launchParamsToJson } from "./abiJson.js";
+import {
+  BANKR_V4_EARLIER_ADDRESSES,
+  BANKR_V4_LAUNCH_ADDRESSES,
+} from "./addresses.js";
 import { remoteAuthorizer, type AuthorizationRequest } from "./authorizer.js";
 import { isLaunchSdkError } from "./errors.js";
 import { buildLaunchParams } from "./normalize.js";
@@ -244,7 +248,7 @@ describe("pad signer (server)", () => {
     expect(authorized[0]!.params).toEqual(wide);
   });
 
-  test("the handler needs an authorize callback and a registry", () => {
+  test("the handler needs an authorize callback; its registry defaults to the chain's shipped record", () => {
     expect(() =>
       createAuthorizeHandler({
         account: signer,
@@ -252,27 +256,46 @@ describe("pad signer (server)", () => {
         launchpadId: 7n,
       } as never),
     ).toThrow(TypeError);
-    let thrown: unknown;
-    try {
-      createAuthorizeHandler({
-        account: signer,
-        chain: "robinhood",
-        launchpadId: 7n,
-        authorize: () => {},
-      });
-    } catch (err) {
-      thrown = err;
+    // Every chain has a record, so none is left to ask for a `registry`.
+    for (const chain of ["base", "robinhood", "arbitrum", "arc"] as const) {
+      expect(
+        () =>
+          createAuthorizeHandler({
+            account: signer,
+            chain,
+            launchpadId: 7n,
+            authorize: () => {},
+          }),
+        chain,
+      ).not.toThrow();
     }
-    expect(isLaunchSdkError(thrown, "PROVIDER_NOT_DEPLOYED")).toBe(true);
-    expect((thrown as { detail?: string }).detail).toContain("`registry`");
-    // Base's registry defaults to the shipped record's.
-    expect(() =>
-      createAuthorizeHandler({
-        account: signer,
-        chain: "base",
-        launchpadId: 7n,
-        authorize: () => {},
-      }),
-    ).not.toThrow();
+  });
+
+  test("the default registry is the latest contracts', the one a default client's requests name", async () => {
+    const handler = createAuthorizeHandler({
+      account: signer,
+      chain: "base",
+      launchpadId: 7n,
+      authorize: () => {},
+    });
+    const post = (registry: string) =>
+      handler(
+        new Request("https://pad.example/authorize", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...request,
+            registry,
+            launchpadId: "7",
+            nativeDevBuy: request.nativeDevBuy.toString(),
+            params: launchParamsToJson(params),
+          }),
+        }),
+      );
+    const latest = BANKR_V4_LAUNCH_ADDRESSES.base!.launchpadRegistry;
+    const earlier = BANKR_V4_EARLIER_ADDRESSES.base!.launchpadRegistry;
+    expect(latest).not.toBe(earlier);
+    expect((await post(latest)).status).toBe(200);
+    expect((await post(earlier)).status).toBe(400);
   });
 });

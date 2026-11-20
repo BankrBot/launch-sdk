@@ -5,8 +5,7 @@ import {
   type AbiParameter,
   type Hex,
 } from "viem";
-import type { LaunchParams } from "./economics.js";
-import { LAUNCH_PARAMS_PARAM } from "./terms.js";
+import { launchParamsParam, type AnyLaunchParams } from "./terms.js";
 
 // ABI values over JSON, the shape Bankr's API and the SDK's HTTP helpers use: bigints as decimal strings, viem's
 // small integers (48 bits and under) as numbers, addresses checksummed. Parsing is strict and names the bad path.
@@ -113,10 +112,18 @@ export function abiFromJson(
   }
 }
 
-/** `LaunchParams` as JSON (bigints as decimal strings). */
-export const launchParamsToJson = (p: LaunchParams): Json =>
-  abiToJson(LAUNCH_PARAMS_PARAM, p);
+/** `LaunchParams` as JSON (bigints as decimal strings); a suite 4 launch's `options` ride as hex bytes. */
+export const launchParamsToJson = (p: AnyLaunchParams): Json =>
+  abiToJson(launchParamsParam(p), p);
 
-/** JSON back into `LaunchParams`; throws a TypeError naming the first bad field. */
-export const launchParamsFromJson = (value: unknown): LaunchParams =>
-  abiFromJson(LAUNCH_PARAMS_PARAM, value, "params") as LaunchParams;
+/** JSON back into `LaunchParams` (suite 4's when it carries `options`); throws a TypeError naming the first bad field. */
+export const launchParamsFromJson = (value: unknown): AnyLaunchParams =>
+  abiFromJson(
+    launchParamsParam(
+      typeof value === "object" && value !== null
+        ? (value as { options?: unknown })
+        : {},
+    ),
+    value,
+    "params",
+  ) as AnyLaunchParams;

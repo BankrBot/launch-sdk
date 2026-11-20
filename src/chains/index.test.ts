@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  BANKR_V4_ADDRESSES,
+  BANKR_V4_EARLIER_ADDRESSES,
+  BANKR_V4_LAUNCH_ADDRESSES,
   BANKR_V4_CAP_EXCLUSIONS,
   requireCapExclusions,
 } from "../addresses.js";
@@ -69,13 +70,21 @@ describe("CHAINS capability table", () => {
     expect(CHAINS.robinhood.maxTxGas).toBe(32_000_000n);
   });
 
-  test("only Base is deployed with a record; every other chain waits for its suite's broadcast", () => {
+  test("the earlier contracts are on Base alone, and only Base is `deployed`; the latest are on every chain", () => {
     for (const chain of LAUNCH_CHAINS) {
       expect(CHAINS[chain].deployed, chain).toBe(chain === "base");
-      expect(BANKR_V4_ADDRESSES[chain] === null, chain).toBe(chain !== "base");
+      expect(BANKR_V4_EARLIER_ADDRESSES[chain] === null, chain).toBe(
+        chain !== "base",
+      );
+      expect(BANKR_V4_LAUNCH_ADDRESSES[chain]?.chainId, chain).toBe(
+        CHAINS[chain].chainId,
+      );
+      expect(Object.isFrozen(BANKR_V4_LAUNCH_ADDRESSES[chain]), chain).toBe(
+        true,
+      );
     }
-    expect(BANKR_V4_ADDRESSES.base?.chainId).toBe(CHAINS.base.chainId);
-    expect(Object.isFrozen(BANKR_V4_ADDRESSES.base)).toBe(true);
+    expect(BANKR_V4_EARLIER_ADDRESSES.base?.chainId).toBe(CHAINS.base.chainId);
+    expect(Object.isFrozen(BANKR_V4_EARLIER_ADDRESSES.base)).toBe(true);
   });
 
   test("every chain has a suite config; Arbitrum's and Arc's list no cap exclusions", () => {

@@ -15,14 +15,14 @@ import {
   bankrHookLensAbi,
   bankrLaunchFactoryAbi,
   bankrLaunchTokenAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { CAP_BPS } from "./economics.js";
 import {
   HOOK_LENS_FRAGMENT,
   readLaunchInfo,
   type SuiteReadContext,
 } from "./lens.js";
-import { predictToken, readLiveSuite } from "./predict.js";
+import { predictToken, readEarlierLivePointers } from "./predict.js";
 import { parseLaunchReceipt } from "./receipt.js";
 import { requireAddress } from "./recipient.js";
 
@@ -41,10 +41,10 @@ export interface InvariantReport {
   skipped: string[];
 }
 
-type Outcome = boolean | "skipped";
+export type Outcome = boolean | "skipped";
 
 /** A contract answering with a revert or no data: a failed check. Anything else (the RPC) is thrown. */
-function isRevert(err: unknown): boolean {
+export function isRevert(err: unknown): boolean {
   return (
     err instanceof BaseError &&
     err.walk(
@@ -57,7 +57,7 @@ function isRevert(err: unknown): boolean {
   );
 }
 
-async function passes<T>(
+export async function passes<T>(
   read: () => Promise<T>,
   ok: (value: T) => boolean,
   onRevert: Outcome = false,
@@ -71,7 +71,7 @@ async function passes<T>(
 }
 
 // Selectors an owned or mintable token would answer: owner(), mint(address,uint256), the OZ AccessControl probe.
-const OWNER_PROBES = ["0x8da5cb5b", "0x40c10f19", "0x91d14854"] as const;
+export const OWNER_PROBES = ["0x8da5cb5b", "0x40c10f19", "0x91d14854"] as const;
 
 /**
  * Holds a token to what a launch through this chain's v4 factory guarantees. Every check is a read; any revert
@@ -259,7 +259,7 @@ async function predictionCheck(
   const before = receipt.blockNumber - 1n;
   try {
     const [suite, onChain] = await Promise.all([
-      readLiveSuite(ctx.client, ctx.addresses.factory, before),
+      readEarlierLivePointers(ctx.client, ctx.addresses.factory, before),
       readContract(ctx.client, {
         address: ctx.addresses.factory,
         abi: bankrLaunchFactoryAbi,

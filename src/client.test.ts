@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { getAddress, type Hex } from "viem";
 import { arbitrum, base, robinhood } from "viem/chains";
-import { BANKR_V4_ADDRESSES } from "./addresses.js";
+import {
+  BANKR_V4_EARLIER_ADDRESSES,
+  BANKR_V4_LAUNCH_ADDRESSES,
+  DEFAULT_SUITE,
+  chooseSuite,
+  type LaunchAddresses,
+  type SuiteRecords,
+} from "./addresses.js";
 import { CHAINS } from "./chains/index.js";
 import { createLaunchClient, type LaunchClient } from "./client.js";
 import { ANY_CURVE, curveWordHex, encodeCurve } from "./curve.js";
@@ -71,6 +78,169 @@ async function expectCode(
   return thrown;
 }
 
+describe("which contracts a client is on", () => {
+  const at = (n: number) => getAddress(`0x${n.toString(16).padStart(40, "0")}`);
+  // A made-up suite 4 row: what a chain's go-live adds to the SDK's table.
+  const row = (chainId: number): LaunchAddresses => ({
+    ...testSuite(chainId),
+    factory: at(0x4f),
+    settings: at(0x45),
+    termsLens: at(0x46),
+    raffleRunCode: at(0x47),
+    launchResolverLibrary: at(0x48),
+    launchPricingLibrary: at(0x49),
+    settingsColdLibrary: at(0x4a),
+    ledgerColdLibrary: at(0x4b),
+  });
+  // Base has both suites, Arbitrum suite 4 alone, Robinhood none: a table from before a chain's go-live.
+  const SHIPPED: SuiteRecords = {
+    suite3: BANKR_V4_EARLIER_ADDRESSES,
+    suite4: {
+      ...BANKR_V4_LAUNCH_ADDRESSES,
+      base: row(8453),
+      arbitrum: row(42161),
+      robinhood: null,
+    },
+  };
+  const detailOf = (fn: () => unknown) =>
+    (expectSync(fn, "PROVIDER_NOT_DEPLOYED") as { detail?: string }).detail;
+
+  test("a client that names nothing is on the chain's latest contracts, on every chain", () => {
+    expect(DEFAULT_SUITE).toBe(4);
+    for (const chain of sdk.LAUNCH_CHAINS) {
+      const record = BANKR_V4_LAUNCH_ADDRESSES[chain];
+      if (record === null) throw new Error(`${chain} has no record`);
+      // Arc has no usable public RPC, so every client names one.
+      const c = createLaunchClient({ chain, rpcUrl: "http://127.0.0.1:1" });
+      expect(c.provider.addresses, chain).toEqual(record);
+      expect(c.provider.addresses.settings).toBe(record.settings);
+      expect(Object.keys(c.contracts()).sort()).toEqual([
+        "coinTerms",
+        "holderLegs",
+        "launchpads",
+        "owner",
+        "settings",
+      ]);
+    }
+  });
+
+  test("the default follows the latest contracts' table alone: suite 3's record moves no client that names none", () => {
+    expect(chooseSuite("base", {}, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: row(8453),
+    });
+    expect(chooseSuite("arbitrum", {}, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: row(42161),
+    });
+    expect(chooseSuite("robinhood", {}, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: {},
+    });
+  });
+
+  test("an override is merged over the latest record, and stands alone where the chain has none or it names another factory", () => {
+    const hook = at(0x77);
+    expect(chooseSuite("base", { addresses: { hook } }, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: { ...row(8453), hook },
+    });
+    // Another factory's contracts are its own, all of them: nothing of the shipped record is left beside it.
+    const other = { factory: at(0x5f), settings: at(0x99), hook };
+    expect(chooseSuite("base", { addresses: other }, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: other,
+    });
+    expect(
+      chooseSuite("base", { suite: 3, addresses: { factory: at(0x5f) } }),
+    ).toEqual({ suite: 3, addresses: { factory: at(0x5f) } });
+    const own = { ...row(8453), settings: at(0x99) };
+    expect(chooseSuite("base", { addresses: own }, SHIPPED)).toEqual({
+      suite: 4,
+      addresses: own,
+    });
+    expect(
+      chooseSuite("robinhood", { addresses: { settings: at(0x99) } }, SHIPPED),
+    ).toEqual({ suite: 4, addresses: { settings: at(0x99) } });
+  });
+
+  test("an override that brings its own factory is a whole record by itself: nothing shipped is left beside it", () => {
+    const shipped = BANKR_V4_LAUNCH_ADDRESSES.base!;
+    // A whole record of the earlier contracts, passed without saying so, is refused and told how to say so.
+    for (const addresses of [SUITE, { factory: SUITE.factory }]) {
+      const detail = detailOf(() =>
+        createLaunchClient({ chain: "base", addresses }),
+      );
+      expect(detail).toContain("addresses.settings");
+      expect(detail).toContain("`suite: 3`");
+    }
+    // Its factory and settings alone are not a record: the ledger, hook and registry would be the shipped ones.
+    const partial = detailOf(() =>
+      createLaunchClient({
+        chain: "base",
+        addresses: { factory: SUITE.factory, settings: at(0x45) },
+      }),
+    );
+    expect(partial).toContain("addresses.ledger");
+    expect(partial).toContain("addresses.hook");
+    // The record's own factory, or a pointer beside it, moves nothing.
+    const hook = at(0x77);
+    const c = createLaunchClient({
+      chain: "base",
+      addresses: { factory: shipped.factory, hook },
+    });
+    expect(c.provider.addresses).toEqual({ ...shipped, hook });
+    // A fork's record that names its settings contract is taken as it is, the shipped terms lens not added.
+    const fork = { ...SUITE, settings: at(0x45) };
+    expect(
+      createLaunchClient({ chain: "base", addresses: fork }).provider.addresses,
+    ).toEqual(fork);
+    expect(
+      detailOf(() =>
+        createLaunchClient({
+          chain: "robinhood",
+          addresses: { factory: SUITE.factory },
+        }),
+      ),
+    ).toContain("addresses.settings");
+  });
+
+  test("suite 3, the test deployment before, is reached only by name, on Base alone", () => {
+    expect(chooseSuite("base", { suite: 3 }, SHIPPED)).toEqual({
+      suite: 3,
+      addresses: { ...BANKR_V4_EARLIER_ADDRESSES.base },
+    });
+    // A whole suite 3 fork record takes no settings contract from the shipped row.
+    const fork = chooseSuite("base", { suite: 3, addresses: SUITE }, SHIPPED);
+    expect(fork).toEqual({ suite: 3, addresses: { ...SUITE } });
+    expect(fork.addresses.settings).toBeUndefined();
+    const c = createLaunchClient({ chain: "base", suite: 3 });
+    expect(c.provider.addresses).toEqual(BANKR_V4_EARLIER_ADDRESSES.base!);
+    expectSync(() => c.contracts(), "PROVIDER_NOT_DEPLOYED");
+    for (const chain of sdk.LAUNCH_CHAINS) {
+      if (BANKR_V4_EARLIER_ADDRESSES[chain] !== null) continue;
+      expect(detailOf(() => createLaunchClient({ chain, suite: 3 }))).toContain(
+        "drop `suite: 3`",
+      );
+    }
+  });
+
+  test("suite 3 with a settings contract is refused, not read as suite 4", () => {
+    const detail = (
+      expectSync(
+        () =>
+          createLaunchClient({
+            chain: "base",
+            suite: 3,
+            addresses: { ...SUITE, settings: at(0x45) },
+          }),
+        "PROVIDER_NOT_DEPLOYED",
+      ) as { detail?: string }
+    ).detail;
+    expect(detail).toContain("addresses.settings");
+  });
+});
+
 describe("createLaunchClient", () => {
   test("UNSUPPORTED_CHAIN for a chain outside CHAINS; RPC_REQUIRED on Arc without an RPC", () => {
     expectSync(
@@ -78,43 +248,56 @@ describe("createLaunchClient", () => {
       "UNSUPPORTED_CHAIN",
     );
     expectSync(
-      () => createLaunchClient({ chain: "arc", addresses: testSuite(5042) }),
+      () =>
+        createLaunchClient({
+          chain: "arc",
+          suite: 3,
+          addresses: testSuite(5042),
+        }),
       "RPC_REQUIRED",
     );
   });
 
-  test("PROVIDER_NOT_DEPLOYED with no record, an incomplete override, a foreign chain id or another provider", () => {
+  test("PROVIDER_NOT_DEPLOYED with an incomplete override, a foreign chain id or another provider", () => {
     for (const chain of sdk.LAUNCH_CHAINS)
-      expect(BANKR_V4_ADDRESSES[chain] === null, chain).toBe(chain !== "base");
-    // Each refusal says what to pass: the docs' first sample (no addresses) is the first wall a fork user hits.
+      expect(BANKR_V4_EARLIER_ADDRESSES[chain] === null, chain).toBe(
+        chain !== "base",
+      );
+    // Each refusal says what to pass. Every chain has a record, so a client with no addresses is refused nowhere.
     const detail = (fn: () => unknown) =>
       (expectSync(fn, "PROVIDER_NOT_DEPLOYED") as { detail?: string }).detail;
-    expect(detail(() => createLaunchClient({ chain: "robinhood" }))).toContain(
-      "fork: true",
-    );
     expect(
       detail(() =>
         createLaunchClient({
           chain: "robinhood",
-          addresses: { factory: SUITE.factory },
+          addresses: { factory: SUITE.factory, settings: SUITE.factory },
         }),
       ),
     ).toContain("addresses.weth,");
     expect(
       detail(() =>
-        createLaunchClient({ chain: "base", addresses: testSuite(42161) }),
+        createLaunchClient({
+          chain: "base",
+          suite: 3,
+          addresses: testSuite(42161),
+        }),
       ),
     ).toContain("42161");
     expectSync(
       () =>
         createLaunchClient({
           chain: "base",
+          suite: 3,
           addresses: SUITE,
           provider: "bankr_v3" as never,
         }),
       "PROVIDER_NOT_DEPLOYED",
     );
-    const c = createLaunchClient({ chain: "base", addresses: SUITE });
+    const c = createLaunchClient({
+      chain: "base",
+      suite: 3,
+      addresses: SUITE,
+    });
     expect(c.provider).toMatchObject({
       id: "bankr_v4",
       chain: "base",
@@ -123,7 +306,7 @@ describe("createLaunchClient", () => {
   });
 
   test("Base needs no addresses: the client is built on the shipped record", () => {
-    const record = BANKR_V4_ADDRESSES.base!;
+    const record = BANKR_V4_LAUNCH_ADDRESSES.base!;
     const c = createLaunchClient({ chain: "base" });
     expect(c.provider.addresses).toEqual(record);
     expect(c.provider.contractsCommit).toBe(record.gitCommit);
@@ -136,6 +319,7 @@ describe("createLaunchClient", () => {
       () =>
         createLaunchClient({
           chain: "base",
+          suite: 3,
           addresses: SUITE,
           publicClient: arb,
         }),
@@ -144,6 +328,7 @@ describe("createLaunchClient", () => {
     expect(() =>
       createLaunchClient({
         chain: "base",
+        suite: 3,
         addresses: SUITE,
         publicClient: f.fake.publicClient(),
         api: { apiKey: "bk_x" } as never,
@@ -166,6 +351,7 @@ describe("the deployed gate", () => {
     const f = rhFixture();
     const c = createLaunchClient({
       chain: "robinhood",
+      suite: 3,
       addresses: RH_SUITE,
       publicClient: f.fake.publicClient(),
     });
@@ -186,6 +372,7 @@ describe("the deployed gate", () => {
     f.set("factory", "launchGated", true);
     const c = createLaunchClient({
       chain: "robinhood",
+      suite: 3,
       addresses: RH_SUITE,
       publicClient: f.fake.publicClient(),
       fork: true,
@@ -204,6 +391,7 @@ describe("the deployed gate", () => {
     f.set("factory", "launchGated", true);
     const c = createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       publicClient: f.fake.publicClient(),
     });
@@ -227,6 +415,7 @@ describe("launchpad()", () => {
     const f = fixture();
     const c = createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       publicClient: f.fake.publicClient(),
     });
@@ -252,6 +441,7 @@ describe("launchpad()", () => {
   test("an open pad: no signer, no vanity, the operator's payee and its share", async () => {
     const c = createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       publicClient: fixture().fake.publicClient(),
     });
@@ -268,6 +458,7 @@ describe("plans from elsewhere", () => {
     const f = fixture();
     const c = createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       publicClient: f.fake.publicClient(),
       fork: true,
@@ -303,6 +494,7 @@ describe("launch", () => {
     f.fake.onSend = (tx) => launchLogs(f, tx);
     return createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       fork: true,
       publicClient: f.fake.publicClient(),
@@ -335,6 +527,7 @@ describe("launch", () => {
     await expectCode(
       createLaunchClient({
         chain: "base",
+        suite: 3,
         addresses: SUITE,
         fork: true,
         publicClient: f.fake.publicClient(),
@@ -545,6 +738,7 @@ describe("parseLaunchReceipt", () => {
     const f = fixture();
     const c = createLaunchClient({
       chain: "base",
+      suite: 3,
       addresses: SUITE,
       publicClient: f.fake.publicClient(),
       fork: true,
@@ -590,6 +784,29 @@ describe("parseLaunchReceipt", () => {
 });
 
 describe("public surface", () => {
+  // Which contract set a client is on is the SDK's business: a caller types no name that says so.
+  test("no export, client method or plan field a caller types carries the word suite", () => {
+    expect(Object.keys(sdk).filter((k) => /suite/i.test(k))).toEqual([]);
+    const client = createLaunchClient({ chain: "base" });
+    const reach = [
+      ...Object.keys(client),
+      ...Object.keys(client.contracts()),
+      ...Object.keys(client.contracts().settings),
+    ];
+    expect(reach.filter((k) => /suite/i.test(k))).toEqual([]);
+    expect(reach).toEqual(
+      expect.arrayContaining(["contracts", "settings", "levers"]),
+    );
+  });
+
+  test("the launchpad registry's exported ABI is the latest contracts'", () => {
+    const names: string[] = sdk.bankrLaunchpadRegistryAbi.flatMap((e) =>
+      e.type === "function" ? [e.name] : [],
+    );
+    expect(names).toContain("operatorOf");
+    expect(names).not.toContain("setFeeBounds");
+  });
+
   test("no B20, Launch v3 or keeper export survives", () => {
     const names = Object.keys(sdk);
     for (const gone of [
@@ -604,11 +821,11 @@ describe("public surface", () => {
     }
     for (const kept of [
       "createLaunchClient",
-      "BANKR_V4_ADDRESSES",
+      "BANKR_V4_EARLIER_ADDRESSES",
       "holderShareToHoldersBps",
       "remoteAuthorizer",
       "mineVanitySalt",
-      "readLiveSuite",
+      "readEarlierLivePointers",
       "bankrLaunchpadRegistryAbi",
       "percentToPips",
       "pipsToPercent",

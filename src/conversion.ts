@@ -7,14 +7,17 @@ import {
   type Hex,
 } from "viem";
 import { readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import { bucketIds, requireLaunch, type SuiteReadContext } from "./lens.js";
 import type { UnsignedTx } from "./providers/types.js";
 import { requireAddress } from "./recipient.js";
+import { readCoinLeg } from "./settings/coinLeg.js";
+import { readSuite4HolderConversion } from "./suite4/holderPiles.js";
 import { buildCallTx } from "./tx.js";
 
-/** BnkrHolderLeg's wake views and its permissionless poke, entry for entry as core's generated ABI has them. */
-export const HOLDER_LEG_WAKE_ABI = [
+/** The earlier contracts' BnkrHolderLeg: its wake views and its permissionless poke, entry for entry as core's
+ *  generated ABI has them. A current leg answers `poke` and `bnkr` alike and has no queue views. */
+export const EARLIER_HOLDER_LEG_WAKE_ABI = [
   {
     type: "function",
     name: "payoutMode",
@@ -275,29 +278,35 @@ export function holdersWakeDue(r: HoldersWakeReads, now: number) {
   };
 }
 
-/** Whether a launch's holders' pile is due for its quote's conversion to BNKR, or its forward in quote (Q4). */
+/**
+ * Whether a launch's holders' pile is due for its quote's conversion to BNKR, or its forward in quote (Q4), read at
+ * the holder leg of the coin's own launch. Where a field differs on the earlier contracts, it says so.
+ */
 export interface HolderConversion {
   token: Address;
   poolId: Hex;
   quote: Address;
-  /** The pile waiting in the fee ledger for the chain's holder leg. */
+  /** The pile waiting in the fee ledger for the coin's holder leg. */
   pile: bigint;
-  /** The pile at which a swap that asks wakes the leg (the quote's compound floor / 50, about $5); 0 when unarmed. */
+  /** The pile at which a swap that asks wakes the leg: the floor the leg was built with for the quote (on the
+   *  earlier contracts the quote's compound floor / 50, about $5); 0 when unarmed. */
   floor: bigint;
   armed: boolean;
   /** A factory pause skips the wake (Q5). */
   paused: boolean;
   /** The quote's piles convert to BNKR; otherwise they forward to the distributor in quote, with no interval. */
   converts: boolean;
-  /** A route ending at BNKR is in force (`routeOf`). Without one a conversion reverts, so the pile's one stage starts
-   *  its STALE_AFTER clock, after which it forwards in quote. */
+  /** The leg holds a route for the quote (`routeOf`; on the earlier contracts, one ending at BNKR). Without one a
+   *  conversion reverts, so the pile's one stage starts the leg's stale clock, after which it forwards in quote. */
   routed: boolean;
-  /** Unix seconds from which the quote's next conversion may run (0: now). */
+  /** Unix seconds from which the quote's next conversion may run (0: now): when the ledger's shared conversion
+   *  window reopens (on the earlier contracts, the leg's own interval since its last conversion). */
   nextConvertAt: number;
   /** The pile already staged in the leg (a wake or poke inside a spent window), which no swap of the coin wakes for. */
   staged: bigint;
-  /** The leg forwards the pile in quote now, with no interval: QUOTE mode, a queued BNKR swap or route to BNKR, or a
-   *  staged pile past STALE_AFTER (the notice is the holders' exit). */
+  /** The leg forwards the pile in quote now, with no interval: a quote it does not convert, or a staged pile past
+   *  the leg's stale period (on the earlier contracts also a queued BNKR swap or route: the notice is the holders'
+   *  exit). */
   forwardsNow: boolean;
   /** A swap that asks for the wake in its hookData (`holdersWakeRequest`) and carries its gas would forward or convert
    *  the pile now, or (no route) stage it to start its stale clock: the sponsor's cue. */
@@ -307,11 +316,16 @@ export interface HolderConversion {
   convertDue: boolean;
 }
 
+/** `now` is unix seconds: default the clock's on suite 3, the chain's latest block on suite 4. */
 export async function readHolderConversion(
   ctx: SuiteReadContext,
   token: unknown,
-  now: number = Math.floor(Date.now() / 1_000),
+  at?: number,
 ): Promise<HolderConversion> {
+  // A suite 4 coin's pile waits at the leg of its own launch, under that leg's terms.
+  if (ctx.addresses.settings !== undefined)
+    return readSuite4HolderConversion(ctx, token, at);
+  const now = at ?? Math.floor(Date.now() / 1_000);
   const info = await requireLaunch(ctx, token);
   const { client, addresses: a } = ctx;
   const [wake, paused] = await Promise.all([
@@ -346,7 +360,7 @@ export async function readHolderConversion(
     floor = holderPileFloor(wake, entry.minCompoundQuote);
   }
   const base = { token: info.token, poolId: info.poolId, quote: info.quote };
-  const l = { address: leg, abi: HOLDER_LEG_WAKE_ABI } as const;
+  const l = { address: leg, abi: EARLIER_HOLDER_LEG_WAKE_ABI } as const;
   const [
     claimable,
     mode,
@@ -465,13 +479,16 @@ export async function buildConvertTx(
 ): Promise<UnsignedTx> {
   const from = requireAddress(sender, ctx.chain.chain);
   const info = await requireLaunch(ctx, token);
+  // The holders' bucket has one beneficiary, locked for life: the leg of the coin's own launch. A chain can have
+  // several leg generations, and the record names only the one new launches bind.
+  const own = await readCoinLeg(ctx.client, ctx.addresses.ledger, info.poolId);
   return {
     ...buildCallTx(
       ctx.chain.chainId,
       from,
-      ctx.addresses.holderLeg,
+      own ?? ctx.addresses.holderLeg,
       encodeFunctionData({
-        abi: HOLDER_LEG_WAKE_ABI,
+        abi: EARLIER_HOLDER_LEG_WAKE_ABI,
         functionName: "poke",
         args: [info.poolId],
       }),

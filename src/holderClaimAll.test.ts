@@ -12,8 +12,8 @@ import {
   bankrFeeLedgerAbi,
   bankrLaunchFactoryAbi,
   holderRewardsDistributorAbi,
-} from "./abis/generated.js";
-import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+} from "./abis/suite3.js";
+import { CONVERT_GAS, EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { isLaunchSdkError } from "./errors.js";
 import { HOLDER_CLAIM_ALL_GAS, HOLDER_GAS } from "./holderClaimAll.js";
 import { bucketIds } from "./lens.js";
@@ -114,7 +114,7 @@ function setup(n: number, o: Piles = {}, who: Holdings = {}) {
       removalExecuteAfter: 0n,
     }),
   });
-  f.fake.contract(SUITE.holderLeg, HOLDER_LEG_WAKE_ABI, {
+  f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
     payoutMode: o.mode ?? 0,
     bnkr: FAKE_BNKR,
     retiredBnkr: false,
@@ -151,7 +151,7 @@ const pokeCall = (poolId: `0x${string}`) => ({
   target: SUITE.holderLeg,
   allowFailure: true,
   callData: encodeFunctionData({
-    abi: HOLDER_LEG_WAKE_ABI,
+    abi: EARLIER_HOLDER_LEG_WAKE_ABI,
     functionName: "poke",
     args: [poolId],
   }),

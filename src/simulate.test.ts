@@ -13,16 +13,12 @@ import {
   bankrLaunchFactoryAbi,
   bankrLaunchTokenAbi,
   bankrLaunchpadRegistryAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { CHAINS } from "./chains/index.js";
 import { createLaunchClient } from "./client.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
-import {
-  HOOK_EXTENSION_ERRORS,
-  callLaunch,
-  launchCallError,
-  launchRevertName,
-} from "./simulate.js";
+import { callLaunch, launchCallError, launchRevertName } from "./simulate.js";
+import { HOOK_EXTENSION_ERRORS } from "./unvendoredErrors.js";
 import { FakeChain } from "./__internal__/fakeRpc.js";
 import { installSuite, testSuite } from "./__internal__/fakeSuite.js";
 
@@ -162,6 +158,7 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
     const sdk = createLaunchClient({
       chain: "base",
       publicClient,
+      suite: 3,
       addresses: SUITE,
       fork: true,
     });
@@ -205,8 +202,8 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
     const { sdk, withAllocations } = await unestimated(
       "gas required exceeds allowance (16777216)",
     );
-    expect(sdk.buildLaunchTx(await withAllocations(23)).gas).toBe(16_777_216n);
-    const over = await withAllocations(24);
+    expect(sdk.buildLaunchTx(await withAllocations(12)).gas).toBe(16_777_216n);
+    const over = await withAllocations(13);
     let refused: unknown;
     try {
       sdk.buildLaunchTx(over);
@@ -217,10 +214,10 @@ describe("a node that gives no gas estimate for a launch, as one does for a laun
       true,
     );
     expect((refused as { detail?: string }).detail).toContain(
-      "the heaviest launch the factory accepts stands in for it: a gas limit of about 16,832,292 with its 24 builder allocations",
+      "the heaviest launch on Bankr's launchpad stands in for it: a gas limit of about 16,856,954 with its 13 builder allocations",
     );
     expect((refused as { detail?: string }).detail).toContain(
-      "at that figure 23 of the 24 fit",
+      "at that figure 12 of the 13 fit",
     );
   });
 

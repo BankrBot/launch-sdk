@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Address, Hex } from "viem";
+import { getAddress, type Address, type Hex } from "viem";
 import {
   BankrApiResponseError,
   DEFAULT_BANKR_API_URL,
@@ -8,6 +8,7 @@ import {
   type AccountFeesResponse,
   type FetchLike,
   type LaunchPage,
+  type LaunchpadStats,
   type PrepareRequest,
   type RegisterResult,
 } from "./api.js";
@@ -87,6 +88,7 @@ const PAGE: LaunchPage = {
       imageUrl: null,
       provider: "bankr_v4",
       launchpadId: "0",
+      quoteAddress: "0x4200000000000000000000000000000000000006",
       launcher: "0x1111111111111111111111111111111111111111",
       feeRecipient: null,
       builder: "mypad",
@@ -190,10 +192,60 @@ describe("createBankrApi: the launch index", () => {
     expect(calls[0]!.url.searchParams.get("launchpad")).toBe("7");
   });
 
-  test("accountFees: GET /bankr-v4/accounts/:account/fees with the chain's id; null for a 404, API_ERROR for a wrong shape", async () => {
+  test("launchpadStats: GET /launchpads/:chain/:id/stats with only the options given", async () => {
+    const body: LaunchpadStats = {
+      chain: "base",
+      launchpadId: "7",
+      window: "7d",
+      visibility: "all",
+      stats: { launches: 3, volume24hUsd: 12.5 },
+    };
+    const { fetch, calls } = fakeFetch(() => json(200, body));
+    const api = createBankrApi({ fetch });
+    expect(await api.launchpadStats("base", 7n, { window: "7d" })).toEqual(
+      body,
+    );
+    expect(calls[0]!.url.pathname).toBe("/launchpads/base/7/stats");
+    expect(Object.fromEntries(calls[0]!.url.searchParams)).toEqual({
+      window: "7d",
+    });
+    const wrong = fakeFetch(() => json(200, { ...body, stats: null }));
+    await expectCode(
+      createBankrApi({ fetch: wrong.fetch }).launchpadStats("base", "7"),
+      "API_ERROR",
+    );
+  });
+
+  test("search, quote and deploy dates: a Date goes out as ISO, a string unchanged", async () => {
+    const { fetch, calls } = fakeFetch(() =>
+      json(200, { launches: [], nextCursor: null }),
+    );
+    const api = createBankrApi({ fetch });
+    await api.launches({
+      q: "dog",
+      quote: "0x4200000000000000000000000000000000000006",
+      deployedAfter: new Date(Date.UTC(2026, 10, 1)),
+      deployedBefore: "2026-11-02T00:00:00+00:00",
+    });
+    expect(Object.fromEntries(calls[0]!.url.searchParams)).toEqual({
+      q: "dog",
+      quote: "0x4200000000000000000000000000000000000006",
+      deployedAfter: "2026-11-01T00:00:00.000Z",
+      deployedBefore: "2026-11-02T00:00:00+00:00",
+    });
+    await expectCode(
+      api.launches({ deployedAfter: new Date(Number.NaN) }),
+      "INVALID_PARAMS",
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  test("accountFees: GET /bankr-v4/accounts/:account/fees with the chain's id and the ledger named; null for a 404, API_ERROR for a wrong shape", async () => {
+    const LEDGER = getAddress("0x00000000000000000000000000000000000084e2");
     const body: AccountFeesResponse = {
       chainId: 8453,
       account: TOKEN,
+      ledger: LEDGER,
       balances: [],
       buckets: [],
       totalByQuote: [],
@@ -205,6 +257,11 @@ describe("createBankrApi: the launch index", () => {
     );
     expect(calls[0]!.url.href).toBe(
       `https://api.bankr.bot/bankr-v4/accounts/${TOKEN}/fees?chainId=8453`,
+    );
+    // A suite's client names its own ledger: on a chain with two suites the answer is that ledger's alone.
+    await createBankrApi({ fetch }).accountFees("base", TOKEN, LEDGER);
+    expect(calls[1]!.url.href).toBe(
+      `https://api.bankr.bot/bankr-v4/accounts/${TOKEN}/fees?chainId=8453&ledger=${LEDGER}`,
     );
     const missing = fakeFetch(() => json(404, { error: "Not found" }));
     expect(

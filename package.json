@@ -1,7 +1,7 @@
 {
   "name": "@bankr/launch-sdk",
-  "version": "0.1.0-alpha.0",
-  "description": "Launch tokens from your own wallet on Bankr's Uniswap v4 hook, on Bankr's launchpad or your own, with fees to holders and every launch indexed by Bankr.",
+  "version": "1.0.0-alpha.0",
+  "description": "Run your own launchpad on Bankr's Uniswap v4 hook with your own parameters, and launch tokens on it from your own wallet, with fees to holders and every launch indexed by Bankr.",
   "type": "module",
   "license": "MIT",
   "author": "Bankr",

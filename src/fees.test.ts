@@ -8,7 +8,7 @@ import {
   zeroAddress,
   type Hex,
 } from "viem";
-import { bankrFeeLedgerAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi } from "./abis/suite3.js";
 import type { FetchLike } from "./api.js";
 import { CHAINS } from "./chains/index.js";
 import { isLaunchSdkError, type LaunchSdkErrorCode } from "./errors.js";
@@ -27,7 +27,6 @@ import {
   postLaunchFixture,
   setLedgerBalance,
 } from "./__internal__/fakeLaunch.js";
-import { eventLog } from "./__internal__/fakeRpc.js";
 
 const USDC = getAddress(CHAINS.base.quotes.USDC.address);
 
@@ -365,6 +364,7 @@ const apiBucket = (i: number, o: { firstTouch?: boolean } = {}) => ({
 const accountBody = (buckets: unknown[], balances: unknown[] = []) => ({
   chainId: 8453,
   account: OTHER,
+  ledger: SUITE.ledger,
   balances,
   buckets,
   totalByQuote: [],
@@ -383,11 +383,10 @@ describe("claim all", () => {
     const { client } = postLaunchFixture({ api: { url: API, fetch } });
     const owed = await client.fees.getOwed(OTHER);
     expect(urls.map((u) => u.href)).toEqual([
-      `${API}/bankr-v4/accounts/${OTHER}/fees?chainId=8453`,
+      `${API}/bankr-v4/accounts/${OTHER}/fees?chainId=8453&ledger=${SUITE.ledger}`,
     ]);
     expect(owed).toEqual({
       account: OTHER,
-      source: "api",
       balances: [{ quote: WETH, amount: 5n }],
       buckets: [
         {
@@ -399,129 +398,6 @@ describe("claim all", () => {
       ],
       totalByQuote: [{ quote: WETH, amount: BigInt(big) + 5n }],
     });
-  });
-
-  test("getOwed falls back to a ledger log scan when the index fails: each share's claimable, checkpoint and sides", async () => {
-    const { fetch } = accountApi({ status: 503 });
-    const { f, client } = postLaunchFixture({ api: { url: API, fetch } });
-    const mine = installLaunch(f, {
-      launcher: LAUNCHER,
-      quote: WETH,
-      decayShares: [{ account: LAUNCHER, sharesWad: 10n ** 17n }],
-    });
-    installLaunch(f, {
-      launcher: OTHER,
-      quote: WETH,
-      salt: `0x${"55".repeat(32)}`,
-    });
-    const creator = bucketIds.creator(mine.poolId);
-    const decay = bucketIds.decay(mine.poolId);
-    const q = (amount: bigint) =>
-      mine.tokenIsCurrency0 ? ([0n, amount] as const) : ([amount, 0n] as const);
-    mine.claimable.set(`${creator}:${LAUNCHER.toLowerCase()}`, q(70n));
-    mine.cumulated.set(creator, q(700n));
-    mine.claimable.set(`${decay}:${LAUNCHER.toLowerCase()}`, q(5n));
-    mine.cumulated.set(decay, q(90n));
-    mine.checkpoints.set(`${decay}:${LAUNCHER.toLowerCase()}`, q(40n));
-    setLedgerBalance(f, LAUNCHER, WETH, 9n);
-    const owed = await client.fees.getOwed(LAUNCHER);
-    expect(owed.source).toBe("chain");
-    expect(owed).not.toHaveProperty("keeperCovered");
-    expect(owed.buckets).toEqual([
-      {
-        bucketId: creator,
-        poolId: mine.poolId,
-        token: mine.token,
-        quote: WETH,
-        kind: "creator",
-        claimableQuote: 70n,
-        claimableToken: 0n,
-        firstTouch: true,
-        bothSides: false,
-      },
-      {
-        bucketId: decay,
-        poolId: mine.poolId,
-        token: mine.token,
-        quote: WETH,
-        kind: "decay",
-        claimableQuote: 5n,
-        claimableToken: 0n,
-        firstTouch: false,
-        bothSides: false,
-      },
-    ]);
-    expect(owed.balances).toEqual([{ quote: WETH, amount: 9n }]);
-    expect(owed.totalByQuote).toEqual([{ quote: WETH, amount: 84n }]);
-    // One eth_getLogs window per maxLogRange blocks, from the suite's deploy block to the head: the beneficiary
-    // events, and the SwapFees naming it the referrer.
-    expect(f.fake.logRequests).toEqual([
-      { fromBlock: 1n, toBlock: 100n },
-      { fromBlock: 1n, toBlock: 100n },
-    ]);
-  });
-
-  test("the scan follows a share moved in by updateBeneficiary or a takeover, and drops one moved away", async () => {
-    const { f, client } = postLaunchFixture({ fork: true });
-    const l = installLaunch(f, { launcher: LAUNCHER, quote: WETH });
-    const creator = bucketIds.creator(l.poolId);
-    const NEXT = getAddress("0x3333333333333333333333333333333333333333");
-    f.fake.addLog(
-      eventLog(
-        bankrFeeLedgerAbi,
-        "UpdateBeneficiary",
-        { poolId: creator, oldBeneficiary: LAUNCHER, newBeneficiary: OTHER },
-        SUITE.ledger,
-      ),
-    );
-    f.fake.addLog(
-      eventLog(
-        bankrFeeLedgerAbi,
-        "CtoExecuted",
-        {
-          bucketId: creator,
-          oldRecipient: OTHER,
-          newRecipient: NEXT,
-          shareWad: 10n ** 18n,
-        },
-        SUITE.ledger,
-      ),
-    );
-    l.shares.delete(`${creator}:${LAUNCHER.toLowerCase()}`);
-    l.shares.set(`${creator}:${NEXT.toLowerCase()}`, 10n ** 18n);
-    l.claimable.set(
-      `${creator}:${NEXT.toLowerCase()}`,
-      l.tokenIsCurrency0 ? [0n, 3n] : [3n, 0n],
-    );
-    // A takeover of a launch with several recipients logs once per old recipient, each naming the one heir.
-    f.fake.addLog(
-      eventLog(
-        bankrFeeLedgerAbi,
-        "CtoExecuted",
-        {
-          bucketId: creator,
-          oldRecipient: LAUNCHER,
-          newRecipient: NEXT,
-          shareWad: 10n ** 17n,
-        },
-        SUITE.ledger,
-      ),
-    );
-    expect(
-      (await client.fees.getOwed(NEXT)).buckets.map((b) => b.bucketId),
-    ).toEqual([creator]);
-    expect((await client.fees.getOwed(LAUNCHER)).buckets).toEqual([]);
-    expect((await client.fees.getOwed(OTHER)).buckets).toEqual([]);
-  });
-
-  test("a fork client never asks Bankr's index", async () => {
-    const { fetch, urls } = accountApi({ body: accountBody([]) });
-    const { client } = postLaunchFixture({
-      api: { url: API, fetch },
-      fork: true,
-    });
-    expect((await client.fees.getOwed(OTHER)).source).toBe("chain");
-    expect(urls).toEqual([]);
   });
 
   test("buildClaimAll: one withdraw(ids, quotes) when everything fits, from the account with the model's gas", async () => {

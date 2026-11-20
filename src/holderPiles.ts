@@ -1,14 +1,15 @@
 import type { Address, Hex } from "viem";
 import { getBlock, readContract } from "viem/actions";
-import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/generated.js";
+import { bankrFeeLedgerAbi, bankrLaunchFactoryAbi } from "./abis/suite3.js";
 import {
-  HOLDER_LEG_WAKE_ABI,
+  EARLIER_HOLDER_LEG_WAKE_ABI,
   UNLISTED_FLOOR,
   holderPileFloor,
   holdersWakeDue,
   routeEndsAt,
 } from "./conversion.js";
 import { bucketIds, type SuiteReadContext } from "./lens.js";
+import { readSuite4HolderPiles } from "./suite4/holderPiles.js";
 
 // Always-on: only a swap that asks (hook-data flag 8) wakes a pool's holders' pile, and `claimFor` never does, so a
 // holder claim-all pokes the leg for every pile that is due. Bankr's API decides with this same rule.
@@ -18,7 +19,9 @@ import { bucketIds, type SuiteReadContext } from "./lens.js";
 export type HolderPoke = "none" | "forward" | "convert";
 
 export interface HolderPile {
-  /** The factory lists the pool's quote. */
+  /** The leg the pile is poked at: the chain's on suite 3, the leg of the coin's own launch on suite 4. */
+  leg: Address;
+  /** The chain lists the pool's quote. */
   listed: boolean;
   poke: HolderPoke;
 }
@@ -30,7 +33,11 @@ export async function readHolderPiles(
   pools: readonly { poolId: Hex; quote: Address }[],
 ): Promise<HolderPile[]> {
   const { client, addresses: a } = ctx;
-  const leg = { address: a.holderLeg, abi: HOLDER_LEG_WAKE_ABI } as const;
+  if (a.settings !== undefined) return readSuite4HolderPiles(ctx, pools);
+  const leg = {
+    address: a.holderLeg,
+    abi: EARLIER_HOLDER_LEG_WAKE_ABI,
+  } as const;
   const quotes = [
     ...new Map(pools.map((p) => [p.quote.toLowerCase(), p.quote])).values(),
   ];
@@ -140,10 +147,10 @@ export async function readHolderPiles(
           ),
         ]);
   return rows.map((r): HolderPile => {
-    const { listed } = r;
+    const at = { leg: a.holderLeg, listed: r.listed };
     if (r.floor === UNLISTED_FLOOR)
-      return { listed, poke: r.pile > 0n ? "forward" : "none" };
-    if (legState === null || !reached(r)) return { listed, poke: "none" };
+      return { ...at, poke: r.pile > 0n ? "forward" : "none" };
+    if (legState === null || !reached(r)) return { ...at, poke: "none" };
     const [payoutMode, bnkr, minConvertInterval, staleAfter, bnkrAt, block] =
       legState;
     const [retired, lastConvertAt, routeAt, queued, live] =
@@ -165,7 +172,7 @@ export async function readHolderPiles(
       Number(block.timestamp),
     );
     return {
-      listed,
+      ...at,
       poke: !w.due ? "none" : w.forwardsNow ? "forward" : "convert",
     };
   });

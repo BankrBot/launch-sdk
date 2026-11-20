@@ -8,9 +8,14 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  bankrLaunchFactoryAbi as suite4FactoryAbi,
+  bankrLaunchTokenCreationCode as suite4TokenCreationCode,
+} from "./abis/generated.js";
+import {
   bankrLaunchFactoryAbi,
   bankrLaunchTokenCreationCode,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
+import { DEFAULT_SUITE } from "./addresses.js";
 import {
   CAP_BPS,
   CAP_DURATION_SECS,
@@ -21,13 +26,14 @@ import type { ReadClient } from "./providers/types.js";
 
 // Token and escrow prediction, vendored from core's bankr-v4 saltMining.ts (src/__internal__ holds them equal). A
 // token's address depends on the suite as it is now (hook, treasury and cap controller can rotate), so the suite is
-// read live, and every prediction is cross-checked against `factory.computeTokenAddress`.
+// read live, and every prediction is cross-checked against `factory.computeTokenAddress`. Suite 3 compiles the
+// wallet cap in; a suite 4 token is built with its coin's own terms, under suite 4's creation code.
 
 /** LaunchConstants.DEAD: every token cap-excludes it (the locker's dust and the buyback's burns). */
 const DEAD: Address = "0x000000000000000000000000000000000000dEaD";
 
 /** Everything a token address depends on besides the launch itself, read live from the factory. */
-export interface LiveSuite {
+export interface EarlierLivePointers {
   factory: Address;
   tokenDeployer: Address;
   vestingEscrowImpl: Address;
@@ -40,12 +46,23 @@ export interface LiveSuite {
   buyback: Address;
 }
 
+/** A suite 4 factory holds no cap controller: a coin's own is in its terms. */
+export type LivePointers = Omit<EarlierLivePointers, "capController">;
+
+/** What a suite 4 token is deployed with of its coin's terms (`resolve`): the supply, the wallet cap, who may end it. */
+export interface TokenTerms {
+  totalSupply: bigint;
+  capAmount: bigint;
+  capSecs: number | bigint;
+  capController: Address;
+}
+
 /** The factory's live pointers (`blockNumber` reads them as they stood then). */
-export async function readLiveSuite(
+export async function readEarlierLivePointers(
   client: ReadClient,
   factory: Address,
   blockNumber?: bigint,
-): Promise<LiveSuite> {
+): Promise<EarlierLivePointers> {
   const read = <
     N extends
       | "tokenDeployer"
@@ -101,6 +118,61 @@ export async function readLiveSuite(
   };
 }
 
+/** A suite 4 factory's live pointers: the same eight, and no cap controller. */
+export async function readLivePointers(
+  client: ReadClient,
+  factory: Address,
+  blockNumber?: bigint,
+): Promise<LivePointers> {
+  const read = (
+    functionName:
+      | "tokenDeployer"
+      | "vestingEscrowImpl"
+      | "poolManager"
+      | "locker"
+      | "hook"
+      | "ledger"
+      | "treasury"
+      | "buyback",
+  ) =>
+    readContract(client, {
+      address: factory,
+      abi: suite4FactoryAbi,
+      functionName,
+      blockNumber,
+    });
+  const [
+    tokenDeployer,
+    vestingEscrowImpl,
+    poolManager,
+    locker,
+    hook,
+    ledger,
+    treasury,
+    buyback,
+  ] = await Promise.all([
+    read("tokenDeployer"),
+    read("vestingEscrowImpl"),
+    read("poolManager"),
+    read("locker"),
+    read("hook"),
+    read("ledger"),
+    read("treasury"),
+    read("buyback"),
+  ]);
+  return {
+    factory,
+    tokenDeployer,
+    vestingEscrowImpl,
+    poolManager,
+    locker,
+    hook,
+    ledger,
+    treasury,
+    buyback,
+  };
+}
+
 /** The token deployer's and the escrow clone's CREATE2 salt: keccak256(abi.encodePacked(launcher, salt)). */
 export function deriveDeployerSalt(launcher: Address, salt: Hex): Hex {
   return keccak256(concatHex([launcher, salt]));
@@ -113,7 +185,7 @@ export function cloneInitCode(implementation: Address): Hex {
 
 /** `factory.computeVestingEscrow(launcher, salt)`; the clone exists only when something vests. */
 export function predictEscrow(
-  suite: Pick<LiveSuite, "factory" | "vestingEscrowImpl">,
+  suite: Pick<EarlierLivePointers, "factory" | "vestingEscrowImpl">,
   launcher: Address,
   salt: Hex,
 ): Address {
@@ -134,15 +206,37 @@ export type TokenIdentity = Pick<
   | "metadataAdmin"
   | "totalSupply"
   | "capExclusions"
->;
+> & {
+  /** A suite 4 launch's resolved terms; absent, the token is suite 3's. */
+  terms?: TokenTerms;
+};
+
+/** The supply, cap and cap controller a token is built with: its terms' on suite 4, the compiled figures on suite 3. */
+function tokenTerms(
+  suite: EarlierLivePointers | LivePointers,
+  identity: TokenIdentity,
+): TokenTerms {
+  if (identity.terms) return identity.terms;
+  if (!("capController" in suite))
+    throw new Error(
+      "without a cap controller among the factory's pointers, a token is predicted from its resolved terms",
+    );
+  const totalSupply = identity.totalSupply || DEFAULT_TOTAL_SUPPLY;
+  return {
+    totalSupply,
+    capAmount: (totalSupply * BigInt(CAP_BPS)) / 10_000n,
+    capSecs: CAP_DURATION_SECS,
+    capController: suite.capController,
+  };
+}
 
 /** BankrLaunchToken creation code ‖ the constructor arguments the ERC-20 token deployer encodes. */
 export function tokenInitCode(
-  suite: LiveSuite,
+  suite: EarlierLivePointers | LivePointers,
   identity: TokenIdentity,
   escrow: Address,
 ): Hex {
-  const supply = identity.totalSupply || DEFAULT_TOTAL_SUPPLY;
+  const terms = tokenTerms(suite, identity);
   const args = encodeAbiParameters(
     [
       { type: "string" },
@@ -159,14 +253,14 @@ export function tokenInitCode(
     [
       identity.name,
       identity.symbol,
-      supply,
+      terms.totalSupply,
       suite.factory,
       identity.metadataUri,
       // The admin is a constructor argument; the trading start is not (the deployer hands it over transiently).
       identity.metadataAdmin,
-      (supply * BigInt(CAP_BPS)) / 10_000n,
-      BigInt(CAP_DURATION_SECS),
-      suite.capController,
+      terms.capAmount,
+      BigInt(terms.capSecs),
+      terms.capController,
       // The factory's own exclusions, the escrow at index 5, then the launch's.
       [
         suite.poolManager,
@@ -181,12 +275,15 @@ export function tokenInitCode(
       ],
     ],
   );
-  return concatHex([bankrLaunchTokenCreationCode, args]);
+  return concatHex([
+    identity.terms ? suite4TokenCreationCode : bankrLaunchTokenCreationCode,
+    args,
+  ]);
 }
 
 /** The token a launch of `identity` by `launcher` with `salt` deploys. Always cross-check `factory.computeTokenAddress`. */
 export function predictToken(
-  suite: LiveSuite,
+  suite: EarlierLivePointers | LivePointers,
   identity: TokenIdentity,
   launcher: Address,
   salt: Hex,
@@ -203,6 +300,11 @@ export function predictToken(
   });
 }
 
-/** keccak256 of the vendored BankrLaunchToken creation code (core's `bankrLaunchTokenCreationCodeHash`). */
-export const launchTokenCreationCodeHash = (): Hex =>
-  keccak256(bankrLaunchTokenCreationCode);
+/** keccak256 of the vendored BankrLaunchToken creation code (core's `bankrLaunchTokenCreationCodeHash`): the latest
+ *  contracts' token's, or with `3` the earlier test deployment's. */
+export const launchTokenCreationCodeHash = (
+  suite: 3 | 4 = DEFAULT_SUITE,
+): Hex =>
+  keccak256(
+    suite === 4 ? suite4TokenCreationCode : bankrLaunchTokenCreationCode,
+  );

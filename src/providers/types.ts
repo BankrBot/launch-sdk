@@ -21,12 +21,19 @@ import type {
   LaunchEconomics,
   LaunchParams,
 } from "../economics.js";
+import type { LaunchExtensionInput } from "../extension.js";
+import type {
+  LaunchExtensionPreview,
+  PreviewExtensionOptions,
+} from "../extensionPreview.js";
 import type { LaunchFees } from "../fees.js";
 import type { LaunchHolders } from "../holders.js";
 import type { LaunchpadOperations } from "../launchpads.js";
+import type { LaunchContracts } from "../settings/index.js";
 import type { InvariantReport } from "../invariants.js";
 import type { LaunchpadInfo, VolumeSplit } from "../launchpad.js";
 import type { LaunchInfo } from "../lens.js";
+import type { ResolvedLaunch } from "../suite4/plan.js";
 import type { LaunchMetadataAdmin, TradingStatus } from "../token.js";
 import type { LaunchVesting } from "../vesting.js";
 
@@ -127,11 +134,17 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
   autoLpBps?: number;
   /** Buyback, in bps of the creator side. Default 0. */
   buybackBps?: number;
-  /** Creator vesting (30-day cliff, 365-day linear). Default: the pad's `policy.defaultVestBps`. `recipient` defaults to the launcher. */
+  /**
+   * Creator vesting. Default: the pad's share and schedule (suite 3: a 30-day cliff, then linear to 365 days).
+   * `recipient` defaults to the launcher. Suite 4: `cliffSeconds` and `durationSeconds` name the schedule inside the
+   * pad's range (name one and the other takes the pad's default); both 0 unlock the slice at the trading start.
+   */
   vesting?: {
     bps: number;
     recipient?: Address;
     allowContractRecipient?: boolean;
+    cliffSeconds?: number;
+    durationSeconds?: number;
   };
   /** A share of supply vested to the coin's holders, pushed to the launch's distributor. Counts toward the 50 % cap. */
   vestToHolders?: {
@@ -141,10 +154,76 @@ export interface LaunchInput<C extends LaunchChain = LaunchChain> {
   };
   /** In the quote's base units; native on WETH (not on Arc), an ERC-20 approval to the factory otherwise. `slippageBps` defaults to 200. */
   devBuy?: { amount: bigint; slippageBps?: number };
+  /**
+   * An extension the hook binds to the pool for good: one of Bankr's presets by name or id with its parameters
+   * (`{ preset: "sniper_tax", buyPips, sellPips, endSecs }`, `"decay_tax"`, `"pump_brake"`), a raw preset
+   * (`{ presetId, params }`), or custom code the suite's allowlist holds (`{ address, codehash, … }`). Each parameter
+   * is held to its contract's bound (`EXTENSION_OUT_OF_BOUNDS`), then the registry's allowlist and the launchpad's
+   * policy are read (`EXTENSION_NOT_ALLOWED`). Pure mode only. Default: none.
+   */
+  extension?: LaunchExtensionInput;
+  // Suite 4 only, each optional: unset takes the launchpad's default, resolved on chain. A suite 3 launch refuses them.
+  /** The total supply in the token's base units (18 decimals), inside the pad's range. Default: the pad's. */
+  supply?: bigint;
+  /** The wallet cap: its size in bps of supply and its length in seconds, or `false` for none. Default: the pad's. */
+  walletCap?: { bps: number; seconds: number } | false;
+  /**
+   * Builder allocations: slices of the supply to other wallets, in the token's base units, each on its own schedule.
+   * `cliffSeconds` and `durationSeconds` default to 0: unlocked at the trading start. The pad must allow them.
+   */
+  allocations?: readonly LaunchAllocation[];
+  /**
+   * Auto-liquidity's own terms beside `autoLpBps` (set `bps` here or `autoLpBps`, not both): the compound's `floor`
+   * and `cap` in the quote's base units (both, where the pad allows a launch its own), its cadence and its band, in
+   * ticks on the 200 grid. A term left out of a group takes the pad's default. Refused on a launch with no auto-LP.
+   */
+  autoLp?: {
+    bps?: number;
+    floor?: bigint;
+    cap?: bigint;
+    intervalSeconds?: number;
+    /** Of the backlog; 0: no share cap. */
+    shareBps?: number;
+    deviationTicks?: number;
+    band?: { halfWidthTicks: number; gridTicks: number };
+  };
+  /** The buyback's cadence beside `buybackBps` (set `bps` here or `buybackBps`, not both). Refused with no buyback. */
+  buyback?: { bps?: number; intervalSeconds?: number; retrySeconds?: number };
+  /** How the holders' rewards stream: over how many seconds, and the share of a top-up that restarts the clock. */
+  holderStream?: { seconds: number; restartBps: number };
+  /**
+   * Wallets exempt from the wallet cap beside the suite's own. Default: the chain's settlers, sent only where the
+   * launch has a cap and the pad allows exemptions. Refused when named on a launch with no cap.
+   */
+  capExclusions?: readonly Address[];
+  /** With an extension: the most the base fee and the extension's fee may reach together, in pips. Default: the pad's. */
+  feeCeilingPips?: number;
+  /**
+   * Pins the launch to the terms and the token the plan showed: if either differs when it lands it reverts
+   * (`TERMS_CHANGED`) and is planned again. Default true; false takes whatever terms are in force at inclusion.
+   */
+  pin?: boolean;
+  /**
+   * The claim operator a contract fee recipient with restricted claims has named on the fee ledger. On a coin that
+   * can be taken over, a takeover settles its share into a balance only it or its operator withdraws: without one
+   * the launch is refused (`CLAIM_OPERATOR_REQUIRED`). A wallet, a Safe and an EIP-7702 account need none.
+   */
+  claimOperator?: Address;
   /** Pure mode only: a single-use bytes32 that satisfies the pad's vanity. By default the SDK mines a fresh one. */
   salt?: Hex;
   /** Default 1,200. Raise it for Safe or ERC-4337 launchers, whose signing latency can outlast the default. */
   deadlineSeconds?: number;
+}
+
+/** One builder allocation of a suite 4 launch. */
+export interface LaunchAllocation {
+  recipient: Address;
+  /** In the token's base units. */
+  amount: bigint;
+  /** Seconds after the trading start before any of it unlocks. Default 0. */
+  cliffSeconds?: number;
+  /** Seconds after the trading start by which all of it has unlocked. Default 0: unlocked at once. */
+  durationSeconds?: number;
 }
 
 /** One quote the chain's factory allows, prices and the launch's pad accepts. */
@@ -181,7 +260,10 @@ export interface LaunchPlan<C extends LaunchChain = LaunchChain> {
   factory: Address;
   launcher: Address;
   launchpadId: bigint;
-  params: LaunchParams;
+  /** `factory.launch`'s tuple. A suite 4 launch carries `options`: what it names beyond the pad's defaults, and its pins. */
+  params: LaunchParams & { options?: Hex };
+  /** A suite 4 launch: the terms its coin will freeze, as the chain's launch check resolved them. */
+  resolved?: ResolvedLaunch;
   /** `msg.value`: a native dev buy, else 0. */
   value: bigint;
   predictedToken: Address;
@@ -202,6 +284,8 @@ export interface LaunchPlan<C extends LaunchChain = LaunchChain> {
   approvals: readonly UnsignedTx[];
   /** The dev buy's simulated output; `params.devBuyMinOut` applies the slippage to it. */
   devBuyOut: bigint;
+  /** The launch's extension as the hook will bind it, with what a confirm screen shows; null when it names none. */
+  extension: LaunchExtensionPreview | null;
   /** From a funded simulation; null when the RPC could not estimate. */
   gasEstimate: bigint | null;
   /** The ERC-8021 builder-code suffix appended to the launch calldata, if any. */
@@ -284,6 +368,10 @@ export interface LaunchProviderAdapter<C extends LaunchChain = LaunchChain> {
   launchpad(id?: bigint): Promise<LaunchpadInfo>;
   readQuotes(launchpadId?: bigint): Promise<QuoteToken[]>;
   plan(input: LaunchInput<C>): Promise<LaunchPlan<C>>;
+  previewExtension(
+    extension: LaunchExtensionInput,
+    options?: PreviewExtensionOptions,
+  ): Promise<LaunchExtensionPreview>;
   buildLaunchTx(plan: LaunchPlan<C>, options?: { gas?: bigint }): UnsignedTx;
   /** `blockNumber` replays the launch at a past block, e.g. to read why a mined launch reverted. */
   simulate(
@@ -301,6 +389,7 @@ export interface LaunchProviderAdapter<C extends LaunchChain = LaunchChain> {
   readonly vesting: LaunchVesting;
   readonly metadataAdmin: LaunchMetadataAdmin;
   readonly launchpads: LaunchpadOperations;
+  contracts(): LaunchContracts;
   verifyTokenInvariants(
     token: Address,
     receipt?: TransactionReceipt,

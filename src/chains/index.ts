@@ -92,8 +92,9 @@ const freezeChain = <C extends LaunchChain>(
 /** EIP-7825's per-transaction gas cap (2^24), which Base and Arc enforce. */
 export const EIP_7825_MAX_TX_GAS = 16_777_216n;
 
-// maxLogRange and confirmations mirror Bankr's bankr_v4 indexer (workers' chain params). Base is `deployed` (record
-// and go-live gate 2026-11-07); every other chain flips in its own release once its go-live gates pass.
+// maxLogRange and confirmations mirror Bankr's bankr_v4 indexer (workers' chain params). `deployed` is the earlier
+// contracts' go-live, on Base alone (2026-11-07). The latest contracts' go-live on a chain is its record in
+// `BANKR_V4_LAUNCH_ADDRESSES`: Base, then Robinhood, Arbitrum and Arc (2026-11-19).
 export const CHAINS: ChainTable = Object.freeze({
   base: freezeChain({
     chain: "base",

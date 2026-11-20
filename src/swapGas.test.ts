@@ -150,10 +150,10 @@ describe("the holders' wake request", () => {
     expect(holdersWakeRequest(long, 7)).toEqual({ keepGas: 0 });
   });
 
-  test("funding the first asking pool's wake: 5,450,000 plus the kept gas through six call frames", () => {
+  test("funding the first asking pool's wake: 5,470,000 plus the kept gas through six call frames", () => {
     expect(holdersWakeSwapGas(0)).toBe(HOLDERS_WAKE_SWAP_GAS);
-    expect(holdersWakeSwapGas(2_897_316)).toBe(8_634_436n);
-    expect(holdersWakeSwapGas(4_607_195)).toBe(10_513_761n);
+    expect(holdersWakeSwapGas(2_897_316)).toBe(8_654_436n);
+    expect(holdersWakeSwapGas(4_607_195)).toBe(10_533_761n);
     for (const keepGas of [-1, 0.5, 0x1000000])
       expect(refused(() => holdersWakeSwapGas(keepGas))).toContain("kept gas");
   });

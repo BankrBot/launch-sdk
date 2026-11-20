@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { decodeFunctionData, zeroAddress, type Address } from "viem";
-import { bankrFeeLedgerAbi, bankrHookLensAbi } from "./abis/generated.js";
-import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+import { bankrFeeLedgerAbi, bankrHookLensAbi } from "./abis/suite3.js";
+import { CONVERT_GAS, EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { isLaunchSdkError } from "./errors.js";
 import {
   FAKE_BNKR,
@@ -62,7 +62,7 @@ function setup(
         : [0n, 0n],
   });
   f.fake.contract(SUITE.factory, [], { paused: o.paused ?? false });
-  f.fake.contract(SUITE.holderLeg, HOLDER_LEG_WAKE_ABI, {
+  f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
     payoutMode: o.mode ?? 0,
     bnkr: FAKE_BNKR,
     retiredBnkr: false,
@@ -308,7 +308,7 @@ describe("holders.buildConvert (keeperless Q4: the permissionless convert action
       gas: CONVERT_GAS,
     });
     expect(
-      decodeFunctionData({ abi: HOLDER_LEG_WAKE_ABI, data: tx.data }),
+      decodeFunctionData({ abi: EARLIER_HOLDER_LEG_WAKE_ABI, data: tx.data }),
     ).toEqual({
       functionName: "poke",
       args: [l.poolId],
@@ -318,6 +318,23 @@ describe("holders.buildConvert (keeperless Q4: the permissionless convert action
       "INVALID_PARAMS",
     );
     await expectCode(client.holders.buildConvert(OTHER, OTHER), "NOT_A_LAUNCH");
+  });
+
+  test("two leg generations live: the poke goes to the coin's own leg, not the one the record names", async () => {
+    const { f, client, l } = setup();
+    const EARLIER_LEG = "0x00000000000000000000000000000000000001e9" as Address;
+    // the coin was launched under an earlier generation: its holders' bucket is locked to that leg
+    f.fake.contract(SUITE.ledger, bankrFeeLedgerAbi, {
+      beneficiariesOf: ([bucket]: readonly unknown[]) =>
+        bucket === bucketIds.holders(l.poolId) ? [EARLIER_LEG] : [],
+    });
+    const tx = await client.holders.buildConvert(l.token, OTHER);
+    expect(tx.to).toBe(EARLIER_LEG);
+    expect(tx.to).not.toBe(SUITE.holderLeg);
+    expect(
+      decodeFunctionData({ abi: EARLIER_HOLDER_LEG_WAKE_ABI, data: tx.data })
+        .args,
+    ).toEqual([l.poolId]);
   });
 });
 

@@ -11,7 +11,7 @@ import {
   bankrLaunchFactoryAbi,
   bankrLaunchpadRegistryAbi,
   holderRewardsDeployerAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import {
   requireCapExclusions,
   type LaunchProviderId,
@@ -45,6 +45,10 @@ import {
   type CodeOfKind,
 } from "./errors.js";
 import {
+  requireExtension,
+  type LaunchExtensionPreview,
+} from "./extensionPreview.js";
+import {
   BANKR_LAUNCHPAD_ID,
   checkPadTerms,
   padSigner,
@@ -63,8 +67,8 @@ import {
 import {
   predictEscrow,
   predictToken,
-  readLiveSuite,
-  type LiveSuite,
+  readEarlierLivePointers,
+  type EarlierLivePointers,
 } from "./predict.js";
 import type {
   LaunchInput,
@@ -154,7 +158,7 @@ export async function readLaunchState(ctx: PlanContext, n: NormalizedLaunch) {
         quote: n.quote.address,
         launchpadId: n.launchpadId,
       }),
-      readLiveSuite(client, a.factory),
+      readEarlierLivePointers(client, a.factory),
       readContract(client, { ...f, functionName: "weth" }),
       curveKey(n.curve.word),
       curveKey(ANY_CURVE),
@@ -215,7 +219,7 @@ export interface StartTick {
 }
 
 /** The grid tick at or under `exact`. A float a hair under a grid line rounds onto it: never a negative offset. */
-function onGrid(exact: number): StartTick {
+export function onGrid(exact: number): StartTick {
   const tick = Math.floor(exact / TICK_SPACING) * TICK_SPACING;
   return { tick, offsetTicks: Math.max(exact - tick, 0) };
 }
@@ -341,10 +345,10 @@ export async function curveAtStartTick(
 }
 
 /** The factory's recipient rules plus the claim-capability test; returns `allowCodeVestingRecipient`. */
-async function checkRecipients(
+export async function checkRecipients(
   ctx: PlanContext,
   n: NormalizedLaunch,
-  suite: LiveSuite,
+  suite: Omit<EarlierLivePointers, "capController">,
   vestBps: number,
 ): Promise<boolean> {
   const chain = n.chain;
@@ -427,10 +431,12 @@ export async function finishPlan<C extends LaunchChain>(
     n: NormalizedLaunch<C>;
     pad: PadState;
     quote: QuoteToken;
-    suite: LiveSuite;
+    suite: EarlierLivePointers;
     params: LaunchParams;
     value: bigint;
     token: Address;
+    /** The launch's extension, read and admitted before the salt was mined; omitted, none. */
+    extension?: LaunchExtensionPreview | null;
   },
 ): Promise<LaunchPlan<C>> {
   const { client, addresses: a, chain: caps } = ctx;
@@ -478,6 +484,13 @@ export async function finishPlan<C extends LaunchChain>(
       chain,
       detail:
         "Vested tokens cannot go to this launch's own token, escrow or distributor.",
+    });
+  // A payee the launch names is held to the same rule (InvalidExtensionPayee); unnamed, it is the first recipient.
+  if (own.some((x) => isAddressEqual(x, params.extension.payee)))
+    throw new LaunchRefusedError("INVALID_PARAMS", {
+      chain,
+      detail:
+        "The extension's payee cannot be this launch's own token, escrow or distributor.",
     });
 
   const [sim, allowance] = await Promise.all([
@@ -548,14 +561,16 @@ export async function finishPlan<C extends LaunchChain>(
           ]
         : [],
     devBuyOut: sim.devBuyOut,
+    extension: i.extension ?? null,
     gasEstimate: sim.gas,
     dataSuffix: ctx.dataSuffix,
   };
 }
 
 /**
- * Pure mode: validates and refuses, reads the pad and its defaults, places the start tick, mines the pad's vanity
- * salt (cross-checked against the factory), has a signed pad's authorizer sign the terms, simulates the launch (a
+ * Pure mode: validates and refuses, reads the pad and its defaults, holds an extension to the registry's allowlist
+ * and the pad's policy, places the start tick, mines the pad's vanity salt (cross-checked against the factory), has
+ * a signed pad's authorizer sign the terms (the extension's included), simulates the launch (a
  * dev buy with the launcher funded and approved by state override) for the dev buy's output and the gas, and lists
  * the approvals an ERC-20 dev buy still needs.
  */
@@ -609,9 +624,15 @@ export async function planLaunch<C extends LaunchChain>(
     chain,
   });
   const native = quote.devBuy === "native";
-  const [start, allowCodeVestingRecipient] = await Promise.all([
+  const [start, allowCodeVestingRecipient, extension] = await Promise.all([
     placeStartTick(ctx, quote, n),
     checkRecipients(ctx, n, s.suite, vestBps),
+    n.extension &&
+      requireExtension(ctx, n.extension, {
+        policy: s.pad.pad.policy,
+        fees: economics,
+        payee: n.feeRecipients[0]!.recipient,
+      }),
   ]);
   const tick = start.tick;
   const curve = await curveAtStartTick(ctx, n, start.offsetTicks, s.curveKeys);
@@ -642,7 +663,7 @@ export async function planLaunch<C extends LaunchChain>(
           buybackBps: economics.buybackBps,
           autoLpBps: economics.autoLpBps,
           padDecay: s.pad.terms.decay,
-          extensionCallsOut: false,
+          extensionCallsOut: n.extension ? !n.extension.terms.quoteOnly : false,
         }),
       },
       chain,
@@ -698,5 +719,6 @@ export async function planLaunch<C extends LaunchChain>(
     params,
     value,
     token,
+    extension,
   });
 }

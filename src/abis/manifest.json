@@ -2,17 +2,36 @@
   "source": "packages/core/src/bankr-v4/abi/generated.ts",
   "solc": "0.8.26+commit.8a97fa7a",
   "abis": {
-    "bankrLaunchFactoryAbi": "0x19cbf168ba72f90771f90bba5897df5c765268f7cbdb6a434c9b8c877f522aa3",
-    "bankrLaunchpadRegistryAbi": "0x8679323a7fbf9869c8d07f1cff83e566134693ccffaf322c9db8c32ae1a73ea5",
-    "bankrFeeLedgerAbi": "0x0f5f5f845da7cf82683acc6de74c137bc6cf92f3c95b8d588dc9371fc9742ee6",
-    "holderRewardsDeployerAbi": "0xfb39c53a1f9a8f6b131c2ca781254ce2a6a9020b275ae0bc4ac3e6a963d11d22",
-    "holderRewardsDistributorAbi": "0xfc8e60ffc943afcc0a4439f02e6c6f304a09f4c3cbc958e91c30d684dd9575b9",
+    "bankrLaunchFactoryAbi": "0x0ecb331f2b539a94e1802d3aef53ef1cad7c7d4065987a5727f03762eb9c8e2f",
+    "bankrLaunchpadRegistryAbi": "0x5cc3e4db50746020612d6c8ccc9ffcddcb6f8cbda1940af5022e288e7d035a77",
+    "bankrFeeLedgerAbi": "0x36b2bb5f26ca6485defccfd8275c5dfe55bfe393cad293897653504581d9408e",
+    "holderRewardsDeployerAbi": "0x6876465d5cecb91ecd6e08b6f34ebc7b4ea8b3e72ebcdfa84d879e69e11dbf03",
+    "holderRewardsDistributorAbi": "0xca32a3ae51731a6ae93da132eff1214f09ea008bbfc63507bd016877058b315a",
     "creatorVestingEscrowAbi": "0x1f75c7da0398e24da80439812ca9e1260c88f81593407a56cc296a5908ec20f6",
-    "bankrLaunchTokenAbi": "0x14ba5c29768843659dc397d625b41884688d708b517afd3451a89cd4f7a4ca36",
-    "bankrHookLensAbi": "0x7da21e407333aab503aeed4381c5edd4295c2f9c66e692ed802621bf7d559faf",
-    "erc20TokenDeployerAbi": "0xd16a8ef875fb5604fc053320e9a5cf69fabd12095a3414cbbfed77389c21f1f3"
+    "bankrLaunchTokenAbi": "0x5bec06fef49531966524698fd613888a9529ba3d3ccaf21ed273333a44bf4812",
+    "bankrHookLensAbi": "0xb44843b0cc04fb0aab01975b9b2f60d40d2d773b3ab4443a009c2cb8fae2e005",
+    "erc20TokenDeployerAbi": "0x2918171d2e52192bda0d3a7d68b68b635d42475f8da440fdfecd9cb75b58808f",
+    "bankrLaunchSettingsAbi": "0x15f684c72316c368675abe2b5afda7ee4ad64d2079de557e594e39effa1b171a"
   },
   "creationCodes": {
-    "bankrLaunchToken": "0x1f0a68c4a3132b202811d4f6a488576b0efbaf29cd4aaa0aafe4af7106122159"
+    "bankrLaunchToken": "0x7afb58134511b24832c9896e9fca51861930b7d51fd719fe16780edba8bc81c1"
+  },
+  "suite3": {
+    "source": "packages/core/src/bankr-v4/suite3/abi/generated.ts",
+    "solc": "0.8.26+commit.8a97fa7a",
+    "abis": {
+      "bankrLaunchFactoryAbi": "0x19cbf168ba72f90771f90bba5897df5c765268f7cbdb6a434c9b8c877f522aa3",
+      "bankrLaunchpadRegistryAbi": "0x8679323a7fbf9869c8d07f1cff83e566134693ccffaf322c9db8c32ae1a73ea5",
+      "bankrFeeLedgerAbi": "0x0f5f5f845da7cf82683acc6de74c137bc6cf92f3c95b8d588dc9371fc9742ee6",
+      "holderRewardsDeployerAbi": "0xfb39c53a1f9a8f6b131c2ca781254ce2a6a9020b275ae0bc4ac3e6a963d11d22",
+      "holderRewardsDistributorAbi": "0xfc8e60ffc943afcc0a4439f02e6c6f304a09f4c3cbc958e91c30d684dd9575b9",
+      "creatorVestingEscrowAbi": "0x1f75c7da0398e24da80439812ca9e1260c88f81593407a56cc296a5908ec20f6",
+      "bankrLaunchTokenAbi": "0x14ba5c29768843659dc397d625b41884688d708b517afd3451a89cd4f7a4ca36",
+      "bankrHookLensAbi": "0x7da21e407333aab503aeed4381c5edd4295c2f9c66e692ed802621bf7d559faf",
+      "erc20TokenDeployerAbi": "0xd16a8ef875fb5604fc053320e9a5cf69fabd12095a3414cbbfed77389c21f1f3"
+    },
+    "creationCodes": {
+      "bankrLaunchToken": "0x1f0a68c4a3132b202811d4f6a488576b0efbaf29cd4aaa0aafe4af7106122159"
+    }
   }
 }

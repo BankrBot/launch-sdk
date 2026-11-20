@@ -1,12 +1,13 @@
 // Test-only: a launched token on a fake v4 suite (factory record, ledger buckets, hook lens, distributor, escrow and
-// the token itself), so the post-launch reads and builders run through viem's real encode and decode. Shipped with
-// the public tests' fakes (viem and relative imports only).
+// the token itself), so the post-launch reads and builders run through viem's real encode and decode. A suite that
+// names a settings contract answers in suite 4's encodings. Shipped with the public tests' fakes.
 import {
   encodePacked,
   getAddress,
   keccak256,
   toHex,
   zeroAddress,
+  type Abi,
   type Address,
   type Hex,
   type TransactionReceipt,
@@ -20,7 +21,8 @@ import {
   creatorVestingEscrowAbi,
   holderRewardsDeployerAbi,
   holderRewardsDistributorAbi,
-} from "../abis/generated.js";
+} from "../abis/suite3.js";
+import * as suite4 from "../abis/generated.js";
 import { base } from "viem/chains";
 import { CHAINS } from "../chains/index.js";
 import { createLaunchClient, type LaunchApiOptions } from "../client.js";
@@ -66,6 +68,7 @@ export function postLaunchFixture(
   launchesOf(f);
   const client = createLaunchClient({
     chain: "base",
+    suite: 3,
     addresses: SUITE,
     publicClient: f.fake.publicClient(),
     api: o.api,
@@ -74,11 +77,30 @@ export function postLaunchFixture(
   return { f, client };
 }
 
+/** What a launched token is installed on: either suite's fake. */
+export type LaunchFixture = Pick<SuiteFixture, "fake" | "suite">;
+
+const suite3 = {
+  bankrFeeLedgerAbi,
+  bankrHookLensAbi,
+  bankrLaunchFactoryAbi,
+  bankrLaunchTokenAbi,
+  bankrLaunchpadRegistryAbi,
+  holderRewardsDeployerAbi,
+  holderRewardsDistributorAbi,
+};
+
+/** The suite's own ABIs: a function only the other suite has reverts empty here, as on its chain. */
+const abisOf = (
+  suite: LaunchFixture["suite"],
+): { [K in keyof typeof suite3]: Abi } =>
+  suite.settings === undefined ? suite3 : suite4;
+
 const ledgerBalances = new WeakMap<object, Map<string, bigint>>();
 
 /** The ledger's `balances(account, currency)` on `f`'s suite (referral slices and settled shares). */
 export function setLedgerBalance(
-  f: SuiteFixture,
+  f: LaunchFixture,
   account: Address,
   currency: Address,
   amount: bigint,
@@ -86,7 +108,7 @@ export function setLedgerBalance(
   balancesOf(f).set(`${lower(account)}:${lower(currency)}`, amount);
 }
 
-function balancesOf(f: SuiteFixture): Map<string, bigint> {
+function balancesOf(f: LaunchFixture): Map<string, bigint> {
   let m = ledgerBalances.get(f.fake);
   if (!m) {
     m = new Map();
@@ -184,6 +206,12 @@ export interface FakeLaunch {
   /** Token reads per lowercase account. */
   balances: Map<string, bigint>;
   bnkr: Address;
+  /** Suite 4: the holder leg the coin keeps for life and the ledger's id for it, and Bankr's own part waived. */
+  leg: Address;
+  legId: number;
+  waived: boolean;
+  /** The pool's init second, as the hook's lens reports it. */
+  initTimestamp: number;
   /** The lens's `extSwapGasHeadroom(poolId, pins)`; 0 for a pool without an extension (the default). */
   extSwapGasHeadroom: (pins: bigint) => bigint;
   /** Token overrides: `setToken(fn, value)`. */
@@ -195,7 +223,7 @@ const registries = new WeakMap<object, Map<string, FakeLaunch>>();
 export const FAKE_BNKR = fakeAddress(0xb4b4);
 
 /** Every launch installed on a fixture, keyed by lowercase token. */
-function launchesOf(f: SuiteFixture): Map<string, FakeLaunch> {
+function launchesOf(f: LaunchFixture): Map<string, FakeLaunch> {
   let m = registries.get(f.fake);
   if (!m) {
     m = new Map();
@@ -205,8 +233,10 @@ function launchesOf(f: SuiteFixture): Map<string, FakeLaunch> {
   return m;
 }
 
-function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
+function installReaders(f: LaunchFixture, launches: Map<string, FakeLaunch>) {
   const { fake, suite } = f;
+  const on4 = suite.settings !== undefined;
+  const abis = abisOf(suite);
   const get = (token: unknown) => launches.get(lower(String(token)));
   const byPool = (poolId: unknown) =>
     [...launches.values()].find((l) => l.poolId === poolId);
@@ -224,7 +254,7 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
     tickSpacing: 0,
     hooks: zeroAddress,
   };
-  fake.contract(suite.factory, bankrLaunchFactoryAbi, {
+  fake.contract(suite.factory, abis.bankrLaunchFactoryAbi, {
     poolOf: ([t]: readonly unknown[]) => {
       const l = get(t);
       return l ? [l.poolId, key(l)] : [`0x${"00".repeat(32)}`, noKey];
@@ -232,11 +262,11 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
     launcherOf: ([t]: readonly unknown[]) => get(t)?.launcher ?? zeroAddress,
     vestingEscrowOf: ([t]: readonly unknown[]) => get(t)?.escrow ?? zeroAddress,
   });
-  fake.contract(suite.holderRewardsDeployer, holderRewardsDeployerAbi, {
+  fake.contract(suite.holderRewardsDeployer, abis.holderRewardsDeployerAbi, {
     distributorOfToken: ([t]: readonly unknown[]) =>
       get(t)?.distributor ?? zeroAddress,
   });
-  fake.contract(suite.launchpadRegistry, bankrLaunchpadRegistryAbi, {
+  fake.contract(suite.launchpadRegistry, abis.bankrLaunchpadRegistryAbi, {
     // Batch F: a token the suite never launched reverts UnknownLaunch, never reads as id 0.
     launchpadOf: ([t]: readonly unknown[]) => {
       const l = get(t);
@@ -246,11 +276,13 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
   });
   const bucketsOf = (bucket: unknown) =>
     [...launches.values()].find((l) =>
-      [bucketIds.creator(l.poolId), bucketIds.decay(l.poolId)].includes(
-        bucket as Hex,
-      ),
+      [
+        bucketIds.creator(l.poolId),
+        bucketIds.decay(l.poolId),
+        bucketIds.holders(l.poolId),
+      ].includes(bucket as Hex),
     );
-  fake.contract(suite.ledger, bankrFeeLedgerAbi, {
+  fake.contract(suite.ledger, abis.bankrFeeLedgerAbi, {
     poolTerms: ([poolId]: readonly unknown[]) => {
       const l = byPool(poolId);
       const decay = l
@@ -258,6 +290,24 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
             k.startsWith(bucketIds.decay(l.poolId)),
           )
         : false;
+      // FeeMath's T_QUOTE_IS_0 1, T_WAIVED 2, T_DECAY_SPLIT 4.
+      if (on4)
+        return {
+          hook: suite.hook,
+          flags:
+            (l && !l.tokenIsCurrency0 ? 1 : 0) |
+            (l?.waived ? 2 : 0) |
+            (decay ? 4 : 0),
+          referrerBps: l?.referrerBps ?? 0,
+          bankrFeeBps: 1_000,
+          bankrMinPips: 250,
+          holdersShareBps: 5_000,
+          legId: l?.legId ?? 0,
+          treasuryWad: 0n,
+          treasuryDecayWad: 0n,
+          distributor: zeroAddress,
+          holderWad: 0n,
+        };
       return {
         hook: suite.hook,
         quoteIs0: l ? !l.tokenIsCurrency0 : false,
@@ -319,14 +369,39 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
       balancesOf(f).get(`${lower(String(a))}:${lower(String(c))}`) ?? 0n,
   });
   fake.contract(suite.hook, HOOK_LENS_FRAGMENT, { hookLens: HOOK_LENS });
-  fake.contract(HOOK_LENS, bankrHookLensAbi, {
+  fake.contract(HOOK_LENS, abis.bankrHookLensAbi, {
     poolConfig: ([poolId]: readonly unknown[]) => {
       const l = byPool(poolId);
       const sched = { startPips: 17_500, steadyPips: 17_500, decaySecs: 0 };
+      // Suite 4's record: the pool's own rules after `openTick`, and a compound floor on each schedule.
+      const own = on4
+        ? {
+            floorTick: -887_220,
+            edgeTick: 887_220,
+            refTauSecs: 1_800,
+            buy: { ...sched, compoundFloor: 10n ** 17n },
+            sell: { ...sched, compoundFloor: 10n ** 17n },
+            works: {
+              compoundCap: 2n * 10n ** 17n,
+              compoundInterval: 300,
+              compoundShareBps: 2_500,
+              compoundDeviationTicks: 488,
+              bandHalfWidth: 34,
+              bandGrid: 10,
+              swapCapTicks: 50,
+            },
+            fill: {
+              buybackInterval: 300,
+              buybackRetry: 60,
+              fillTravelTicks: 100,
+              fillStartGapTicks: 20,
+            },
+          }
+        : { buy: sched, sell: sched };
       return {
         registered: l !== undefined,
         tokenIsCurrency0: l?.tokenIsCurrency0 ?? false,
-        initTimestamp: 1,
+        initTimestamp: l?.initTimestamp ?? 1,
         // The pool's own tick: a currency1 token's is the negative of its quote-per-token start.
         startTick: l ? (l.tokenIsCurrency0 ? l.startTick : -l.startTick) : 0,
         token: l?.token ?? zeroAddress,
@@ -341,8 +416,7 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
         openTick: 0,
         heldQuote: 0n,
         heldToken: 0n,
-        buy: sched,
-        sell: sched,
+        ...own,
       };
     },
     extSwapGasHeadroom: ([poolId, pins]: readonly unknown[]) =>
@@ -388,7 +462,7 @@ function installReaders(f: SuiteFixture, launches: Map<string, FakeLaunch>) {
  * prediction for `launcher` and `salt`, so the invariant checks can hold it to its receipt.
  */
 export function installLaunch(
-  f: SuiteFixture,
+  f: LaunchFixture,
   input: FakeLaunchInput,
 ): FakeLaunch {
   const { fake, suite } = f;
@@ -471,6 +545,10 @@ export function installLaunch(
     pastBnkr: new Map(),
     balances: new Map(),
     bnkr: FAKE_BNKR,
+    leg: suite.holderLeg,
+    legId: 1,
+    waived: false,
+    initTimestamp: 1,
     extSwapGasHeadroom: () => 0n,
     setToken: (fn, value) => {
       const entry = fake.contracts.get(lower(token));
@@ -478,40 +556,10 @@ export function installLaunch(
     },
   };
   launches.set(lower(token), launch);
-  // The ledger's registrations, so a log scan finds every beneficiary.
-  for (const bucket of [bucketIds.creator(poolId), bucketIds.decay(poolId)]) {
-    const held = [...shares].filter(([k]) => k.startsWith(`${bucket}:`));
-    if (held.length === 0) continue;
-    fake.addLog(
-      eventLog(
-        bankrFeeLedgerAbi,
-        "BucketRegistered",
-        {
-          bucketId: bucket,
-          poolId,
-          beneficiaries: held.map(([k]) => getAddress(k.split(":")[1]!)),
-          shares: held.map(([, v]) => v),
-        },
-        suite.ledger,
-      ),
-    );
-    // Entry by entry beside BucketRegistered; only Bankr's pad's creator entries can be taken over.
-    if (held.some(([k]) => creatorParts.has(k)))
-      fake.addLog(
-        eventLog(
-          bankrFeeLedgerAbi,
-          "CreatorShares",
-          {
-            bucketId: bucket,
-            creatorShares: held.map(([k]) => creatorParts.get(k) ?? 0n),
-            takeover: (input.launchpadId ?? 1n) === 0n,
-          },
-          suite.ledger,
-        ),
-      );
-  }
-
-  fake.contract(token, bankrLaunchTokenAbi, {
+  const abis = abisOf(suite);
+  fake.contract(token, abis.bankrLaunchTokenAbi, {
+    // Suite 4 only: the link's limit is the coin's own.
+    metadataMaxBytes: 2_048,
     name,
     symbol,
     metadataUri,
@@ -527,11 +575,12 @@ export function installLaunch(
     balanceOf: ([a]: readonly unknown[]) =>
       launch.balances.get(lower(String(a))) ?? 0n,
   });
-  fake.contract(suite.factory, bankrLaunchFactoryAbi, {
+  fake.contract(suite.factory, abis.bankrLaunchFactoryAbi, {
     capController: CAP_CONTROLLER,
   });
   const legAsset = [token, launch.quote, launch.bnkr] as const;
-  fake.contract(distributor, holderRewardsDistributorAbi, {
+  fake.contract(distributor, abis.holderRewardsDistributorAbi, {
+    holderLeg: () => launch.leg,
     assetOf: ([leg]: readonly unknown[]) =>
       legAsset[Number(leg)] ?? zeroAddress,
     earned: ([leg, a]: readonly unknown[]) =>
@@ -579,7 +628,7 @@ export function installLaunch(
 /** A receipt for `l`'s launch: the token's admin, the ledger's creator bucket, the factory's `TokenLaunched` and
  *  `LaunchResolved` (and `TradingScheduled` with a `tradingStart`), plus any `extraLogs`. */
 export function launchReceipt(
-  f: SuiteFixture,
+  f: LaunchFixture,
   l: FakeLaunch,
   o: {
     extraLogs?: RpcLog[];

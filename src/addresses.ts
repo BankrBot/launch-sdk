@@ -37,7 +37,7 @@ export interface ProviderAddresses {
   readonly owner: Address;
   readonly weth: Address;
   readonly treasury: Address;
-  /** The chain's BNKR holder leg: sole beneficiary of every launch's holders bucket. */
+  /** The chain's BNKR holder leg in force. On suite 4 a coin keeps the leg of its launch (`contracts().holderLegs`). */
   readonly holderLeg: Address;
   /** The holder leg's go-live price references (BankrReferenceOracle). A BNKR swap replaces them: the SDK reads the
    *  leg's own (`references()`) wherever it matters. */
@@ -50,7 +50,32 @@ export interface ProviderAddresses {
   /** Added after a hook rotation: every generation oldest first, `hook` last. */
   readonly hookGenerations?: readonly Address[];
   readonly claimsRedeemers?: readonly Address[];
+  /**
+   * Suite 4 only: BankrLaunchSettings, which holds every pad's terms and judges a launch (`resolve`). A record that
+   * names it is suite 4's, and the client plans its launches against it; suite 3 has none.
+   */
+  readonly settings?: Address;
+  /** Suite 4 only: BankrTermsLens, which reads a coin's stored terms and holds them to its record. */
+  readonly termsLens?: Address;
 }
+
+/** A suite 4 record: core's `BankrV4Suite4Deployment` key for key, suite 3's keys and the seven DeploySuite adds. */
+export interface LaunchAddresses extends ProviderAddresses {
+  readonly settings: Address;
+  readonly termsLens: Address;
+  /** RaffleRunCode: Raffle Run's creation code, which the preset deployer reads. */
+  readonly raffleRunCode: Address;
+  readonly launchResolverLibrary: Address;
+  readonly launchPricingLibrary: Address;
+  readonly settingsColdLibrary: Address;
+  readonly ledgerColdLibrary: Address;
+}
+
+/** Whether a record is suite 4's: it names a settings contract (core's `isBankrV4Suite4Record`). */
+export const hasSettingsContract = (
+  a: Partial<ProviderAddresses>,
+): a is Partial<ProviderAddresses> & { settings: Address } =>
+  a.settings !== undefined;
 
 export interface ProviderInfo<C extends LaunchChain = LaunchChain> {
   readonly id: LaunchProviderId;
@@ -63,7 +88,7 @@ export interface ProviderInfo<C extends LaunchChain = LaunchChain> {
  * The v4 suite per chain, mirroring core's `BANKR_V4_DEPLOYMENTS`: `null` until the chain's suite is broadcast. A
  * record is not enough to launch: the chain's `deployed` flag in `CHAINS` must also be on, or the client a `fork`.
  */
-export const BANKR_V4_ADDRESSES: {
+export const BANKR_V4_EARLIER_ADDRESSES: {
   readonly [C in LaunchChain]: ProviderAddresses | null;
 } = Object.freeze({
   base: Object.freeze({
@@ -101,6 +126,160 @@ export const BANKR_V4_ADDRESSES: {
 });
 
 /**
+ * Suite 4 per chain, core's `BANKR_V4_SUITE4_DEPLOYMENTS` key for key: `null` until that chain's suite 4 is
+ * broadcast (every chain has one today). These are the contracts a client is on unless it asks otherwise
+ * (`chooseSuite`): a chain's record here is its go-live, and from then a client launches there without `fork`.
+ */
+export const BANKR_V4_LAUNCH_ADDRESSES: {
+  readonly [C in LaunchChain]: LaunchAddresses | null;
+} = Object.freeze({
+  base: Object.freeze({
+    chainId: 8453,
+    hook: "0xf8Df392d399aF9c1235B02e5df8c56fEdb7978Cc",
+    ledger: "0x7C836e937831Cd5931A1ACbB9117dF9714D7d1F7",
+    factory: "0x8cdE4Edb9A51909eef93F102f5Ce1b950769792E",
+    locker: "0x9525077330d2f7954CC85820227921acD7BD45ff",
+    holderRewardsDeployer: "0x91DD41b8DFfAC2ca59FAD5Cd2bB8fa032189F245",
+    tokenDeployer: "0x9176b7E0dd4A8d1d42aFA4a13FB254d74F2E095f",
+    tokenDeployerKind: "erc20",
+    vestingEscrowImpl: "0xa93b63846dcDf351B489d9b528aFe9a670FC7592",
+    launchpadRegistry: "0x893Bfef8dD523e9cf28f91498eE305Cbeb37ac80",
+    presetDeployer: "0x26cD5E95d577492F72E24529e7A64B6cFdD6896e",
+    claimsRedeemer: "0x5AF6F17dB59f7E7d7279184900446AbCf127B546",
+    launchRegistryLibrary: "0x93d8Ec767b641d7Ca6fef1544a1911FA24F4FB86",
+    launchEconomicsLibrary: "0x39a0d989dC68967c0b1084eAc7d0AD0608CC4F10",
+    launchPoolLibrary: "0x3FaBf898070fCed54321218Af13590AdfDD3d240",
+    ledgerCtoLibrary: "0x41B2c9dea6FC0E588620bE61fb513Ef300B45bef",
+    hookColdLibrary: "0x13f79Efa7272BfC6EBB823fDf6419446A8dAbFa7",
+    create3Factory: "0xD1CBbA51EC36D05EaE7CaF748aF29B56f0c8cabA",
+    deployer: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    owner: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    weth: "0x4200000000000000000000000000000000000006",
+    treasury: "0x5f8DA8F88eC81e27f2E22fCB9CA5D926c595E508",
+    holderLeg: "0x022624267f01a1F034809943bDB5d92F256d5991",
+    referenceOracle: "0x0e30e91f298aB6FF8f200c04c17F34C73b6Cc1ee",
+    buyback: "0x54EC7852807D3F002EB64b360fC06C938c8b71f7",
+    blockNumber: 57978620,
+    gitCommit: "5bffed4ea0936473fb09c6fd027312762f5bf692",
+    settings: "0xdaaee43D50D7b081C6b990eD362E2d4cFc56e1aa",
+    termsLens: "0x0Ec2F172D558FA1289B695C06B8d265C8795F43F",
+    raffleRunCode: "0x60B5A40e87938eD02287F17ad96e6e37aDD5b984",
+    launchResolverLibrary: "0xBcFA0Ca101b719EBde9b00e63a18981Be403f4F3",
+    launchPricingLibrary: "0x0f8947CF24cfb872cc455a4232f6cDaEff723B77",
+    settingsColdLibrary: "0x5015D7e1c307e2A7B85a302EC9a3901E9BCc3Ff6",
+    ledgerColdLibrary: "0x928B8D8F728144Cf43b5BBf251b575CE6013d667",
+  }),
+  robinhood: Object.freeze({
+    chainId: 4663,
+    hook: "0xf8Df392d399aF9c1235B02e5df8c56fEdb7978Cc",
+    ledger: "0x15e5F60817ee337f58A0B6c34b905C7C2dBC2F64",
+    factory: "0x2F2FDedE5b61D9B624462FB9e138913fD2620427",
+    locker: "0x6436f3A1755a11553af9E0399dFf3d5c1ddbA5f6",
+    holderRewardsDeployer: "0xbd0C5159C97d12916957E33E509aF7d652Ec6b77",
+    tokenDeployer: "0x77900f98aBd1a84e0F96088A81233423061E4698",
+    tokenDeployerKind: "erc20",
+    vestingEscrowImpl: "0xFcd738eC0ed08b8d151aef5d41DF448E12ca11da",
+    launchpadRegistry: "0x893Bfef8dD523e9cf28f91498eE305Cbeb37ac80",
+    presetDeployer: "0x7428a12d9A3543b6EF4A2aD3275e45bb87e2440C",
+    claimsRedeemer: "0x5AF6F17dB59f7E7d7279184900446AbCf127B546",
+    launchRegistryLibrary: "0x93d8Ec767b641d7Ca6fef1544a1911FA24F4FB86",
+    launchEconomicsLibrary: "0x39a0d989dC68967c0b1084eAc7d0AD0608CC4F10",
+    launchPoolLibrary: "0x3FaBf898070fCed54321218Af13590AdfDD3d240",
+    ledgerCtoLibrary: "0x41B2c9dea6FC0E588620bE61fb513Ef300B45bef",
+    hookColdLibrary: "0x13f79Efa7272BfC6EBB823fDf6419446A8dAbFa7",
+    create3Factory: "0xD1CBbA51EC36D05EaE7CaF748aF29B56f0c8cabA",
+    deployer: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    owner: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    treasury: "0x5f8DA8F88eC81e27f2E22fCB9CA5D926c595E508",
+    holderLeg: "0xB25d2E3e72a00bDd97d47cF8e22B3BE6C74A38A8",
+    referenceOracle: "0x89d03Da2ecDa2dC7D8C08900174CD3710A53ebe2",
+    buyback: "0xce14daAF9f405BF18382022C3cA335C9Faf92D55",
+    blockNumber: 118608550,
+    gitCommit: "a24a73f4fcf908ab92467672afbc909850eb23d8",
+    settings: "0x7fD2Bd17387e3dA342db0952Ba0b2f250114Fda2",
+    termsLens: "0xeDd74F56afDc34d9Bf6a083C580588514dd4aA62",
+    raffleRunCode: "0x2761Ff8aFe0d37e26b1f614DCad081c3799D65B1",
+    launchResolverLibrary: "0xBcFA0Ca101b719EBde9b00e63a18981Be403f4F3",
+    launchPricingLibrary: "0x0f8947CF24cfb872cc455a4232f6cDaEff723B77",
+    settingsColdLibrary: "0x5015D7e1c307e2A7B85a302EC9a3901E9BCc3Ff6",
+    ledgerColdLibrary: "0x928B8D8F728144Cf43b5BBf251b575CE6013d667",
+  }),
+  arbitrum: Object.freeze({
+    chainId: 42161,
+    hook: "0xf8Df392d399aF9c1235B02e5df8c56fEdb7978Cc",
+    ledger: "0x15e5F60817ee337f58A0B6c34b905C7C2dBC2F64",
+    factory: "0x2F2FDedE5b61D9B624462FB9e138913fD2620427",
+    locker: "0x6436f3A1755a11553af9E0399dFf3d5c1ddbA5f6",
+    holderRewardsDeployer: "0xbd0C5159C97d12916957E33E509aF7d652Ec6b77",
+    tokenDeployer: "0x77900f98aBd1a84e0F96088A81233423061E4698",
+    tokenDeployerKind: "erc20",
+    vestingEscrowImpl: "0xFcd738eC0ed08b8d151aef5d41DF448E12ca11da",
+    launchpadRegistry: "0x893Bfef8dD523e9cf28f91498eE305Cbeb37ac80",
+    presetDeployer: "0x7428a12d9A3543b6EF4A2aD3275e45bb87e2440C",
+    claimsRedeemer: "0x5AF6F17dB59f7E7d7279184900446AbCf127B546",
+    launchRegistryLibrary: "0x93d8Ec767b641d7Ca6fef1544a1911FA24F4FB86",
+    launchEconomicsLibrary: "0x39a0d989dC68967c0b1084eAc7d0AD0608CC4F10",
+    launchPoolLibrary: "0x3FaBf898070fCed54321218Af13590AdfDD3d240",
+    ledgerCtoLibrary: "0x41B2c9dea6FC0E588620bE61fb513Ef300B45bef",
+    hookColdLibrary: "0x13f79Efa7272BfC6EBB823fDf6419446A8dAbFa7",
+    create3Factory: "0xD1CBbA51EC36D05EaE7CaF748aF29B56f0c8cabA",
+    deployer: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    owner: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    weth: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    treasury: "0x5f8DA8F88eC81e27f2E22fCB9CA5D926c595E508",
+    holderLeg: "0xB25d2E3e72a00bDd97d47cF8e22B3BE6C74A38A8",
+    referenceOracle: "0x89d03Da2ecDa2dC7D8C08900174CD3710A53ebe2",
+    buyback: "0xce14daAF9f405BF18382022C3cA335C9Faf92D55",
+    blockNumber: 525760842,
+    gitCommit: "a24a73f4fcf908ab92467672afbc909850eb23d8",
+    settings: "0x7fD2Bd17387e3dA342db0952Ba0b2f250114Fda2",
+    termsLens: "0xeDd74F56afDc34d9Bf6a083C580588514dd4aA62",
+    raffleRunCode: "0x2761Ff8aFe0d37e26b1f614DCad081c3799D65B1",
+    launchResolverLibrary: "0xBcFA0Ca101b719EBde9b00e63a18981Be403f4F3",
+    launchPricingLibrary: "0x0f8947CF24cfb872cc455a4232f6cDaEff723B77",
+    settingsColdLibrary: "0x5015D7e1c307e2A7B85a302EC9a3901E9BCc3Ff6",
+    ledgerColdLibrary: "0x928B8D8F728144Cf43b5BBf251b575CE6013d667",
+  }),
+  arc: Object.freeze({
+    chainId: 5042,
+    hook: "0xf8Df392d399aF9c1235B02e5df8c56fEdb7978Cc",
+    ledger: "0x15e5F60817ee337f58A0B6c34b905C7C2dBC2F64",
+    factory: "0x2F2FDedE5b61D9B624462FB9e138913fD2620427",
+    locker: "0x6436f3A1755a11553af9E0399dFf3d5c1ddbA5f6",
+    holderRewardsDeployer: "0xbd0C5159C97d12916957E33E509aF7d652Ec6b77",
+    tokenDeployer: "0x77900f98aBd1a84e0F96088A81233423061E4698",
+    tokenDeployerKind: "erc20",
+    vestingEscrowImpl: "0xFcd738eC0ed08b8d151aef5d41DF448E12ca11da",
+    launchpadRegistry: "0x893Bfef8dD523e9cf28f91498eE305Cbeb37ac80",
+    presetDeployer: "0x7428a12d9A3543b6EF4A2aD3275e45bb87e2440C",
+    claimsRedeemer: "0x5AF6F17dB59f7E7d7279184900446AbCf127B546",
+    launchRegistryLibrary: "0x93d8Ec767b641d7Ca6fef1544a1911FA24F4FB86",
+    launchEconomicsLibrary: "0x39a0d989dC68967c0b1084eAc7d0AD0608CC4F10",
+    launchPoolLibrary: "0x3FaBf898070fCed54321218Af13590AdfDD3d240",
+    ledgerCtoLibrary: "0x41B2c9dea6FC0E588620bE61fb513Ef300B45bef",
+    hookColdLibrary: "0x13f79Efa7272BfC6EBB823fDf6419446A8dAbFa7",
+    create3Factory: "0xD1CBbA51EC36D05EaE7CaF748aF29B56f0c8cabA",
+    deployer: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    owner: "0xa73215E8226258e1A367C85A728AD346172d6530",
+    weth: "0x0000000000000000000000000000000000000000",
+    treasury: "0x5f8DA8F88eC81e27f2E22fCB9CA5D926c595E508",
+    holderLeg: "0xB25d2E3e72a00bDd97d47cF8e22B3BE6C74A38A8",
+    referenceOracle: "0x89d03Da2ecDa2dC7D8C08900174CD3710A53ebe2",
+    buyback: "0xce14daAF9f405BF18382022C3cA335C9Faf92D55",
+    blockNumber: 32132861,
+    gitCommit: "a24a73f4fcf908ab92467672afbc909850eb23d8",
+    settings: "0x7fD2Bd17387e3dA342db0952Ba0b2f250114Fda2",
+    termsLens: "0xeDd74F56afDc34d9Bf6a083C580588514dd4aA62",
+    raffleRunCode: "0x2761Ff8aFe0d37e26b1f614DCad081c3799D65B1",
+    launchResolverLibrary: "0xBcFA0Ca101b719EBde9b00e63a18981Be403f4F3",
+    launchPricingLibrary: "0x0f8947CF24cfb872cc455a4232f6cDaEff723B77",
+    settingsColdLibrary: "0x5015D7e1c307e2A7B85a302EC9a3901E9BCc3Ff6",
+    ledgerColdLibrary: "0x928B8D8F728144Cf43b5BBf251b575CE6013d667",
+  }),
+});
+
+/**
  * Each chain's `config/<chain>.json` capExclusions (core's `BANKR_V4_CAP_EXCLUSIONS`): the aggregator settlers every
  * launch excludes from its 24 h wallet cap. They enter the token's initcode. Absent = the chain has no suite config
  * yet, so no launch can be built for it, fork or not; every chain has one today.
@@ -126,6 +305,61 @@ export const BANKR_V4_CAP_EXCLUSIONS: {
   arbitrum: Object.freeze([] as const),
   arc: Object.freeze([] as const),
 });
+
+/** The seven keys a suite 4 record adds to suite 3's (core's `BANKR_V4_SUITE4_RECORD_KEYS`). */
+export const SUITE4_ADDRESS_KEYS = Object.freeze(
+  Object.keys({
+    settings: true,
+    termsLens: true,
+    raffleRunCode: true,
+    launchResolverLibrary: true,
+    launchPricingLibrary: true,
+    settingsColdLibrary: true,
+    ledgerColdLibrary: true,
+  } satisfies Record<
+    | Exclude<keyof LaunchAddresses, keyof ProviderAddresses>
+    | "settings"
+    | "termsLens",
+    true
+  >) as (keyof LaunchAddresses)[],
+);
+
+/**
+ * The suite of a client that names none: the latest, suite 4. Suite 3 was the test deployment before it, on Base
+ * alone, and is reached only by asking for it.
+ */
+export const DEFAULT_SUITE: 3 | 4 = 4;
+
+/** The records a client is built from; a test passes its own. */
+export interface SuiteRecords {
+  readonly suite3: { readonly [C in LaunchChain]: ProviderAddresses | null };
+  readonly suite4: { readonly [C in LaunchChain]: LaunchAddresses | null };
+}
+
+/**
+ * The suite a client is on and the addresses it starts from: the named `suite`, else `DEFAULT_SUITE`. An override
+ * is merged over that suite's own record, unless it names another factory: that factory's contracts are its own,
+ * so the override then stands alone and must be the whole record.
+ */
+export function chooseSuite(
+  chain: LaunchChain,
+  o: { suite?: 3 | 4; addresses?: Partial<ProviderAddresses> },
+  records: SuiteRecords = {
+    suite3: BANKR_V4_EARLIER_ADDRESSES,
+    suite4: BANKR_V4_LAUNCH_ADDRESSES,
+  },
+): { suite: 3 | 4; addresses: Partial<ProviderAddresses> } {
+  const suite = o.suite ?? DEFAULT_SUITE;
+  const record = suite === 4 ? records.suite4[chain] : records.suite3[chain];
+  const factory = o.addresses?.factory;
+  const own =
+    factory !== undefined &&
+    factory.toLowerCase() !== record?.factory.toLowerCase();
+  return {
+    suite,
+    addresses: own ? { ...o.addresses } : { ...record, ...o.addresses },
+  };
+}
 
 // Every key a complete record carries: a fork override for a chain without a record must fill all of them.
 export const PROVIDER_ADDRESS_KEYS = Object.freeze(
@@ -158,10 +392,27 @@ export const PROVIDER_ADDRESS_KEYS = Object.freeze(
     blockNumber: true,
     gitCommit: true,
   } satisfies Record<
-    Exclude<keyof ProviderAddresses, "hookGenerations" | "claimsRedeemers">,
+    Exclude<
+      keyof ProviderAddresses,
+      "hookGenerations" | "claimsRedeemers" | "settings" | "termsLens"
+    >,
     true
   >) as (keyof ProviderAddresses)[],
 );
+
+/** Whether `a` is the suite 4 this SDK version ships for `chain`: the record that went through its go-live. */
+export function isShippedSuite4(
+  chain: LaunchChain,
+  a: Pick<ProviderAddresses, "factory" | "settings">,
+): boolean {
+  const record = BANKR_V4_LAUNCH_ADDRESSES[chain];
+  return (
+    record !== null &&
+    a.settings !== undefined &&
+    record.settings.toLowerCase() === a.settings.toLowerCase() &&
+    record.factory.toLowerCase() === a.factory.toLowerCase()
+  );
+}
 
 export function isCompleteRecord(
   a: Partial<ProviderAddresses>,

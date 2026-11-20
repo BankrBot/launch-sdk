@@ -11,11 +11,11 @@ import {
 import {
   bankrFeeLedgerAbi,
   holderRewardsDistributorAbi,
-} from "./abis/generated.js";
+} from "./abis/suite3.js";
 import { isLaunchSdkError } from "./errors.js";
 import { EIP_7825_MAX_TX_GAS } from "./chains/index.js";
 import { HOLDER_CLAIM_ALL_GAS, HOLDER_GAS } from "./index.js";
-import { CONVERT_GAS, HOLDER_LEG_WAKE_ABI } from "./conversion.js";
+import { CONVERT_GAS, EARLIER_HOLDER_LEG_WAKE_ABI } from "./conversion.js";
 import { bucketIds } from "./lens.js";
 import {
   FAKE_BNKR,
@@ -91,7 +91,7 @@ function anyQuoteCoins(o: { wake?: bigint } = {}) {
         ? [0n, 40n]
         : [0n, 0n],
   });
-  f.fake.contract(SUITE.holderLeg, HOLDER_LEG_WAKE_ABI, {
+  f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
     pending: ([p]: readonly unknown[]) => (p === hostile0.poolId ? 3n : 0n),
   });
   return { ...fixture, MEME, HOSTILE, meme0, meme1, hostile0, weth0, weth1 };
@@ -107,7 +107,7 @@ const aggregate = (data: `0x${string}`) =>
 
 const poke = (poolId: `0x${string}`) =>
   encodeFunctionData({
-    abi: HOLDER_LEG_WAKE_ABI,
+    abi: EARLIER_HOLDER_LEG_WAKE_ABI,
     functionName: "poke",
     args: [poolId],
   });
@@ -464,7 +464,7 @@ describe("holders", () => {
       wake: (40n << 160n) | BigInt(SUITE.holderLeg),
     });
     // The leg pays in quote (QUOTE mode): the forward rule, so the forward-only budget.
-    armed.f.fake.contract(SUITE.holderLeg, HOLDER_LEG_WAKE_ABI, {
+    armed.f.fake.contract(SUITE.holderLeg, EARLIER_HOLDER_LEG_WAKE_ABI, {
       payoutMode: 1,
       bnkr: FAKE_BNKR,
       retiredBnkr: false,
