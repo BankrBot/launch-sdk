@@ -10,9 +10,8 @@ import {
 import { LaunchConfigError } from "../errors.js";
 
 /**
- * Every chain the SDK launches on: the chains Bankr's own apps and launch index cover (core's `BANKR_V4_CHAINS`),
- * then Ethereum and BNB Chain, where the contracts are live and the SDK is the only way in (`indexed: false`).
- * New chains arrive as additive minors.
+ * Every chain the SDK launches on, each covered by Bankr's launch index: the chains Bankr's own apps launch on
+ * (core's `BANKR_V4_CHAINS`), then Ethereum and BNB Chain. New chains arrive as additive minors.
  */
 export const LAUNCH_CHAINS = Object.freeze([
   "base",
@@ -81,16 +80,10 @@ export interface ChainCapabilities<C extends LaunchChain = LaunchChain> {
   readonly holderPayout: "bnkr" | "quote";
   /** Per-transaction gas ceiling the chain's RPC enforces (EIP-7825's 2^24 on Base, Arc, Ethereum and BNB Chain). */
   readonly maxTxGas: bigint;
-  /** The widest `eth_getLogs` block range to request: Bankr's indexer's window, or what a public RPC serves where
-   *  Bankr runs no indexer. */
+  /** The widest `eth_getLogs` block range to request: Bankr's indexer's window. */
   readonly maxLogRange: number;
-  /** Blocks before a launch is treated as final: Bankr's indexer's depth where it indexes the chain. */
+  /** Blocks before a launch is treated as final: Bankr's indexer's depth. */
   readonly confirmations: number;
-  /**
-   * Whether Bankr's launch index and API cover the chain. Where they do not, on-chain reads, planning and launching
-   * work as everywhere, every index read throws `INDEX_NOT_COVERED`, and a launch is not registered.
-   */
-  readonly indexed: boolean;
   /** No usable public RPC: the client needs an `rpcUrl` or `publicClient`. */
   readonly rpcRequired: boolean;
   /** The public RPC works but is limited (shallow history, rate limits): pass an `rpcUrl`. */
@@ -109,8 +102,8 @@ const freezeChain = <C extends LaunchChain>(
 /** EIP-7825's per-transaction gas cap (2^24): Base, Arc, Ethereum and BNB Chain's ceiling. */
 export const EIP_7825_MAX_TX_GAS = 16_777_216n;
 
-// maxLogRange and confirmations mirror Bankr's bankr_v4 indexer (workers' chain params) on the chains it indexes. A
-// chain is live once its record is in `BANKR_V4_LAUNCH_ADDRESSES`: no flag here says so a second time.
+// maxLogRange and confirmations mirror Bankr's bankr_v4 indexer (workers' chain params). A chain is live once its
+// record is in `BANKR_V4_LAUNCH_ADDRESSES`: no flag here says so a second time.
 export const CHAINS: ChainTable = Object.freeze({
   base: freezeChain({
     chain: "base",
@@ -136,7 +129,6 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 20,
     rpcRequired: false,
     rpcRecommended: false,
-    indexed: true,
   }),
   robinhood: freezeChain({
     chain: "robinhood",
@@ -162,7 +154,6 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 100,
     rpcRequired: false,
     rpcRecommended: true,
-    indexed: true,
   }),
   arbitrum: freezeChain({
     chain: "arbitrum",
@@ -188,7 +179,6 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 20,
     rpcRequired: false,
     rpcRecommended: false,
-    indexed: true,
   }),
   arc: freezeChain({
     chain: "arc",
@@ -210,10 +200,8 @@ export const CHAINS: ChainTable = Object.freeze({
     confirmations: 2,
     rpcRequired: true,
     rpcRecommended: false,
-    indexed: true,
   }),
-  // Bankr indexes neither chain, so no indexer row sets maxLogRange or confirmations: each is the SDK's own figure,
-  // inside what public RPCs served when probed on 2026-11-20. maxTxGas is the chain config's.
+  // Ethereum's and BNB Chain's maxTxGas is each chain config's (`config/<chain>.json`).
   ethereum: freezeChain({
     chain: "ethereum",
     chainId: 1,
@@ -234,13 +222,11 @@ export const CHAINS: ChainTable = Object.freeze({
     nativeDevBuy: true,
     holderPayout: "quote",
     maxTxGas: EIP_7825_MAX_TX_GAS,
-    // publicnode and viem's default RPC both served 10,000-block ranges; publicnode refuses week-old logs.
     maxLogRange: 2_000,
-    // Three epochs: finalized by then. The `finalized` tag trailed the head by 68 to 70 blocks.
+    // Three epochs: finalized by then.
     confirmations: 96,
     rpcRequired: false,
     rpcRecommended: true,
-    indexed: false,
   }),
   bnb: freezeChain({
     chain: "bnb",
@@ -267,13 +253,12 @@ export const CHAINS: ChainTable = Object.freeze({
     nativeDevBuy: true,
     holderPayout: "quote",
     maxTxGas: EIP_7825_MAX_TX_GAS,
-    // The cap of viem's default RPC (56.rpc.thirdweb.com), which also rate-limits; publicnode served 50,000.
+    // The cap of viem's default RPC (56.rpc.thirdweb.com).
     maxLogRange: 1_000,
-    // About 9 seconds at 0.45 s blocks. The `finalized` tag trailed the head by 0 to 1 block.
+    // About 9 seconds at 0.45 s blocks.
     confirmations: 20,
     rpcRequired: false,
     rpcRecommended: true,
-    indexed: false,
   }),
 });
 

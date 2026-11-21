@@ -23,7 +23,7 @@ function expectCode(fn: () => unknown, code: string): void {
 }
 
 describe("CHAINS capability table", () => {
-  test("the six chains, keyed by their own name: the four Bankr indexes, then Ethereum and BNB Chain", () => {
+  test("the six chains, keyed by their own name", () => {
     expect([...LAUNCH_CHAINS]).toEqual([
       "base",
       "robinhood",
@@ -31,12 +31,6 @@ describe("CHAINS capability table", () => {
       "arc",
       "ethereum",
       "bnb",
-    ]);
-    expect(LAUNCH_CHAINS.filter((c) => CHAINS[c].indexed)).toEqual([
-      "base",
-      "robinhood",
-      "arbitrum",
-      "arc",
     ]);
     for (const chain of LAUNCH_CHAINS) {
       expect(CHAINS[chain].chain).toBe(chain);

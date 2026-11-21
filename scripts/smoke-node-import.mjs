@@ -53,10 +53,8 @@ try {
 const sdk = await import("@bankr/launch-sdk");
 const server = await import("@bankr/launch-sdk/server");
 assert.deepEqual([...sdk.LAUNCH_CHAINS], ["base", "robinhood", "arbitrum", "arc", "ethereum", "bnb"]);
-// Bankr's index covers the first four; BNB Chain's dollars have 18 decimals.
-assert.deepEqual(sdk.LAUNCH_CHAINS.filter((c) => !sdk.CHAINS[c].indexed), ["ethereum", "bnb"]);
+// BNB Chain's dollars have 18 decimals.
 assert.equal(sdk.CHAINS.bnb.quotes.USDT.decimals, 18);
-await assert.rejects(sdk.createBankrApi({}).launches({ chain: "bnb" }), (e) => sdk.isLaunchSdkError(e, "INDEX_NOT_COVERED"));
 // Every chain ships its contracts' record: that row is what makes the chain live, and a default client reads it.
 for (const chain of sdk.LAUNCH_CHAINS) {
   assert.equal(sdk.BANKR_V4_LAUNCH_ADDRESSES[chain].chainId, sdk.CHAINS[chain].chainId, chain);

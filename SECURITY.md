@@ -20,4 +20,4 @@ Test against a local fork. Never test against other people's tokens, pools or fu
 
 ## Supported versions
 
-Fixes ship in a new version on the current dist-tag (`alpha` until 1.0.0). A version that a fix supersedes is deprecated on npm with an upgrade message.
+Fixes ship in a new version on the `latest` dist-tag. A version that a fix supersedes is deprecated on npm with an upgrade message.

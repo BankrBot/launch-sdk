@@ -2,11 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { getAddress, parseEther, type Address, type Hex } from "viem";
 import { bsc, mainnet } from "viem/chains";
 import { BANKR_V4_LAUNCH_ADDRESSES } from "./addresses.js";
-import { createBankrApi, type FetchLike } from "./api.js";
+import { createBankrApi, type FetchLike, type RegisterResult } from "./api.js";
 import { CHAINS, LAUNCH_CHAINS } from "./chains/index.js";
 import { createLaunchClient, type LaunchClient } from "./client.js";
 import { erc20SlotsFor } from "./data/erc20Slots.js";
-import { isLaunchSdkError, launchSdkError } from "./errors.js";
 import { KNOB } from "./launch/settings.js";
 import { FakeChain } from "./__internal__/fakeRpc.js";
 import {
@@ -20,55 +19,60 @@ import {
   freshContractsState,
 } from "./__internal__/fakeContractsState.js";
 
-// Ethereum and BNB Chain: Bankr's contracts are live there and Bankr's apps, API and launch index are not. The SDK
-// reads, plans and launches on them like anywhere, and says plainly that there is no index to read.
+// Ethereum and BNB Chain: the SDK reads, plans, launches and reads Bankr's launch index there as on any chain. The
+// index knows Ethereum as `ethereum`, the SDK's own name for it.
 
 const LAUNCHER = getAddress("0x1111111111111111111111111111111111111111");
 const TOKEN: Address = "0x1234567890abcdef1234567890abcdef12345678";
 const TX_HASH: Hex = `0x${"ab".repeat(32)}`;
-const NOT_COVERED =
-  "Bankr's launch index does not cover this chain. Read from the chain with client.launchInfo and client.contracts().";
+const API = "https://api.test";
 
-/** A fetch that counts its calls: an index read on an unindexed chain must never reach it. */
-function countingFetch(): { fetch: FetchLike; calls: string[] } {
-  const calls: string[] = [];
-  const fetch: FetchLike = async (url) => {
-    calls.push(String(url));
-    return Response.json({ launches: [], nextCursor: null });
+/** Bankr's API: records each call and answers the index's routes for `chain`. */
+function fakeApi(chain: "ethereum" | "bnb") {
+  const calls: { url: URL; body: unknown }[] = [];
+  const registered: RegisterResult = {
+    chain,
+    txHash: TX_HASH,
+    confirmations: 5,
+    launches: [],
   };
-  return { fetch, calls };
-}
-
-async function notCovered(
-  promise: Promise<unknown>,
-  chain: string,
-): Promise<void> {
-  let thrown: unknown;
-  try {
-    await promise;
-  } catch (err) {
-    thrown = err;
-  }
-  expect(isLaunchSdkError(thrown, "INDEX_NOT_COVERED"), String(thrown)).toBe(
-    true,
-  );
-  const err = thrown as { message: string; chain: string; name: string };
-  expect(err.message).toBe(NOT_COVERED);
-  expect(err.chain).toBe(chain);
-  expect(err.name).toBe("LaunchConfigError");
+  const fetch: FetchLike = async (url, init) => {
+    const u = new URL(url);
+    calls.push({
+      url: u,
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    });
+    if (u.pathname === "/launches/register") return Response.json(registered);
+    if (u.pathname === "/launches")
+      return Response.json({ launches: [], nextCursor: null });
+    if (u.pathname.endsWith("/stats"))
+      return Response.json({
+        chain,
+        launchpadId: "1",
+        stats: { launches: 0, volume24hUsd: 0 },
+      });
+    if (u.pathname.endsWith("/fees"))
+      return Response.json({
+        chainId: CHAINS[chain].chainId,
+        account: LAUNCHER,
+        ledger: u.searchParams.get("ledger") ?? undefined,
+        balances: [],
+        buckets: [],
+        totalByQuote: [],
+        bucketCount: 0,
+      });
+    return Response.json({ error: "Not found." }, { status: 404 });
+  };
+  return { fetch, calls, registered };
 }
 
 describe("the chain table: Ethereum and BNB Chain", () => {
-  test("they follow the chains Bankr indexes, and only they are unindexed", () => {
+  test("they follow the chains Bankr's own apps launch on", () => {
     expect([...LAUNCH_CHAINS]).toEqual([
       "base",
       "robinhood",
       "arbitrum",
       "arc",
-      "ethereum",
-      "bnb",
-    ]);
-    expect(LAUNCH_CHAINS.filter((c) => !CHAINS[c].indexed)).toEqual([
       "ethereum",
       "bnb",
     ]);
@@ -142,50 +146,58 @@ describe("the chain table: Ethereum and BNB Chain", () => {
   });
 });
 
-describe("Bankr's launch index does not cover them", () => {
-  test("the error is one code with one plain sentence", () => {
-    const err = launchSdkError("INDEX_NOT_COVERED", { chain: "bnb" });
-    expect(err.message).toBe(NOT_COVERED);
-    expect(err.message).not.toMatch(/\d{3}|not yet|soon|coming/i);
-  });
-
-  test("createBankrApi: every call that names such a chain is refused before any request", async () => {
+describe("Bankr's launch index covers them", () => {
+  test("createBankrApi: every call names the chain as the SDK does, and fees by its chain id", async () => {
     for (const chain of ["ethereum", "bnb"] as const) {
-      const { fetch, calls } = countingFetch();
-      const api = createBankrApi({ fetch });
-      await notCovered(api.launches({ chain }), chain);
-      await notCovered(api.launch(chain, TOKEN), chain);
-      await notCovered(api.launchpadStats(chain, 1n), chain);
-      await notCovered(api.register(chain, TX_HASH), chain);
-      await notCovered(api.accountFees(chain, LAUNCHER), chain);
-      await notCovered(api.allLaunches({ chain }).next(), chain);
-      expect(calls).toEqual([]);
-      // A read that names no chain is the index's own, across the chains it covers.
-      await api.launches();
-      expect(calls).toHaveLength(1);
+      const { fetch, calls, registered } = fakeApi(chain);
+      const api = createBankrApi({ url: API, fetch });
+      expect(await api.launches({ chain })).toEqual({
+        launches: [],
+        nextCursor: null,
+      });
+      expect(await api.launch(chain, TOKEN)).toBeNull();
+      expect((await api.launchpadStats(chain, 1n)).chain).toBe(chain);
+      expect(await api.register(chain, TX_HASH)).toEqual(registered);
+      expect((await api.accountFees(chain, LAUNCHER))?.chainId).toBe(
+        CHAINS[chain].chainId,
+      );
+      expect(calls.map((c) => `${c.url.pathname}${c.url.search}`)).toEqual([
+        `/launches?chain=${chain}`,
+        `/launches/${chain}/${TOKEN}`,
+        `/launchpads/${chain}/1/stats`,
+        "/launches/register",
+        `/bankr-v4/accounts/${LAUNCHER}/fees?chainId=${CHAINS[chain].chainId}`,
+      ]);
+      expect(calls[3]!.body).toEqual({ chain, txHash: TX_HASH });
     }
   });
 
-  test("a client's index reads and its owed fees are refused the same way; its chain reads are not", async () => {
+  test("a client's index reads and its owed fees ask for its own chain and ledger", async () => {
     for (const chain of ["ethereum", "bnb"] as const) {
-      const { fetch, calls } = countingFetch();
+      const { fetch, calls, registered } = fakeApi(chain);
       const fake = new FakeChain(chain === "bnb" ? bsc : mainnet);
       const client: LaunchClient = createLaunchClient({
         chain,
         publicClient: fake.publicClient(),
-        api: { fetch },
+        api: { url: API, fetch },
       });
       const { index } = client;
-      await notCovered(index.launches(), chain);
-      await notCovered(index.all().next(), chain);
-      await notCovered(index.launch(TOKEN), chain);
-      await notCovered(index.builder("mypad"), chain);
-      await notCovered(index.launchpadStats(1n), chain);
-      await notCovered(index.register(TX_HASH), chain);
-      await notCovered(client.fees.getOwed(LAUNCHER), chain);
-      await notCovered(client.fees.buildClaimAll(LAUNCHER), chain);
-      expect(calls).toEqual([]);
-      expect(typeof client.contracts().settings.pad).toBe("function");
+      expect((await index.launches()).launches).toEqual([]);
+      expect((await index.all().next()).done).toBe(true);
+      expect(await index.launch(TOKEN)).toBeNull();
+      expect(await index.builder("mypad")).toBeNull();
+      expect((await index.launchpadStats(1n)).launchpadId).toBe("1");
+      expect(await index.register(TX_HASH)).toEqual(registered);
+      const owed = await client.fees.getOwed(LAUNCHER);
+      expect(owed).toMatchObject({ account: LAUNCHER, buckets: [] });
+      const fees = calls.at(-1)!.url;
+      expect(fees.pathname).toBe(`/bankr-v4/accounts/${LAUNCHER}/fees`);
+      expect(Object.fromEntries(fees.searchParams)).toEqual({
+        chainId: String(CHAINS[chain].chainId),
+        ledger: BANKR_V4_LAUNCH_ADDRESSES[chain].ledger,
+      });
+      for (const call of calls.slice(0, 2))
+        expect(call.url.searchParams.get("chain")).toBe(chain);
     }
   });
 });
@@ -287,9 +299,9 @@ describe("a launch on BNB Chain", () => {
     expect(result.devBuyOut).toBe(amount * FAKE_TOKENS_PER_UNIT);
   });
 
-  test("with `api` set the launch still lands: registration is skipped, not attempted and not failed", async () => {
+  test("with `api` set the launch is registered with Bankr's index", async () => {
     const f = fixture(WBNB);
-    const { fetch, calls } = countingFetch();
+    const { fetch, calls, registered } = fakeApi("bnb");
     f.fake.onSend = (tx) => {
       f.fake.blockNumber += 10n;
       return launchLogs(f, tx);
@@ -300,11 +312,11 @@ describe("a launch on BNB Chain", () => {
       fork: true,
       publicClient: f.fake.publicClient(),
       walletClient: f.fake.walletClient(LAUNCHER),
-      api: { fetch },
+      api: { url: API, fetch },
     });
     const result = await c.launch(input(f));
-    expect(result.token).toBeDefined();
-    expect("registration" in result).toBe(false);
-    expect(calls).toEqual([]);
+    expect(result.registration).toEqual(registered);
+    expect(calls.map((x) => x.url.pathname)).toEqual(["/launches/register"]);
+    expect(calls[0]!.body).toEqual({ chain: "bnb", txHash: result.txHash });
   });
 });

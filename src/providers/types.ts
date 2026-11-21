@@ -326,8 +326,8 @@ export interface LaunchResult<C extends LaunchChain = LaunchChain> {
   totalSupply: bigint;
   devBuyOut: bigint;
   /**
-   * `launch()` on a client with `api` only, on a chain Bankr's index covers: its registration at 5 confirmations,
-   * or null when it failed (the indexer still indexes the launch at the chain's full depth).
+   * `launch()` on a client with `api` only: Bankr's index registration at 5 confirmations, or null when it failed
+   * (the indexer still indexes the launch at the chain's full depth).
    */
   registration?: RegisterResult | null;
 }

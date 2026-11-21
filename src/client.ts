@@ -109,8 +109,7 @@ export interface LaunchClientOptions<C extends LaunchChain = LaunchChain> {
   fork?: boolean;
   /**
    * Set, `launch()` registers each launch with Bankr's index once it has 5 confirmations. Omitted or `false`: the
-   * indexer picks the launch up at the chain's full depth. On a chain the index does not cover nothing is
-   * registered either way.
+   * indexer picks the launch up at the chain's full depth.
    */
   api?: false | LaunchApiOptions;
 }
@@ -123,10 +122,7 @@ export interface LaunchApiOptions {
   fetch?: FetchLike;
 }
 
-/**
- * Bankr's public launch index, scoped to the client's chain. Works without `api` (which sets the URL). On a chain
- * the index does not cover (`chain.indexed` false: Ethereum, BNB Chain) every method rejects `INDEX_NOT_COVERED`.
- */
+/** Bankr's public launch index, scoped to the client's chain. Works without `api` (which sets the URL). */
 export interface LaunchIndex {
   /** Launches on this chain, newest first; pass `nextCursor` back as `cursor` for the next page. A page that
    *  leaves launches out, because Bankr's index of the chain is behind, says so in `incomplete`. */
@@ -326,8 +322,8 @@ export function createLaunchClient<C extends LaunchChain>(
       batch: { multicall: true },
     });
   const bankrApi = createBankrApi({ url: api?.url, fetch: api?.fetch });
-  // A client built with `api` registers each launch with Bankr's index, where the index covers the chain.
-  const registers = api !== undefined && caps.indexed;
+  // A client built with `api` registers each launch with Bankr's index.
+  const registers = api !== undefined;
   const usedSalts = new Set<string>();
   const provider = createBankrV4Adapter({
     chain: caps,
@@ -469,12 +465,7 @@ export function createLaunchClient<C extends LaunchChain>(
       // Async, so a malformed address rejects like the read itself.
       launch: async (token, query) =>
         bankrApi.launch(chain, requireAddress(token, chain), query),
-      // A builder's profile names no chain: on a chain the index does not cover the client has no index at all.
-      builder: async (slug, query) => {
-        if (!caps.indexed)
-          throw new LaunchConfigError("INDEX_NOT_COVERED", { chain });
-        return bankrApi.builder(slug, query);
-      },
+      builder: (slug, query) => bankrApi.builder(slug, query),
       launchpadStats: (id, query) => bankrApi.launchpadStats(chain, id, query),
       register: (txHash) => bankrApi.register(chain, txHash),
     },

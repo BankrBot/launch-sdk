@@ -1,6 +1,5 @@
 import type { Address, Hex } from "viem";
 import {
-  CHAINS,
   LAUNCH_CHAINS,
   getChain,
   isLaunchChain,
@@ -421,16 +420,7 @@ function isoDate(
   return d.toISOString();
 }
 
-/** Bankr's index holds the chains Bankr indexes: a read that names another is refused before any request. */
-function requireIndexed(chain: LaunchChain | undefined): void {
-  if (chain !== undefined && isLaunchChain(chain) && !CHAINS[chain].indexed)
-    throw new LaunchConfigError("INDEX_NOT_COVERED", { chain });
-}
-
-/**
- * A client for Bankr's public launch API. `INVALID_PARAMS` for a `url` that is not http(s); `INDEX_NOT_COVERED`
- * for a call that names a chain the index does not cover (`CHAINS[chain].indexed`).
- */
+/** A client for Bankr's public launch API. `INVALID_PARAMS` for a `url` that is not http(s). */
 export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
   const base = normalizeApiUrl(o.url);
   const doFetch = resolveFetch(o.fetch);
@@ -459,7 +449,6 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
   const api: BankrApi = {
     url: base,
     async launches(query = {}) {
-      requireIndexed(query.chain);
       const reply = await get("/launches", {
         ...query,
         deployedAfter: isoDate(query.deployedAfter, query.chain),
@@ -477,7 +466,6 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
     },
     allLaunches: (query, options) => iterateLaunches(api, query, options),
     async launch(chain, token, query = {}) {
-      requireIndexed(chain);
       const reply = await get(
         `/launches/${segment(chain)}/${segment(token)}`,
         { ...query },
@@ -494,7 +482,6 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       return found(reply, (b) => isRecord(b) && typeof b.slug === "string");
     },
     async launchpadStats(chain, id, query = {}) {
-      requireIndexed(chain);
       const reply = await get(
         `/launchpads/${segment(chain)}/${segment(String(id))}/stats`,
         { ...query },
@@ -512,7 +499,6 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       );
     },
     async register(chain, txHash, options = {}) {
-      requireIndexed(chain);
       const reply = await send(
         doFetch,
         `${base}/launches/register`,
@@ -534,7 +520,6 @@ export function createBankrApi(o: BankrApiOptions = {}): BankrApi {
       );
     },
     async accountFees(chain, account, ledger) {
-      requireIndexed(chain);
       const reply = await get(
         `/bankr-v4/accounts/${segment(account)}/fees`,
         { chainId: getChain(chain).chainId, ledger },
