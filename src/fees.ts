@@ -194,10 +194,8 @@ export function createFees(ctx: ReadContext, index: BankrApi): LaunchFees {
   const refuse = (code: CodeOfKind<"refused">): never => {
     throw new LaunchRefusedError(code, { chain });
   };
-  // The index covers some chains only, and a fork's state is not the live chain it reads.
+  // A fork's state is not the live chain the index reads, so its answer would be another chain's.
   const requireIndex = () => {
-    if (!ctx.chain.indexed)
-      throw new LaunchConfigError("INDEX_NOT_COVERED", { chain });
     if (ctx.fork) throw new LaunchConfigError("INDEX_NOT_ON_FORK", { chain });
   };
   const call = (from: Address, data: Hex) =>

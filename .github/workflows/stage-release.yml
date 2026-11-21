@@ -6,11 +6,6 @@ name: Stage @bankr/launch-sdk release
 
 on:
   workflow_dispatch:
-    inputs:
-      dist_tag:
-        description: "npm dist-tag override. Default: derived from the version (alpha/beta/rc/next, else latest)."
-        required: false
-        type: string
 
 concurrency:
   group: stage-release
@@ -72,14 +67,11 @@ jobs:
       - name: Resolve version and dist-tag
         id: meta
         shell: bash # [[ ]] below is not POSIX
-        env:
-          DIST_TAG_INPUT: ${{ inputs.dist_tag }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
 
-          if [ -n "$DIST_TAG_INPUT" ]; then
-            TAG="$DIST_TAG_INPUT"
-          elif [[ "$VERSION" == *"-alpha"* ]]; then
+          # The version alone decides the dist-tag: a stable version takes latest, a prerelease its own tag.
+          if [[ "$VERSION" == *"-alpha"* ]]; then
             TAG="alpha"
           elif [[ "$VERSION" == *"-beta"* ]]; then
             TAG="beta"
@@ -91,9 +83,9 @@ jobs:
             TAG="latest"
           fi
 
-          # `latest` stays on the deprecated 0.0.0-reserved.0 placeholder until 1.0.0 (GA).
+          # `latest` is what a plain install gets: stable versions from 1.0.0 up, never a 0.x or a prerelease.
           if [ "$TAG" = "latest" ] && [[ "$VERSION" == 0.* ]]; then
-            echo "::error::${VERSION} is below 1.0.0, and latest moves only at GA. Stage it under a prerelease dist-tag."
+            echo "::error::${VERSION} is below 1.0.0, so it cannot take latest. Stage it under a prerelease dist-tag."
             exit 1
           fi
 

@@ -34,11 +34,6 @@ const ERROR_SPEC = {
     message:
       "Fees owed and claim all come from Bankr's API, which indexes Bankr's live contracts only: on a fork, read and claim one launch with fees.get and fees.buildClaim.",
   },
-  INDEX_NOT_COVERED: {
-    kind: "config",
-    message:
-      "Bankr's launch index does not cover this chain. Read from the chain with client.launchInfo and client.contracts().",
-  },
   PAUSED: {
     kind: "refused",
     message: "New launches are paused on this chain.",
